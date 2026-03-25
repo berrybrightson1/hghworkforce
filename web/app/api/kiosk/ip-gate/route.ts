@@ -1,29 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireDbUser } from "@/lib/api-auth";
 import { getClientIpFromRequest } from "@/lib/checkin-ip";
 import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
+import { getKioskAuditActorId } from "@/lib/kiosk-audit-actor";
+import { normalizeKioskCompanyId } from "@/lib/kiosk-company-id";
 
 /**
- * GET /api/checkins/ip-gate
- * Cookie-authenticated. Used by middleware and for diagnostics.
- * Non-employees receive allowed: true (portal check-in is employee-only UI).
+ * GET /api/kiosk/ip-gate?companyId=
+ * Unauthenticated. Same IP rules as portal check-in (first PC bind or enterprise allowlist).
  */
 export async function GET(req: NextRequest) {
-  const auth = await requireDbUser();
-  if (!auth.ok) return auth.response;
+  const companyId = normalizeKioskCompanyId(req.nextUrl.searchParams.get("companyId"));
+  if (!companyId) {
+    return NextResponse.json({ error: "companyId is required" }, { status: 400 });
+  }
 
   try {
-    const employee = await prisma.employee.findUnique({
-      where: { userId: auth.dbUser.id },
-      select: { companyId: true },
-    });
-    if (!employee) {
-      return NextResponse.json({ allowed: true, skipped: true });
-    }
-
     const company = await prisma.company.findUnique({
-      where: { id: employee.companyId },
+      where: { id: companyId },
       select: {
         checkinLockToFirstIp: true,
         checkinBoundIp: true,
@@ -34,28 +28,31 @@ export async function GET(req: NextRequest) {
     });
 
     if (!company) {
-      return NextResponse.json({ allowed: true, skipped: true });
+      return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
     const clientIp = getClientIpFromRequest(req);
+    const actorId = await getKioskAuditActorId(companyId);
     const enforce = await assertCompanyCheckinIpAllowed({
-      companyId: employee.companyId,
+      companyId,
       company,
       clientIp,
-      actorId: auth.dbUser.id,
+      actorId,
     });
 
     if (!enforce.ok) {
-      await prisma.auditLog.create({
-        data: {
-          actorId: auth.dbUser.id,
-          action: "CHECKIN_IP_BLOCKED",
-          entityType: "Company",
-          entityId: employee.companyId,
-          afterState: { reason: enforce.logReason, clientIp, source: "ip_gate" },
-          ipAddress: clientIp,
-        },
-      });
+      if (actorId) {
+        await prisma.auditLog.create({
+          data: {
+            actorId,
+            action: "CHECKIN_IP_BLOCKED",
+            entityType: "Company",
+            entityId: companyId,
+            afterState: { reason: enforce.logReason, clientIp, source: "kiosk_ip_gate" },
+            ipAddress: clientIp,
+          },
+        });
+      }
       return NextResponse.json(
         { allowed: false, reason: enforce.reason },
         { status: 403 },

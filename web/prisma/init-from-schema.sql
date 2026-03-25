@@ -358,6 +358,10 @@ ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "officeLng" DECIMAL(10,7);
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "geofenceRadius" INTEGER;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinEnterpriseEnabled" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinEnforceIpAllowlist" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinLockToFirstIp" BOOLEAN NOT NULL DEFAULT true;
+-- Existing DBs that already added this column with DEFAULT false: fix server default for new rows only.
+ALTER TABLE "Company" ALTER COLUMN "checkinLockToFirstIp" SET DEFAULT true;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinBoundIp" TEXT;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinRequireFaceVerification" BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinFaceDistanceThreshold" DECIMAL(8,5);
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinMaxFaceAttempts" INTEGER NOT NULL DEFAULT 3;
@@ -483,3 +487,31 @@ DO $$ BEGIN
     FOREIGN KEY ("checkinSessionId") REFERENCES "CheckinSession"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 CREATE INDEX IF NOT EXISTS "CheckIn_checkinSessionId_idx" ON "CheckIn"("checkinSessionId");
+
+-- ── Kiosk (office PC check-in) ───────────────────────────────────────────────
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "kioskOfficeOpensAt" TEXT;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "kioskOfficeClosesAt" TEXT;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "kioskCutoffTime" TEXT;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "kioskTimezone" TEXT NOT NULL DEFAULT 'Africa/Accra';
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "kioskLastAbsentRunDate" TEXT;
+
+CREATE TABLE IF NOT EXISTS "KioskDayAbsence" (
+    "id" TEXT NOT NULL,
+    "companyId" TEXT NOT NULL,
+    "employeeId" TEXT NOT NULL,
+    "localDate" TEXT NOT NULL,
+    "reason" TEXT NOT NULL DEFAULT 'MISSING_CHECKIN',
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "KioskDayAbsence_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "KioskDayAbsence_companyId_employeeId_localDate_key" ON "KioskDayAbsence"("companyId", "employeeId", "localDate");
+CREATE INDEX IF NOT EXISTS "KioskDayAbsence_companyId_localDate_idx" ON "KioskDayAbsence"("companyId", "localDate");
+
+DO $$ BEGIN
+  ALTER TABLE "KioskDayAbsence" ADD CONSTRAINT "KioskDayAbsence_companyId_fkey"
+    FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "KioskDayAbsence" ADD CONSTRAINT "KioskDayAbsence_employeeId_fkey"
+    FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

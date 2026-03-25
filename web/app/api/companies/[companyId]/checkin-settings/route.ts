@@ -26,11 +26,17 @@ export async function GET(
       where: { id: companyId },
       select: {
         id: true,
+        checkinLockToFirstIp: true,
+        checkinBoundIp: true,
         checkinEnterpriseEnabled: true,
         checkinEnforceIpAllowlist: true,
         checkinRequireFaceVerification: true,
         checkinFaceDistanceThreshold: true,
         checkinMaxFaceAttempts: true,
+        kioskOfficeOpensAt: true,
+        kioskOfficeClosesAt: true,
+        kioskCutoffTime: true,
+        kioskTimezone: true,
         allowedIps: {
           orderBy: { createdAt: "desc" },
           select: {
@@ -56,10 +62,22 @@ export async function GET(
   }
 }
 
+function optionalHHmm(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
+  if (typeof v !== "string") return undefined;
+  const s = v.trim();
+  if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(s)) return undefined;
+  return s;
+}
+
 /**
  * PATCH /api/companies/[companyId]/checkin-settings
  * Body: checkinEnterpriseEnabled?, checkinEnforceIpAllowlist?, checkinRequireFaceVerification?,
  *       checkinFaceDistanceThreshold? (number), checkinMaxFaceAttempts? (number)
+ *       checkinLockToFirstIp? (boolean), clearCheckinBoundIp? (boolean)
+ *       kioskOfficeOpensAt?, kioskOfficeClosesAt?, kioskCutoffTime? (HH:mm or null),
+ *       kioskTimezone? (IANA string)
  */
 export async function PATCH(
   req: NextRequest,
@@ -87,6 +105,12 @@ export async function PATCH(
 
   if (typeof body.checkinEnterpriseEnabled === "boolean") {
     data.checkinEnterpriseEnabled = body.checkinEnterpriseEnabled;
+  }
+  if (typeof body.checkinLockToFirstIp === "boolean") {
+    data.checkinLockToFirstIp = body.checkinLockToFirstIp;
+  }
+  if (body.clearCheckinBoundIp === true) {
+    data.checkinBoundIp = null;
   }
   if (typeof body.checkinEnforceIpAllowlist === "boolean") {
     data.checkinEnforceIpAllowlist = body.checkinEnforceIpAllowlist;
@@ -116,6 +140,38 @@ export async function PATCH(
     }
   }
 
+  if (body.kioskOfficeOpensAt !== undefined) {
+    const t = optionalHHmm(body.kioskOfficeOpensAt);
+    if (t === undefined) {
+      return NextResponse.json({ error: "kioskOfficeOpensAt must be HH:mm or null" }, { status: 400 });
+    }
+    data.kioskOfficeOpensAt = t;
+  }
+  if (body.kioskOfficeClosesAt !== undefined) {
+    const t = optionalHHmm(body.kioskOfficeClosesAt);
+    if (t === undefined) {
+      return NextResponse.json(
+        { error: "kioskOfficeClosesAt must be HH:mm or null" },
+        { status: 400 },
+      );
+    }
+    data.kioskOfficeClosesAt = t;
+  }
+  if (body.kioskCutoffTime !== undefined) {
+    const t = optionalHHmm(body.kioskCutoffTime);
+    if (t === undefined) {
+      return NextResponse.json({ error: "kioskCutoffTime must be HH:mm or null" }, { status: 400 });
+    }
+    data.kioskCutoffTime = t;
+  }
+  if (typeof body.kioskTimezone === "string") {
+    const tz = body.kioskTimezone.trim();
+    if (tz.length < 2 || tz.length > 64) {
+      return NextResponse.json({ error: "Invalid kioskTimezone" }, { status: 400 });
+    }
+    data.kioskTimezone = tz;
+  }
+
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
@@ -126,11 +182,17 @@ export async function PATCH(
       data,
       select: {
         id: true,
+        checkinLockToFirstIp: true,
+        checkinBoundIp: true,
         checkinEnterpriseEnabled: true,
         checkinEnforceIpAllowlist: true,
         checkinRequireFaceVerification: true,
         checkinFaceDistanceThreshold: true,
         checkinMaxFaceAttempts: true,
+        kioskOfficeOpensAt: true,
+        kioskOfficeClosesAt: true,
+        kioskCutoffTime: true,
+        kioskTimezone: true,
       },
     });
 
@@ -144,10 +206,36 @@ export async function PATCH(
       },
     });
 
+    const refreshed = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: {
+        id: true,
+        checkinLockToFirstIp: true,
+        checkinBoundIp: true,
+        checkinEnterpriseEnabled: true,
+        checkinEnforceIpAllowlist: true,
+        checkinRequireFaceVerification: true,
+        checkinFaceDistanceThreshold: true,
+        checkinMaxFaceAttempts: true,
+        kioskOfficeOpensAt: true,
+        kioskOfficeClosesAt: true,
+        kioskCutoffTime: true,
+        kioskTimezone: true,
+        allowedIps: {
+          orderBy: { createdAt: "desc" },
+          select: { id: true, label: true, address: true, createdAt: true },
+        },
+      },
+    });
+
+    if (!refreshed) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     return NextResponse.json({
-      ...updated,
-      checkinFaceDistanceThreshold: updated.checkinFaceDistanceThreshold
-        ? Number(updated.checkinFaceDistanceThreshold)
+      ...refreshed,
+      checkinFaceDistanceThreshold: refreshed.checkinFaceDistanceThreshold
+        ? Number(refreshed.checkinFaceDistanceThreshold)
         : null,
     });
   } catch {

@@ -23,6 +23,8 @@ export async function GET() {
         company: {
           select: {
             id: true,
+            checkinLockToFirstIp: true,
+            checkinBoundIp: true,
             checkinEnterpriseEnabled: true,
             checkinEnforceIpAllowlist: true,
             checkinRequireFaceVerification: true,
@@ -42,6 +44,8 @@ export async function GET() {
     return NextResponse.json({
       employeeId: employee.id,
       companyId: c.id,
+      checkinLockToFirstIp: c.checkinLockToFirstIp,
+      checkinHasBoundIp: c.checkinBoundIp != null,
       checkinEnterpriseEnabled: c.checkinEnterpriseEnabled,
       checkinEnforceIpAllowlist: c.checkinEnforceIpAllowlist,
       allowedIpCount: c._count.allowedIps,

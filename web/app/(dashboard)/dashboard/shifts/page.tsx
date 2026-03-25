@@ -7,6 +7,13 @@ import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { Button } from "@/components/ui/button";
 import { DatePickerField } from "@/components/ui/date-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { employeeDisplayName } from "@/lib/employee-display";
 
@@ -283,18 +290,22 @@ export default function ShiftsPage() {
 
                 {showAssign === shift.id ? (
                   <div className="space-y-3 rounded-lg border border-hgh-border bg-hgh-offwhite p-3">
-                    <select
-                      value={assignEmployeeId}
-                      onChange={(e) => setAssignEmployeeId(e.target.value)}
-                      className="w-full rounded-lg border border-hgh-border bg-white px-3 py-2 text-sm focus:border-hgh-gold focus:outline-none"
+                    <Select
+                      value={assignEmployeeId || "__none__"}
+                      onValueChange={(v) => setAssignEmployeeId(v === "__none__" ? "" : v)}
                     >
-                      <option value="">Select employee</option>
-                      {employees?.map((emp) => (
-                        <option key={emp.id} value={emp.id}>
-                          {employeeDisplayName(emp)} - {emp.department}
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-full text-sm">
+                        <SelectValue placeholder="Select employee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Select employee</SelectItem>
+                        {employees?.map((emp) => (
+                          <SelectItem key={emp.id} value={emp.id}>
+                            {employeeDisplayName(emp)} — {emp.department}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <DatePickerField
                       value={assignStartDate}
                       onChange={setAssignStartDate}

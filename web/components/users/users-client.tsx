@@ -415,22 +415,24 @@ export function UsersClient({
                             Super Admin
                           </span>
                         ) : (
-                          <select
+                          <Select
                             value={u.role}
-                            onChange={(e) => handleRoleChange(u.id, e.target.value as UserRole)}
-                            aria-label={`Role for ${u.name}`}
-                            className="rounded-md border border-hgh-border bg-white px-2 py-1 text-xs text-hgh-slate focus:outline-none focus-visible:border-hgh-navy/35"
+                            onValueChange={(v) => void handleRoleChange(u.id, v as UserRole)}
                           >
-                            {ROLE_OPTIONS.filter((r) => {
-                              if (currentUserRole === "COMPANY_ADMIN" && r.value === "COMPANY_ADMIN")
-                                return false;
-                              return true;
-                            }).map((r) => (
-                              <option key={r.value} value={r.value}>
-                                {r.label}
-                              </option>
-                            ))}
-                          </select>
+                            <SelectTrigger
+                              className="h-8 min-w-[10.5rem] max-w-[12rem] px-2 text-xs text-hgh-slate"
+                              aria-label={`Role for ${u.name}`}
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent align="start">
+                              {inviteRoleOptions.map((r) => (
+                                <SelectItem key={r.value} value={r.value} className="text-xs">
+                                  {r.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         )}
                       </td>
                       <td className="px-6 py-4">

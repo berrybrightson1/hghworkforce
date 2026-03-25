@@ -18,6 +18,7 @@ import { useApi } from "@/lib/swr";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { cn } from "@/lib/utils";
+import { FaceEnrollmentCapture } from "@/components/face-enrollment-capture";
 
 type ShiftInfo = {
   shift: { name: string; startTime: string; endTime: string };
@@ -149,6 +150,17 @@ export default function PortalCheckInPage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const reloadCheckinContext = useCallback(async () => {
+    try {
+      const res = await fetch("/api/checkin-context");
+      if (!res.ok) return;
+      const ctx = (await res.json()) as CheckinContext;
+      setCheckinCtx(ctx);
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const postSessionEvent = useCallback(
@@ -380,13 +392,22 @@ export default function PortalCheckInPage() {
             Secure check-in session is active. Visibility changes may be logged for audit.
           </p>
         )}
-        {checkinCtx?.checkinRequireFaceVerification &&
-          !checkinCtx?.hasFaceEnrolled && (
-            <p className="mx-auto mt-3 max-w-md rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs text-amber-950">
-              Face verification is required, but no face profile is enrolled for your
-              account. Contact HR to complete enrollment before you can clock in.
+        {checkinCtx && !checkinCtx.hasFaceEnrolled && (
+          <div className="mx-auto mt-4 max-w-lg rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-4 text-left">
+            <p className="text-sm font-medium text-amber-950">Register your face (one time)</p>
+            <p className="mt-1 text-xs text-amber-900/90">
+              Required for the <strong>office kiosk</strong> and for face check-in. Use the camera
+              below. If your company has no HR role, a <strong>company admin</strong> can do this
+              from <strong>Dashboard → Employees → your profile → Check-in face profile</strong>.
             </p>
-          )}
+            <div className="mt-4 flex justify-center sm:justify-start">
+              <FaceEnrollmentCapture
+                employeeId={checkinCtx.employeeId}
+                onSuccess={() => void reloadCheckinContext()}
+              />
+            </div>
+          </div>
+        )}
         {isDev &&
           checkinCtx?.checkinRequireFaceVerification &&
           checkinCtx?.hasFaceEnrolled && (

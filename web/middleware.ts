@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { normalizeKioskCompanyId } from "@/lib/kiosk-company-id";
 import { updateSession } from "@/lib/supabase/middleware";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
@@ -38,7 +39,7 @@ export async function middleware(request: NextRequest) {
   // 2. Auth Session Update
   const response = await updateSession(request);
 
-  // 2b. Enterprise check-in: block /portal/checkin when IP not allowlisted
+  // 2b. Check-in page: block /portal/checkin when IP fails first-PC lock or enterprise allowlist
   const path = request.nextUrl.pathname;
   if (
     path === "/portal/checkin" &&
@@ -62,6 +63,30 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  if (path === "/kiosk/checkin" && request.method === "GET") {
+    const companyId = normalizeKioskCompanyId(
+      request.nextUrl.searchParams.get("c") ??
+        request.nextUrl.searchParams.get("companyId"),
+    );
+    if (companyId) {
+      try {
+        const gateUrl = new URL(
+          `/api/kiosk/ip-gate?companyId=${encodeURIComponent(companyId)}`,
+          request.nextUrl.origin,
+        );
+        const gateRes = await fetch(gateUrl.toString());
+        if (gateRes.status === 403) {
+          const denied = request.nextUrl.clone();
+          denied.pathname = "/kiosk/checkin/denied";
+          denied.search = `?c=${encodeURIComponent(companyId)}`;
+          return NextResponse.redirect(denied);
+        }
+      } catch {
+        // Fail open if gate fetch errors
+      }
+    }
+  }
+
   // 3. Security Headers
   response.headers.set("X-DNS-Prefetch-Control", "on");
   response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
@@ -70,7 +95,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co;"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net https://storage.googleapis.com;"
   );
 
   return response;

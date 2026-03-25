@@ -6,7 +6,7 @@ import { parseFaceDescriptor } from "@/lib/face-math";
 /**
  * POST /api/employees/[id]/face-descriptor
  * Body: { descriptor: number[] }
- * Self-service for linked user, or company HR/admin for same company.
+ * Self-service for the linked employee user, or Super Admin / Company Admin / HR for that company.
  */
 export async function POST(
   req: NextRequest,

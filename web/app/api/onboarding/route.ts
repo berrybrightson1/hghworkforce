@@ -39,7 +39,7 @@ export async function POST(req: Request) {
     }
 
     const company = await prisma.company.create({
-      data: { name },
+      data: { name, checkinLockToFirstIp: true },
     });
 
     // User who creates a company becomes its COMPANY_ADMIN

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/kiosk-absences",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

@@ -37,6 +37,8 @@ export async function GET(
     delete data.faceDescriptor;
     delete data.faceRegisteredAt;
 
+    const canSeeFaceMeta = isSelf || isCompanyAdmin;
+
     // Decrypt if requested and authorized
     if (decryptRequested && isCompanyAdmin) {
       data.ssnit = decrypt(employee.ssnitEncrypted);
@@ -59,7 +61,16 @@ export async function GET(
     delete data.bankAccountEncrypted;
     delete data.bankBranchEncrypted;
 
-    return NextResponse.json(data);
+    return NextResponse.json({
+      ...data,
+      hasFaceEnrolled: employee.faceDescriptor != null,
+      faceRegisteredAt:
+        canSeeFaceMeta && employee.faceRegisteredAt
+          ? employee.faceRegisteredAt.toISOString()
+          : canSeeFaceMeta
+            ? null
+            : undefined,
+    });
   } catch {
     return NextResponse.json({ error: "Failed to load employee" }, { status: 500 });
   }

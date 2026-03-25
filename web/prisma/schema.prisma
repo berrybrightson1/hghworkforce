@@ -112,12 +112,27 @@ model Company {
   /// Enterprise check-in (IP allowlist, audit sessions, optional face match)
   checkinEnterpriseEnabled       Boolean  @default(false)
   checkinEnforceIpAllowlist      Boolean  @default(false)
+  /// When true, the first successful visit to employee check-in from a browser saves that public IP; only that IP can load check-in or POST check-ins until cleared in settings.
+  checkinLockToFirstIp           Boolean  @default(true)
+  /// Normalized IPv4/IPv6 captured on first check-in page load (see checkinLockToFirstIp).
+  checkinBoundIp                 String?
   checkinRequireFaceVerification Boolean  @default(false)
   /// L2 distance threshold for face descriptor match (default applied in app if null)
   checkinFaceDistanceThreshold   Decimal? @db.Decimal(8, 5)
   checkinMaxFaceAttempts         Int      @default(3)
 
+  /// Office kiosk: local HH:mm in kioskTimezone (null = no open/close restriction)
+  kioskOfficeOpensAt     String?
+  kioskOfficeClosesAt    String?
+  /// After this local time, new clock-in blocked; cron marks absent (shift employees)
+  kioskCutoffTime        String?
+  /// IANA timezone e.g. Africa/Accra
+  kioskTimezone          String   @default("Africa/Accra")
+  /// Local YYYY-MM-DD when kiosk absence cron last ran (idempotency)
+  kioskLastAbsentRunDate String?
+
   allowedIps           AllowedIP[]
+  kioskDayAbsences     KioskDayAbsence[]
   ipAccessRequests     IPAccessRequest[]
   checkinSessions      CheckinSession[]
   faceMismatchAlerts   FaceMismatchAlert[]
@@ -189,8 +204,9 @@ model Employee {
   checkIns         CheckIn[]
   shiftAssignments ShiftAssignment[]
   documents        EmployeeDocument[]
-  checkinSessions  CheckinSession[]
-  faceMismatchAlerts FaceMismatchAlert[]
+  checkinSessions        CheckinSession[]
+  faceMismatchAlerts     FaceMismatchAlert[]
+  kioskDayAbsences       KioskDayAbsence[]
 
   @@index([companyId, status])
   @@index([employeeCode])
@@ -513,6 +529,23 @@ model FaceMismatchAlert {
 
   @@index([companyId, resolvedAt])
   @@index([employeeId])
+}
+
+/// Local calendar day in company kioskTimezone; absence if no check-in by cutoff.
+model KioskDayAbsence {
+  id          String   @id @default(cuid())
+  companyId   String
+  employeeId  String
+  /// Local date YYYY-MM-DD for company timezone
+  localDate   String
+  reason      String   @default("MISSING_CHECKIN")
+  createdAt   DateTime @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, employeeId, localDate])
+  @@index([companyId, localDate])
 }
 
 model Shift {

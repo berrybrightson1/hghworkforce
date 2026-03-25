@@ -11,6 +11,7 @@ import {
   Eye,
   EyeOff,
   FileText,
+  Fingerprint,
   Plus,
   Trash2,
   User,
@@ -36,6 +37,7 @@ import { DatePickerField } from "@/components/ui/date-picker";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
+import { FaceEnrollmentCapture } from "@/components/face-enrollment-capture";
 
 interface SalaryComponent {
   id: string;
@@ -70,6 +72,8 @@ interface Employee {
   basicSalary: string;
   company: { name: string };
   salaryComponents: SalaryComponent[];
+  hasFaceEnrolled?: boolean;
+  faceRegisteredAt?: string | null;
   // Sensitive fields (masked by default)
   ssnit?: string;
   tin?: string;
@@ -126,7 +130,7 @@ export default function EmployeeDetailPage() {
   const { data: employee, mutate, isLoading, error } = useApi<Employee>(
     `/api/employees/${id}${revealed ? "?decrypt=true" : ""}`
   );
-  const { data: me } = useApi<{ id: string }>("/api/me");
+  const { data: me } = useApi<{ id: string; role: string }>("/api/me");
   const { data: documents, mutate: mutateDocs } = useApi<EmployeeDocument[]>(`/api/employees/${id}/documents`);
 
   function openEditProfile() {
@@ -299,6 +303,12 @@ export default function EmployeeDetailPage() {
     </div>;
   }
 
+  const isSelfProfile = Boolean(employee.userId && me?.id === employee.userId);
+  const isPayrollAdmin =
+    me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN" || me?.role === "HR";
+  const showFaceEnrollmentCard =
+    employee.status === "ACTIVE" && (isPayrollAdmin || isSelfProfile);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -435,6 +445,38 @@ export default function EmployeeDetailPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {showFaceEnrollmentCard && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Fingerprint size={18} />
+                    Check-in & kiosk face profile
+                  </CardTitle>
+                  <p className="text-xs text-hgh-muted">
+                    Super Admin, Company Admin, or HR can register on behalf of any employee.
+                    Employees with dashboard access to their own record can register here too.
+                    Saving again replaces the previous profile.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {employee.hasFaceEnrolled ? (
+                    <p className="text-sm text-hgh-success">
+                      Face profile is registered
+                      {employee.faceRegisteredAt ? (
+                        <span className="text-hgh-muted">
+                          {" "}
+                          · since {new Date(employee.faceRegisteredAt).toLocaleString()}
+                        </span>
+                      ) : null}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-hgh-muted">No face profile yet — required for the office kiosk.</p>
+                  )}
+                  <FaceEnrollmentCapture employeeId={employee.id} onSuccess={() => void mutate()} />
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       )}

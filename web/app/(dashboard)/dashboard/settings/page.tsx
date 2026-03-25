@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Shield, Calculator, FileText, MapPin, Network } from "lucide-react";
+import { Shield, Calculator, FileText, MapPin, Monitor, Network } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,11 +19,17 @@ import {
 
 interface CheckinSettingsPayload {
   id: string;
+  checkinLockToFirstIp: boolean;
+  checkinBoundIp: string | null;
   checkinEnterpriseEnabled: boolean;
   checkinEnforceIpAllowlist: boolean;
   checkinRequireFaceVerification: boolean;
   checkinFaceDistanceThreshold: number | null;
   checkinMaxFaceAttempts: number;
+  kioskOfficeOpensAt: string | null;
+  kioskOfficeClosesAt: string | null;
+  kioskCutoffTime: string | null;
+  kioskTimezone: string;
   allowedIps: {
     id: string;
     label: string | null;
@@ -578,6 +584,122 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
+          {/* Office kiosk — above the long "Check-in security" card so the bookmark stays visible */}
+          {canEditCheckin && selected && (
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-3">
+                <Monitor size={20} className="shrink-0 text-hgh-gold" />
+                <div>
+                  <CardTitle>Office kiosk</CardTitle>
+                  <p className="mt-0.5 text-xs text-hgh-muted">
+                    Shared browser on the office PC: employees sign in with name, employee code, and
+                    face capture—no Supabase login on that device. After closing time, check-out still
+                    works. Set a cut-off time to stop new check-ins and drive absence marking (shifted
+                    staff only).
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-hgh-slate">
+                  Same IP lock as portal check-in: open this URL once on the kiosk PC while the
+                  first-PC lock is on so that machine&apos;s IP is registered.
+                </p>
+                <div className="rounded-lg border border-hgh-border bg-hgh-offwhite p-3 font-mono text-xs break-all text-hgh-slate">
+                  {(process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000") +
+                    "/kiosk/checkin?c=" +
+                    selected.id}
+                </div>
+                {checkinSettings ? (
+                  <>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-hgh-muted">
+                        Kiosk timezone (IANA)
+                      </label>
+                      <Input
+                        defaultValue={checkinSettings.kioskTimezone || "Africa/Accra"}
+                        key={checkinSettings.kioskTimezone}
+                        disabled={savingCheckinToggle}
+                        onBlur={(e) => {
+                          const tz = e.target.value.trim();
+                          if (tz && tz !== checkinSettings.kioskTimezone) {
+                            void patchCheckinSettings({ kioskTimezone: tz });
+                          }
+                        }}
+                      />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-hgh-muted">
+                          Office opens (optional)
+                        </label>
+                        <Input
+                          type="time"
+                          disabled={savingCheckinToggle}
+                          defaultValue={checkinSettings.kioskOfficeOpensAt ?? ""}
+                          key={`open-${checkinSettings.kioskOfficeOpensAt ?? "x"}`}
+                          onBlur={(e) => {
+                            const v = e.target.value;
+                            const next = v === "" ? null : v;
+                            if (next !== checkinSettings.kioskOfficeOpensAt) {
+                              void patchCheckinSettings({ kioskOfficeOpensAt: next });
+                            }
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-hgh-muted">
+                          Office closes (optional)
+                        </label>
+                        <Input
+                          type="time"
+                          disabled={savingCheckinToggle}
+                          defaultValue={checkinSettings.kioskOfficeClosesAt ?? ""}
+                          key={`close-${checkinSettings.kioskOfficeClosesAt ?? "x"}`}
+                          onBlur={(e) => {
+                            const v = e.target.value;
+                            const next = v === "" ? null : v;
+                            if (next !== checkinSettings.kioskOfficeClosesAt) {
+                              void patchCheckinSettings({ kioskOfficeClosesAt: next });
+                            }
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-hgh-muted">
+                          Cut-off (optional)
+                        </label>
+                        <Input
+                          type="time"
+                          disabled={savingCheckinToggle}
+                          defaultValue={checkinSettings.kioskCutoffTime ?? ""}
+                          key={`cut-${checkinSettings.kioskCutoffTime ?? "x"}`}
+                          onBlur={(e) => {
+                            const v = e.target.value;
+                            const next = v === "" ? null : v;
+                            if (next !== checkinSettings.kioskCutoffTime) {
+                              void patchCheckinSettings({ kioskCutoffTime: next });
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-hgh-muted">
+                      Leave times empty to disable that rule. With a cut-off set, a scheduled job marks
+                      absences for employees who have a shift that day but never checked in—after the
+                      cut-off in this timezone. Requires{" "}
+                      <span className="font-mono">CRON_SECRET</span> on the server for Vercel Cron.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-hgh-muted">
+                    Loading kiosk time settings… If this never finishes, fix Check-in settings (e.g. run
+                    the latest SQL so kiosk columns exist) and refresh.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Enterprise check-in */}
           {canEditCheckin && selected && checkinSettings && (
             <Card>
@@ -591,6 +713,56 @@ export default function SettingsPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
+                <label className="flex items-start gap-2 text-sm text-hgh-slate">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 rounded border-hgh-border"
+                    checked={checkinSettings.checkinLockToFirstIp}
+                    disabled={savingCheckinToggle}
+                    onChange={(e) =>
+                      void patchCheckinSettings({
+                        checkinLockToFirstIp: e.target.checked,
+                      })
+                    }
+                  />
+                  <span>
+                    Lock employee check-in to one work PC (recommended). The first time someone opens
+                    the employee check-in page on your chosen office machine, this system saves that
+                    machine&apos;s public IP. After that, check-in only works from that IP—employees
+                    cannot check in from home or another device. If your office IP changes (e.g. ISP
+                    DHCP), use &quot;Clear registered IP&quot; and open check-in again on the right
+                    PC.
+                  </span>
+                </label>
+                {checkinSettings.checkinLockToFirstIp &&
+                  (checkinSettings.checkinBoundIp ? (
+                    <div className="rounded-lg border border-hgh-border bg-hgh-offwhite p-3 text-xs text-hgh-slate">
+                      <p className="font-medium text-hgh-navy">Registered check-in IP</p>
+                      <p className="mt-1 font-mono">{checkinSettings.checkinBoundIp}</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="mt-2 underline"
+                        disabled={savingCheckinToggle}
+                        onClick={() =>
+                          void patchCheckinSettings({ clearCheckinBoundIp: true })
+                        }
+                      >
+                        Clear registered IP (next visit re-binds a new PC)
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-hgh-muted">
+                      No IP bound yet. On the office PC you want employees to use, log in as an
+                      employee and open Check-in once—the IP will be saved automatically.
+                    </p>
+                  ))}
+
+                <p className="text-xs text-hgh-muted">
+                  When &quot;Lock to one work PC&quot; is on, the manual IP list below is not used.
+                </p>
+
                 <label className="flex items-center gap-2 text-sm text-hgh-slate">
                   <input
                     type="checkbox"
@@ -610,14 +782,19 @@ export default function SettingsPage() {
                     type="checkbox"
                     className="rounded border-hgh-border"
                     checked={checkinSettings.checkinEnforceIpAllowlist}
-                    disabled={savingCheckinToggle || !checkinSettings.checkinEnterpriseEnabled}
+                    disabled={
+                      savingCheckinToggle ||
+                      !checkinSettings.checkinEnterpriseEnabled ||
+                      checkinSettings.checkinLockToFirstIp
+                    }
                     onChange={(e) =>
                       void patchCheckinSettings({
                         checkinEnforceIpAllowlist: e.target.checked,
                       })
                     }
                   />
-                  Enforce IP allowlist (when at least one IP is configured)
+                  Enforce IP allowlist (when at least one IP is configured; off while first-PC lock
+                  is enabled)
                 </label>
                 <label className="flex items-center gap-2 text-sm text-hgh-slate">
                   <input
@@ -681,26 +858,39 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="border-t border-hgh-border pt-4">
-                  <p className="text-xs font-medium text-hgh-muted">Allowed IPs</p>
+                <div
+                  className={`border-t border-hgh-border pt-4 ${checkinSettings.checkinLockToFirstIp ? "pointer-events-none opacity-50" : ""}`}
+                >
+                  <p className="text-xs font-medium text-hgh-muted">Allowed IPs (enterprise allowlist)</p>
+                  {checkinSettings.checkinLockToFirstIp && (
+                    <p className="mt-1 text-xs text-hgh-muted">
+                      Disabled while first-PC lock is enabled.
+                    </p>
+                  )}
                   <div className="mt-2 flex flex-wrap gap-2">
                     <Input
                       placeholder="e.g. 203.0.113.10"
                       value={newAllowedIp}
                       onChange={(e) => setNewAllowedIp(e.target.value)}
                       className="min-w-[140px] flex-1"
+                      disabled={checkinSettings.checkinLockToFirstIp}
                     />
                     <Input
                       placeholder="Label (optional)"
                       value={newAllowedLabel}
                       onChange={(e) => setNewAllowedLabel(e.target.value)}
                       className="min-w-[100px] flex-1"
+                      disabled={checkinSettings.checkinLockToFirstIp}
                     />
                     <Button
                       type="button"
                       size="sm"
                       onClick={() => void handleAddAllowedIp()}
-                      disabled={addingIp || !newAllowedIp.trim()}
+                      disabled={
+                        addingIp ||
+                        !newAllowedIp.trim() ||
+                        checkinSettings.checkinLockToFirstIp
+                      }
                     >
                       Add
                     </Button>

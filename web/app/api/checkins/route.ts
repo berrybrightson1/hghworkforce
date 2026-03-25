@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireDbUser, canAccessCompany } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
-import { checkinIpAllowed, getClientIpFromRequest } from "@/lib/checkin-ip";
+import { getClientIpFromRequest } from "@/lib/checkin-ip";
+import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
 import { faceDescriptorsMatch, parseFaceDescriptor } from "@/lib/face-math";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -171,6 +172,8 @@ export async function POST(req: NextRequest) {
         officeLat: true,
         officeLng: true,
         geofenceRadius: true,
+        checkinLockToFirstIp: true,
+        checkinBoundIp: true,
         checkinEnterpriseEnabled: true,
         checkinEnforceIpAllowlist: true,
         checkinRequireFaceVerification: true,
@@ -181,28 +184,35 @@ export async function POST(req: NextRequest) {
     });
 
     const clientIp = getClientIpFromRequest(req);
-    const allowedAddresses = company?.allowedIps.map((r) => r.address) ?? [];
-    const ipResult = checkinIpAllowed({
-      enterpriseEnabled: company?.checkinEnterpriseEnabled ?? false,
-      enforceIp: company?.checkinEnforceIpAllowlist ?? false,
-      allowedAddresses,
-      clientIp,
-    });
-    if (!ipResult.allowed) {
-      await prisma.auditLog.create({
-        data: {
-          actorId: auth.dbUser.id,
-          action: "CHECKIN_IP_BLOCKED",
-          entityType: "Company",
-          entityId: employee.companyId,
-          afterState: { reason: ipResult.reason, clientIp, source: "checkins_api" },
-          ipAddress: clientIp,
-        },
+    if (company) {
+      const ipOk = await assertCompanyCheckinIpAllowed({
+        companyId: employee.companyId,
+        company,
+        clientIp,
+        actorId: auth.dbUser.id,
       });
-      return NextResponse.json(
-        { error: "Check-in not allowed from this network", reason: ipResult.reason },
-        { status: 403 },
-      );
+      if (!ipOk.ok) {
+        await prisma.auditLog.create({
+          data: {
+            actorId: auth.dbUser.id,
+            action: "CHECKIN_IP_BLOCKED",
+            entityType: "Company",
+            entityId: employee.companyId,
+            afterState: { reason: ipOk.logReason, clientIp, source: "checkins_api" },
+            ipAddress: clientIp,
+          },
+        });
+        return NextResponse.json(
+          {
+            error:
+              ipOk.reason === "ip_mismatch"
+                ? "Check-in is only allowed from your company’s registered work PC."
+                : "Check-in not allowed from this network",
+            reason: ipOk.reason,
+          },
+          { status: 403 },
+        );
+      }
     }
 
     let activeSession: { id: string } | null = null;
@@ -237,7 +247,9 @@ export async function POST(req: NextRequest) {
       if (!stored) {
         return NextResponse.json(
           {
-            error: "Face enrollment required. Ask HR to register your face profile.",
+            error: "Face profile not enrolled yet.",
+            hint:
+              "Open Portal → Check-in and use Register your face, or ask a Company Admin to register it on your employee profile.",
           },
           { status: 403 },
         );
