@@ -5,8 +5,10 @@ const nextConfig: NextConfig = {
   // Monorepo: repo root is one level above `web/` (matches npm workspaces).
   outputFileTracingRoot: path.join(process.cwd(), ".."),
 
-  // distDir must stay relative to the project root. An absolute path (e.g. os.tmpdir())
-  // breaks on Windows: Next joins it with cwd and mkdir fails with ENOENT.
+  // When the Git/Vercel project root is the monorepo (not `web/`), Next still runs with
+  // cwd `web/`; emit the build to `../.next` so `/vercel/path0/.next` exists for deploy.
+  // Relative distDir only—absolute paths break on Windows (Next joins them incorrectly).
+  distDir: "../.next",
 
   // Repo-wide ESLint cleanup is tracked separately; do not block production builds.
   eslint: {
