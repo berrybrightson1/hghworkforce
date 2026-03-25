@@ -1,12 +1,18 @@
 {
   "name": "hgh-payroll-workspace",
   "private": true,
+  "workspaces": [
+    "web"
+  ],
   "scripts": {
-    "dev": "npm run dev --prefix web",
-    "dev:network": "npm run dev:network --prefix web",
-    "build": "npm run build --prefix web",
-    "start": "npm run start --prefix web",
-    "lint": "npm run lint --prefix web",
-    "test": "npm run test --prefix web"
+    "dev": "npm run dev -w hgh-payroll",
+    "dev:network": "npm run dev:network -w hgh-payroll",
+    "build": "npm run build -w hgh-payroll",
+    "start": "npm run start -w hgh-payroll",
+    "lint": "npm run lint -w hgh-payroll",
+    "test": "npm run test -w hgh-payroll"
+  },
+  "dependencies": {
+    "next": "^15.2.8"
   }
 }

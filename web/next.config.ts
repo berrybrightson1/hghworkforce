@@ -1,6 +1,10 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Monorepo: repo root is one level above `web/` (matches npm workspaces).
+  outputFileTracingRoot: path.join(process.cwd(), ".."),
+
   // distDir must stay relative to the project root. An absolute path (e.g. os.tmpdir())
   // breaks on Windows: Next joins it with cwd and mkdir fails with ENOENT.
 
