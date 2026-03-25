@@ -1,0 +1,26 @@
+# Dependencies & build
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+**/.turbo/
+
+# Env / secrets
+.env*
+!.env.example
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+*.log
+.cursor/
+.claude/
+
+# Large local artifacts (optional — remove lines if you want these in git)
+*.zip
+_prd.zip
+_skill.zip
+files.zip
+
+# Prisma
+**/node_modules/.prisma/
