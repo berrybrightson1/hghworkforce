@@ -496,6 +496,10 @@ export default function SettingsPage() {
                           }
                         }}
                       />
+                      <p className="mt-1 text-xs text-hgh-muted">
+                        Also used for shift late, early departure, and overtime (portal and kiosk)—must match
+                        how you define shift start/end times.
+                      </p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div>

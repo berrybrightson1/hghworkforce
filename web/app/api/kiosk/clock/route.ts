@@ -12,19 +12,11 @@ import {
   startOfLocalDayUtc,
   endOfLocalDayUtc,
 } from "@/lib/kiosk-time";
-
-function parseHHmm(t: string) {
-  const [h, m] = t.split(":").map(Number);
-  return { hours: h, minutes: m };
-}
+import { wallMinutesFromDateInZone } from "@/lib/shift-wall-time";
 
 function hhmToMinutes(t: string) {
-  const { hours, minutes } = parseHHmm(t);
-  return hours * 60 + minutes;
-}
-
-function dateToMinutesUTC(d: Date) {
-  return d.getUTCHours() * 60 + d.getUTCMinutes();
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
 }
 
 /**
@@ -210,7 +202,7 @@ export async function POST(req: NextRequest) {
       let lateMinutes: number | null = null;
       if (activeAssignment.shift) {
         const shiftStartMins = hhmToMinutes(activeAssignment.shift.startTime);
-        const clockInMins = dateToMinutesUTC(now);
+        const clockInMins = wallMinutesFromDateInZone(now, tz);
         const diff = clockInMins - shiftStartMins;
         if (diff > 5) lateMinutes = diff;
       }
@@ -257,7 +249,7 @@ export async function POST(req: NextRequest) {
 
     if (shift) {
       const shiftEndMins = hhmToMinutes(shift.endTime);
-      const clockOutMins = dateToMinutesUTC(clockOut);
+      const clockOutMins = wallMinutesFromDateInZone(clockOut, tz);
       if (shiftEndMins - clockOutMins > 5) {
         earlyDepartMinutes = shiftEndMins - clockOutMins;
       }

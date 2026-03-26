@@ -11,13 +11,14 @@ import {
   CalendarDays,
   Landmark,
   TrendingUp,
-  Settings,
   ChevronDown,
   Check,
   UserPlus,
   CreditCard,
   Fingerprint,
   Clock,
+  Menu,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { SidebarAccountMenu } from "@/components/dashboard/sidebar-account-menu";
@@ -92,28 +93,71 @@ const navigation: NavGroup[] = [
   },
 ];
 
-const SidebarItem = React.memo(({ item, pathname }: { item: NavItem; pathname: string }) => {
-  const Icon = item.icon;
-  const active =
-    pathname === item.href ||
-    (item.href !== "/dashboard" && pathname.startsWith(item.href));
-    
-  return (
-    <Link
-      href={item.href}
-      className={cn(
-        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
-        active
-          ? "bg-white/10 text-hgh-gold"
-          : "text-white/80 hover:bg-white/5 hover:text-white",
-      )}
-    >
-      <Icon size={18} className="shrink-0" />
-      {item.label}
-    </Link>
-  );
-});
+const SidebarItem = React.memo(
+  ({
+    item,
+    pathname,
+    onNavigate,
+  }: {
+    item: NavItem;
+    pathname: string;
+    onNavigate?: () => void;
+  }) => {
+    const Icon = item.icon;
+    const active =
+      pathname === item.href ||
+      (item.href !== "/dashboard" && pathname.startsWith(item.href));
+
+    return (
+      <Link
+        href={item.href}
+        onClick={() => onNavigate?.()}
+        className={cn(
+          "flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
+          active
+            ? "bg-white/10 text-hgh-gold"
+            : "text-white/80 hover:bg-white/5 hover:text-white",
+        )}
+      >
+        <Icon size={18} className="shrink-0" />
+        {item.label}
+      </Link>
+    );
+  },
+);
 SidebarItem.displayName = "SidebarItem";
+
+function SidebarNav({
+  groups,
+  pathname,
+  onNavigate,
+}: {
+  groups: NavGroup[];
+  pathname: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-2 py-4">
+      {groups.map((group) => (
+        <div key={group.label} className="space-y-1">
+          <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-white/40">
+            {group.label}
+          </p>
+          <div className="space-y-0.5">
+            {group.items.map((item) => (
+              <SidebarItem
+                key={item.href}
+                item={item}
+                pathname={pathname}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+}
 
 function getVisibleNavigation(role: UserRole): NavGroup[] {
   return navigation
@@ -155,9 +199,9 @@ function CompanySwitcher() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between gap-2 rounded-lg border border-white/10 bg-hgh-navy-light px-3 py-2 text-left text-sm text-white transition hover:bg-hgh-navy-light/90"
+        className="flex w-full min-h-11 items-center justify-between gap-2 rounded-lg border border-white/10 bg-hgh-navy-light px-3 py-2 text-left text-sm text-white transition hover:bg-hgh-navy-light/90"
       >
-        <span className="flex items-center gap-2 truncate">
+        <span className="flex min-w-0 items-center gap-2">
           <Building2 size={16} className="shrink-0 text-hgh-gold" />
           <span className="truncate">
             {loading ? "Loading..." : selected?.name ?? "Select company"}
@@ -170,7 +214,7 @@ function CompanySwitcher() {
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 animate-in rounded-lg border border-white/10 bg-hgh-navy-light shadow-xl">
+        <div className="absolute left-0 right-0 top-full z-[60] mt-1 max-h-[min(50vh,20rem)] animate-in overflow-y-auto rounded-lg border border-white/10 bg-hgh-navy-light shadow-xl">
           {companies.length === 0 ? (
             <p className="px-3 py-2 text-xs text-white/50">No companies yet</p>
           ) : (
@@ -183,7 +227,7 @@ function CompanySwitcher() {
                   setOpen(false);
                 }}
                 className={cn(
-                  "flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-white/5",
+                  "flex min-h-11 w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-white/5",
                   c.id === selected?.id ? "text-hgh-gold" : "text-white/80",
                 )}
               >
@@ -192,8 +236,8 @@ function CompanySwitcher() {
                 ) : (
                   <span className="w-[14px]" />
                 )}
-                <span className="truncate">{c.name}</span>
-                <span className="ml-auto text-xs text-white/40">
+                <span className="min-w-0 truncate">{c.name}</span>
+                <span className="ml-auto shrink-0 text-xs text-white/40">
                   {c._count?.employees ?? 0}
                 </span>
               </button>
@@ -201,6 +245,19 @@ function CompanySwitcher() {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function SidebarBrandingBlock() {
+  return (
+    <div className="border-b border-white/10 px-4 py-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-hgh-gold">
+        HGH WorkForce
+      </p>
+      <div className="mt-3">
+        <CompanySwitcher />
+      </div>
     </div>
   );
 }
@@ -219,57 +276,120 @@ export function DashboardShell({
   const pathname = usePathname();
   const groups = useMemo(() => getVisibleNavigation(userRole), [userRole]);
   const title = useMemo(() => pageTitle(pathname, groups), [pathname, groups]);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!mobileNavOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileNavOpen]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-hgh-offwhite">
-      {/* Sidebar */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-hgh-border bg-hgh-navy text-white md:flex">
-        {/* Top: branding + company switcher */}
-        <div className="border-b border-white/10 px-4 py-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-hgh-gold">
-            HGH WorkForce
-          </p>
-          <div className="mt-3">
+    <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-hgh-offwhite">
+      {/* Mobile navigation drawer */}
+      <div
+        className={cn("fixed inset-0 z-50 md:hidden", !mobileNavOpen && "pointer-events-none")}
+      >
+        <button
+          type="button"
+          className={cn(
+            "absolute inset-0 bg-black/50 transition-opacity",
+            mobileNavOpen ? "opacity-100" : "opacity-0",
+          )}
+          aria-label="Close navigation"
+          tabIndex={mobileNavOpen ? 0 : -1}
+          onClick={() => setMobileNavOpen(false)}
+        />
+        <aside
+          id="dashboard-mobile-drawer"
+          aria-label="Dashboard navigation"
+          className={cn(
+            "absolute inset-y-0 left-0 flex w-[min(17.5rem,calc(100vw-1.5rem))] max-w-sm flex-col border-r border-hgh-border bg-hgh-navy text-white shadow-xl transition-transform duration-200 ease-out",
+            mobileNavOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-hgh-gold">
+              Menu
+            </p>
+            <button
+              type="button"
+              className="rounded-lg p-2 text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/50"
+              aria-label="Close menu"
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <X size={22} />
+            </button>
+          </div>
+          <div className="shrink-0 border-b border-white/10 px-4 py-3">
             <CompanySwitcher />
           </div>
-        </div>
+          <SidebarNav
+            groups={groups}
+            pathname={pathname}
+            onNavigate={() => setMobileNavOpen(false)}
+          />
+          <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
+        </aside>
+      </div>
 
-        {/* Middle: nav links grouped */}
-        <nav className="flex-1 space-y-6 overflow-y-auto px-2 py-4">
-          {groups.map((group) => (
-            <div key={group.label} className="space-y-1">
-              <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-white/40">
-                {group.label}
-              </p>
-              <div className="space-y-0.5">
-                {group.items.map((item) => (
-                  <SidebarItem key={item.href} item={item} pathname={pathname} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        {/* Bottom: account menu */}
-        <SidebarAccountMenu
-          email={userEmail}
-          displayName={userDisplayName}
-        />
+      {/* Desktop sidebar */}
+      <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-hgh-border bg-hgh-navy text-white md:flex">
+        <SidebarBrandingBlock />
+        <SidebarNav groups={groups} pathname={pathname} />
+        <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
       </aside>
 
       {/* Main area */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <header className="flex items-center justify-between border-b border-hgh-border bg-white px-4 py-3 md:px-8">
-          <div>
-            <Breadcrumbs />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="rounded-md bg-hgh-gold/10 px-2.5 py-1 text-xs font-medium text-hgh-gold">
-              {userRole.replace("_", " ")}
-            </span>
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium text-hgh-navy">{userDisplayName}</p>
-              <p className="max-w-[200px] truncate text-xs text-hgh-muted">{userEmail}</p>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
+        <header className="shrink-0 border-b border-hgh-border bg-white px-4 py-3 md:px-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2">
+              <button
+                type="button"
+                className="mt-0.5 shrink-0 rounded-lg border border-hgh-border bg-hgh-offwhite p-2 text-hgh-navy hover:bg-hgh-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40 md:hidden"
+                aria-controls="dashboard-mobile-drawer"
+                aria-haspopup="dialog"
+                aria-label="Open navigation menu"
+                onClick={() => setMobileNavOpen(true)}
+              >
+                <Menu size={20} />
+              </button>
+              <div className="min-w-0 flex-1">
+                <div className="max-w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
+                  <Breadcrumbs />
+                </div>
+                <p className="mt-1 truncate text-sm font-semibold text-hgh-navy md:hidden">{title}</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+              <span
+                className="max-w-[min(160px,45vw)] truncate rounded-md bg-hgh-gold/10 px-2.5 py-1 text-xs font-medium text-hgh-gold sm:max-w-none"
+                title={userRole.replace("_", " ")}
+              >
+                {userRole.replace("_", " ")}
+              </span>
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-medium text-hgh-navy">{userDisplayName}</p>
+                <p className="max-w-[200px] truncate text-xs text-hgh-muted">{userEmail}</p>
+              </div>
             </div>
           </div>
         </header>

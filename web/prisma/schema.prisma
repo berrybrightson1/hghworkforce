@@ -1,5 +1,8 @@
 // HGH Payroll — PostgreSQL on Supabase (pooled DATABASE_URL + DIRECT_URL for migrations)
 // See: https://supabase.com/docs/guides/database/connecting-to-postgres
+//
+// DATABASE_URL (Transaction pooler / port 6543) MUST include ?pgbouncer=true (or &pgbouncer=true).
+// Without it, Postgres can error: 42P05 "prepared statement \"sN\" already exists" on Vercel/PgBouncer.
 
 generator client {
   provider = "prisma-client-js"

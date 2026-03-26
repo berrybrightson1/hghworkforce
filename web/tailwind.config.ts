@@ -24,8 +24,8 @@ export default {
         },
       },
       fontFamily: {
-        sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
-        mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
+        sans: ["var(--font-geist-sans)"],
+        mono: ["var(--font-geist-mono)"],
       },
       keyframes: {
         "toast-in": {

@@ -5,24 +5,14 @@ import { prisma } from "@/lib/prisma";
 import { getClientIpFromRequest } from "@/lib/checkin-ip";
 import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
 import { faceDescriptorsMatch, parseFaceDescriptor } from "@/lib/face-math";
+import { wallMinutesFromDateInZone } from "@/lib/shift-wall-time";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Parse "HH:mm" into { hours, minutes }. */
-function parseHHmm(t: string) {
-  const [h, m] = t.split(":").map(Number);
-  return { hours: h, minutes: m };
-}
-
 /** Minutes elapsed from midnight for an HH:mm string. */
 function hhmToMinutes(t: string) {
-  const { hours, minutes } = parseHHmm(t);
-  return hours * 60 + minutes;
-}
-
-/** Minutes elapsed from midnight for a Date (in UTC). */
-function dateToMinutesUTC(d: Date) {
-  return d.getUTCHours() * 60 + d.getUTCMinutes();
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
 }
 
 // ── GET ──────────────────────────────────────────────────────────────────────
@@ -157,8 +147,11 @@ export async function POST(req: NextRequest) {
         checkinFaceDistanceThreshold: true,
         checkinMaxFaceAttempts: true,
         allowedIps: { select: { address: true } },
+        kioskTimezone: true,
       },
     });
+
+    const companyTz = company?.kioskTimezone || "Africa/Accra";
 
     const clientIp = getClientIpFromRequest(req);
     if (company) {
@@ -307,7 +300,7 @@ export async function POST(req: NextRequest) {
       let lateMinutes: number | null = null;
       if (activeAssignment?.shift) {
         const shiftStartMins = hhmToMinutes(activeAssignment.shift.startTime);
-        const clockInMins = dateToMinutesUTC(now);
+        const clockInMins = wallMinutesFromDateInZone(now, companyTz);
         const diff = clockInMins - shiftStartMins;
         // Only flag as late if more than 5 min grace period
         if (diff > 5) {
@@ -391,7 +384,7 @@ export async function POST(req: NextRequest) {
     const shift = openCheckIn.shiftAssignment?.shift ?? activeAssignment?.shift;
     if (shift) {
       const shiftEndMins = hhmToMinutes(shift.endTime);
-      const clockOutMins = dateToMinutesUTC(clockOut);
+      const clockOutMins = wallMinutesFromDateInZone(clockOut, companyTz);
 
       // Early departure: left before shift end (more than 5 min grace)
       if (shiftEndMins - clockOutMins > 5) {

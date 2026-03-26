@@ -50,7 +50,7 @@ export function Breadcrumbs() {
 
   if (breadcrumbs.length === 0 || (breadcrumbs.length === 1 && breadcrumbs[0].label === "Overview")) {
     return (
-      <nav className="flex items-center space-x-1 text-xs font-medium text-hgh-muted">
+      <nav className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs font-medium text-hgh-muted">
         <Link
           href="/"
           className="flex items-center transition-colors hover:text-hgh-gold"
@@ -63,16 +63,16 @@ export function Breadcrumbs() {
   }
 
   return (
-    <nav className="flex items-center space-x-1 text-xs font-medium text-hgh-muted">
+    <nav className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs font-medium text-hgh-muted">
       <Link
         href="/"
-        className="flex items-center transition-colors hover:text-hgh-gold"
+        className="flex shrink-0 items-center transition-colors hover:text-hgh-gold"
       >
         <Home size={14} />
       </Link>
 
       {breadcrumbs.map((crumb) => (
-        <div key={crumb.href} className="flex items-center space-x-1">
+        <div key={crumb.href} className="flex min-w-0 shrink-0 items-center gap-x-1">
           <ChevronRight size={12} className="opacity-50" />
           {crumb.active ? (
             <span className="text-hgh-navy">{crumb.label}</span>

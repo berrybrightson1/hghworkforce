@@ -185,7 +185,7 @@ export default async function LandingPage() {
       {/* Services */}
       <section
         id="services"
-        className="border-t border-hgh-border bg-white py-24 shadow-[0_1px_0_rgba(10,22,40,0.04)]"
+        className="border-t border-hgh-border bg-white py-16 shadow-[0_1px_0_rgba(10,22,40,0.04)] md:py-24"
       >
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="mx-auto mb-16 max-w-2xl text-center">
@@ -208,9 +208,9 @@ export default async function LandingPage() {
       {/* Features */}
       <section
         id="features"
-        className="border-t border-hgh-border bg-hgh-offwhite py-24"
+        className="border-t border-hgh-border bg-hgh-offwhite py-16 md:py-24"
       >
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="mx-auto mb-16 max-w-2xl text-center">
             <div className="mb-4 flex justify-center" aria-hidden>
               <span className="h-1 w-10 rounded-full bg-hgh-gold" />
@@ -230,12 +230,12 @@ export default async function LandingPage() {
       </section>
 
       {/* Workflow */}
-      <section className="relative overflow-hidden border-t border-hgh-navy-light bg-hgh-navy py-24">
+      <section className="relative overflow-hidden border-t border-hgh-navy-light bg-hgh-navy py-16 md:py-24">
         <div
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_75%_55%_at_50%_0%,rgba(201,168,76,0.14),transparent_52%)]"
           aria-hidden
         />
-        <div className="relative mx-auto max-w-7xl px-6">
+        <div className="relative mx-auto max-w-7xl px-4 sm:px-6">
           <div className="mx-auto mb-16 max-w-2xl text-center">
             <div className="mb-4 flex justify-center" aria-hidden>
               <span className="h-1 w-10 rounded-full bg-hgh-gold" />
@@ -278,7 +278,7 @@ export default async function LandingPage() {
       </section>
 
       {/* Roles */}
-      <section className="border-t border-hgh-border bg-white py-24">
+      <section className="border-t border-hgh-border bg-white py-16 md:py-24">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="mx-auto mb-10 max-w-2xl text-center sm:mb-16">
             <div className="mb-4 flex justify-center" aria-hidden>
@@ -303,8 +303,8 @@ export default async function LandingPage() {
       </div>
 
       {/* CTA */}
-      <section className="border-t border-hgh-border bg-hgh-navy py-24">
-        <div className="mx-auto max-w-3xl px-6 text-center">
+      <section className="border-t border-hgh-border bg-hgh-navy py-16 md:py-24">
+        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
           <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-hgh-gold" aria-hidden />
           <div className="mx-auto mb-8 flex h-16 w-16 items-center justify-center rounded-2xl bg-hgh-gold shadow-lg shadow-hgh-gold/25">
             <Rocket className="text-hgh-navy" size={32} />

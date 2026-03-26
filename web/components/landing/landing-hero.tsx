@@ -48,7 +48,7 @@ function OrbisIcon({
 
 export function LandingHero({ auth }: { auth: LandingAuth }) {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-b from-white via-hgh-offwhite/40 to-hgh-offwhite pb-0 pt-24 md:pt-28">
+    <section className="relative overflow-hidden bg-gradient-to-b from-white via-hgh-offwhite/40 to-hgh-offwhite pb-0 pt-20 md:pt-28">
       <div
         className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_85%_50%_at_50%_-10%,rgba(201,168,76,0.09),transparent_55%)]"
         aria-hidden
