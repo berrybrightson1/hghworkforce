@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -11,8 +11,9 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const companyId = searchParams.get("companyId");
 
-    if (companyId && !canAccessCompany(auth.dbUser, companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (companyId) {
+      const lb = await gateCompanyBilling(auth.dbUser, companyId);
+      if (lb) return lb;
     }
 
     const requests = await prisma.leaveRequest.findMany({
@@ -50,9 +51,11 @@ export async function POST(req: NextRequest) {
     const employee = await prisma.employee.findUnique({
       where: { id: body.employeeId },
     });
-    if (!employee || !canAccessCompany(auth.dbUser, employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!employee) {
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
+    const leaveBill = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (leaveBill) return leaveBill;
 
     const request = await prisma.leaveRequest.create({
       data: {

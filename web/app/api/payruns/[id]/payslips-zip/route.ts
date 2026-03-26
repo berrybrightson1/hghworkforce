@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
 import { createElement } from "react";
 import JSZip from "jszip";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { buildPayslipPdfData } from "@/lib/payslip-pdf-data";
 import { prisma } from "@/lib/prisma";
 import { PayslipDocument } from "@/components/payroll/PayslipDocument";
@@ -38,9 +38,8 @@ export async function GET(
     return NextResponse.json({ error: "Pay run not found" }, { status: 404 });
   }
 
-  if (!canAccessCompany(auth.dbUser, payrun.companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, payrun.companyId);
+  if (billing) return billing;
 
   if (payrun.status !== "APPROVED") {
     return NextResponse.json(

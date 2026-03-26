@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireDbUser, canAccessCompany, canManageCheckinSecurity } from "@/lib/api-auth";
+import { requireDbUser, canManageCheckinSecurity, gateCompanyBilling } from "@/lib/api-auth";
 
 /**
  * GET /api/companies/[companyId]/checkin-settings
@@ -14,9 +14,9 @@ export async function GET(
   if (!auth.ok) return auth.response;
 
   const { companyId } = await ctx.params;
-  if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, companyId);
+  if (billing) return billing;
+
   if (!canManageCheckinSecurity(auth.dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -87,9 +87,9 @@ export async function PATCH(
   if (!auth.ok) return auth.response;
 
   const { companyId } = await ctx.params;
-  if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, companyId);
+  if (billing) return billing;
+
   if (!canManageCheckinSecurity(auth.dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

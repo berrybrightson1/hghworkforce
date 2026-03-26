@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/toast/ToastProvider";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -17,8 +18,12 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "HGH Payroll",
-  description:
-    "Multi-tenant payroll for Ghana — PAYE, SSNIT, payslips, and employee self-service.",
+  description: `Payroll and attendance for Ghana — PAYE, SSNIT, payslips, and employee self-service. ${TRIAL_DAYS}-day full-access trial per workspace, then subscribe.`,
+  appleWebApp: {
+    capable: true,
+    title: "HGH Payroll",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {

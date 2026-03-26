@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import {
-  canAccessCompany,
-  requireDbUser,
-} from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { DEFAULT_MONTHLY_PAYE_BRACKETS } from "@/lib/ghana-tax";
 import { prisma } from "@/lib/prisma";
 
@@ -43,9 +40,8 @@ export async function GET(req: NextRequest) {
   if (!companyId) {
     return NextResponse.json({ error: "companyId required" }, { status: 400 });
   }
-  if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, companyId);
+  if (billing) return billing;
 
   try {
     const companyRows = await prisma.taxBracket.findMany({
@@ -109,9 +105,8 @@ export async function POST(req: NextRequest) {
     if (auth.dbUser.role !== "SUPER_ADMIN" && auth.dbUser.role !== "COMPANY_ADMIN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    if (!canAccessCompany(auth.dbUser, targetCompanyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, targetCompanyId);
+    if (billing) return billing;
   }
 
   const brackets = body.brackets;

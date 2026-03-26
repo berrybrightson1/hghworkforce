@@ -19,6 +19,7 @@ const routeLabels: Record<string, string> = {
   billing: "Billing",
   settings: "Settings",
   help: "Help & Guide",
+  "platform-health": "Platform health",
 };
 
 export function Breadcrumbs() {

@@ -2,7 +2,6 @@ import crypto from "crypto";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
-const TAG_LENGTH = 16;
 // In production, this MUST be a 32-character (256-bit) string in process.env.ENCRYPTION_KEY
 const KEY = process.env.ENCRYPTION_KEY 
   ? Buffer.from(process.env.ENCRYPTION_KEY, "hex") 

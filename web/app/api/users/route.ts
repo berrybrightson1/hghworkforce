@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireDbUser, canAccessCompany } from "@/lib/api-auth";
+import { requireDbUser, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -21,8 +21,9 @@ export async function GET(req: Request) {
   // SUPER_ADMIN with no companyId filter gets all users
   const where = companyId ? { companyId } : {};
 
-  if (companyId && !canAccessCompany(dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (companyId) {
+    const uBill = await gateCompanyBilling(dbUser, companyId);
+    if (uBill) return uBill;
   }
 
   const users = await prisma.user.findMany({
@@ -96,6 +97,15 @@ export async function PATCH(req: Request) {
   // Only SUPER_ADMIN can promote to SUPER_ADMIN
   if (role === "SUPER_ADMIN" && dbUser.role !== "SUPER_ADMIN") {
     return NextResponse.json({ error: "Only Super Admins can grant Super Admin role" }, { status: 403 });
+  }
+
+  if (targetUser.companyId) {
+    const tb = await gateCompanyBilling(dbUser, targetUser.companyId);
+    if (tb) return tb;
+  }
+  if (typeof companyId === "string" && companyId && companyId !== targetUser.companyId) {
+    const tb2 = await gateCompanyBilling(dbUser, companyId);
+    if (tb2) return tb2;
   }
 
   const data: Record<string, unknown> = {};

@@ -6,7 +6,6 @@ import {
   localMinutesFromMidnight,
   parseHHmmToMinutes,
 } from "@/lib/kiosk-time";
-import { normalizeKioskCompanyId } from "@/lib/kiosk-company-id";
 
 /**
  * GET /api/kiosk/status?companyId=

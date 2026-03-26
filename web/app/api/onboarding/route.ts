@@ -1,4 +1,6 @@
+import { addDays } from "date-fns";
 import { NextResponse } from "next/server";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
@@ -38,8 +40,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Company name is required (min 2 characters)" }, { status: 400 });
     }
 
+    const trialEndsAt = addDays(new Date(), TRIAL_DAYS);
     const company = await prisma.company.create({
-      data: { name, checkinLockToFirstIp: true },
+      data: { name, checkinLockToFirstIp: true, trialEndsAt },
     });
 
     // User who creates a company becomes its COMPANY_ADMIN

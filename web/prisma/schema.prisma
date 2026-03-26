@@ -72,13 +72,6 @@ enum LoanStatus {
   CANCELLED
 }
 
-enum PlanTier {
-  FREE
-  STARTER
-  GROWTH
-  ENTERPRISE
-}
-
 enum SubscriptionStatus {
   NONE
   ACTIVE
@@ -94,10 +87,10 @@ model Company {
   registrationNumber String?
   address            String?
   isActive           Boolean  @default(true)
-  /// Commercial tier (limits enforced only when BILLING_ENFORCED=true).
-  planTier           PlanTier             @default(FREE)
-  /// Set by payment provider webhooks when billing is enabled.
-  subscriptionStatus SubscriptionStatus   @default(NONE)
+  /// ACTIVE = paid subscriber (full access). Other values: access until trialEndsAt (or createdAt + trial window if trialEndsAt is null).
+  subscriptionStatus SubscriptionStatus @default(NONE)
+  /// End of the free trial (all features). If null, the app treats the trial end as createdAt + 3 days (see TRIAL_DAYS in billing/access.ts).
+  trialEndsAt        DateTime?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -130,11 +123,18 @@ model Company {
   /// Local YYYY-MM-DD when kiosk absence cron last ran (idempotency)
   kioskLastAbsentRunDate String?
 
+  /// Ghana Tier 2 occupational pension (optional); % of basic salary — employee deduction + employer cost on pay run lines
+  tier2PensionEnabled  Boolean  @default(false)
+  tier2EmployeePercent Decimal  @default(5) @db.Decimal(5, 2)
+  tier2EmployerPercent Decimal  @default(5) @db.Decimal(5, 2)
+
   allowedIps           AllowedIP[]
   kioskDayAbsences     KioskDayAbsence[]
   ipAccessRequests     IPAccessRequest[]
   checkinSessions      CheckinSession[]
   faceMismatchAlerts   FaceMismatchAlert[]
+  webhooks             CompanyWebhook[]
+  attendanceCorrections AttendanceCorrectionRequest[]
 
   @@index([isActive])
 }
@@ -159,6 +159,8 @@ model User {
   ipAccessRequestsReviewed  IPAccessRequest[] @relation("IpAccessReviewedBy")
   resolvedFaceMismatchAlerts FaceMismatchAlert[] @relation("FaceMismatchResolvedBy")
   allowedIpsCreated          AllowedIP[]         @relation("AllowedIpCreatedBy")
+  attendanceCorrectionsRequested AttendanceCorrectionRequest[] @relation("CorrectionRequestedBy")
+  attendanceCorrectionsReviewed  AttendanceCorrectionRequest[] @relation("CorrectionReviewedBy")
 
   @@index([authUserId])
   @@index([companyId, role])
@@ -206,6 +208,8 @@ model Employee {
   checkinSessions        CheckinSession[]
   faceMismatchAlerts     FaceMismatchAlert[]
   kioskDayAbsences       KioskDayAbsence[]
+  onboardingTasks              EmployeeOnboardingTask[]
+  attendanceCorrectionRequests AttendanceCorrectionRequest[]
 
   @@index([companyId, status])
   @@index([employeeCode])
@@ -254,6 +258,7 @@ model Payrun {
   approvedById  String?
   rejectedById  String?
   rejectionNote String?
+  approvalNote  String?
   approvedAt    DateTime?
   lockedAt      DateTime?
   createdAt     DateTime     @default(now())
@@ -278,6 +283,8 @@ model PayrunLine {
   provident       Decimal @db.Decimal(12, 2) @default(0)
   loanDeductions  Decimal @db.Decimal(12, 2) @default(0)
   otherDeductions Decimal @db.Decimal(12, 2) @default(0)
+  tier2Employee   Decimal @db.Decimal(12, 2) @default(0)
+  tier2Employer   Decimal @db.Decimal(12, 2) @default(0)
   totalDeductions Decimal @db.Decimal(12, 2)
   netPay          Decimal @db.Decimal(12, 2)
   isOverridden    Boolean @default(false)
@@ -311,8 +318,13 @@ model LeaveEntitlement {
   id        String    @id @default(cuid())
   companyId String
   leaveType LeaveType
+  /// Base annual (or period) entitlement in days
   days      Int
   isActive  Boolean   @default(true)
+  /// Optional: extra days accrued per calendar month employed (from startDate), added to entitled cap
+  monthlyAccrualRate Decimal? @db.Decimal(5, 2)
+  /// Optional: ceiling on total entitled (base + accrual); null = no cap
+  maxBalanceDays     Int?
 
   company Company @relation(fields: [companyId], references: [id])
 
@@ -331,6 +343,7 @@ model LeaveRequest {
   approvedById  String?
   approvedAt    DateTime?
   rejectionNote String?
+  approvalNote  String?
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
@@ -431,6 +444,7 @@ model CheckIn {
   employee        Employee         @relation(fields: [employeeId], references: [id])
   shiftAssignment ShiftAssignment? @relation(fields: [shiftAssignmentId], references: [id])
   checkinSession  CheckinSession?  @relation(fields: [checkinSessionId], references: [id])
+  correctionRequests AttendanceCorrectionRequest[]
 
   @@index([employeeId, clockIn])
   @@index([companyId, clockIn])
@@ -613,4 +627,68 @@ model AuditLog {
   @@index([actorId])
   @@index([entityType, entityId])
   @@index([createdAt])
+}
+
+enum AttendanceCorrectionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Outbound integration (e.g. Zapier / internal tools) — fired when a pay run is approved
+model CompanyWebhook {
+  id             String   @id @default(cuid())
+  companyId      String
+  url            String
+  /// Shared secret for HMAC-SHA256 of raw JSON body (`X-HGH-Signature: sha256=<hex>`)
+  secret         String
+  payrunApproved Boolean  @default(true)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+/// Staff checklist on employee profile (onboarding / probation tasks)
+model EmployeeOnboardingTask {
+  id          String    @id @default(cuid())
+  employeeId  String
+  title       String
+  description String?
+  sortOrder   Int       @default(0)
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+/// Employee requests a fix to a check-in record; HR/admin approves and times update
+model AttendanceCorrectionRequest {
+  id                String                     @id @default(cuid())
+  checkInId         String
+  employeeId        String
+  companyId         String
+  requestedByUserId String
+  reason            String
+  proposedClockIn   DateTime?
+  proposedClockOut  DateTime?
+  status            AttendanceCorrectionStatus @default(PENDING)
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime                   @default(now())
+
+  checkIn      CheckIn @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  requestedBy  User     @relation("CorrectionRequestedBy", fields: [requestedByUserId], references: [id])
+  reviewedBy   User?    @relation("CorrectionReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([companyId, status])
+  @@index([employeeId])
 }

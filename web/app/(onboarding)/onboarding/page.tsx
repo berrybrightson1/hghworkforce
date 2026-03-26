@@ -3,6 +3,7 @@ import { Rocket } from "lucide-react";
 import { ensureAppUser } from "@/lib/ensure-app-user";
 import { createClient } from "@/lib/supabase/server";
 import { OnboardingForm } from "@/components/onboarding/onboarding-form";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 
 export default async function OnboardingPage() {
   const supabase = await createClient();
@@ -39,7 +40,8 @@ export default async function OnboardingPage() {
             Welcome to HGH Payroll
           </h1>
           <p className="mt-2 text-sm text-hgh-muted">
-            Hi {displayName}! Set up your workspace to get started.
+            Hi {displayName}! Create your first company to start a {TRIAL_DAYS}-day full-access trial; subscribe later
+            under Billing when you are ready to continue past the trial.
           </p>
         </div>
 

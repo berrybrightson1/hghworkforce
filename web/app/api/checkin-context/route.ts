@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 
 /**
  * GET /api/checkin-context
@@ -39,6 +39,9 @@ export async function GET() {
     if (!employee) {
       return NextResponse.json({ error: "Employee profile not found" }, { status: 404 });
     }
+
+    const billing = await gateCompanyBilling(auth.dbUser, employee.company.id);
+    if (billing) return billing;
 
     const c = employee.company;
     return NextResponse.json({

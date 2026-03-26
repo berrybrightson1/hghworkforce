@@ -1,31 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { CreditCard, Sparkles } from "lucide-react";
 import { useCompany } from "@/components/company-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/toast/useToast";
-
-function formatCap(n: number) {
-  if (n >= 1_000_000_000) return "Unlimited";
-  return n.toLocaleString();
-}
+import { TRIAL_DAYS } from "@/lib/billing/access";
+import { useApi } from "@/lib/swr";
 
 type Summary = {
   companyName: string;
-  planTier: string;
   subscriptionStatus: string;
-  billingEnforced: boolean;
+  trialDays: number;
+  trialEndsAt: string;
+  subscribed: boolean;
+  fullAccess: boolean;
+  locked: boolean;
+  superAdminExempt?: boolean;
+  msRemaining: number;
   paymentProviderConfigured: boolean;
-  accessBypassed: boolean;
-  effectiveLabel: string;
-  limits: { maxEmployeesPerCompany: number; maxPayrunsPerMonth: number };
-  tierLimits: { maxEmployeesPerCompany: number; maxPayrunsPerMonth: number };
 };
 
 export default function BillingPage() {
   const { selected, loading } = useCompany();
+  const { data: me } = useApi<{ role: string }>("/api/me");
   const { toast } = useToast();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -41,11 +41,9 @@ export default function BillingPage() {
     let cancelled = false;
     setLoadingSummary(true);
 
-    (async () => {
+    void (async () => {
       try {
-        const res = await fetch(
-          `/api/billing/summary?companyId=${encodeURIComponent(selected.id)}`,
-        );
+        const res = await fetch(`/api/billing/summary?companyId=${encodeURIComponent(selected.id)}`);
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) {
@@ -69,14 +67,25 @@ export default function BillingPage() {
     };
   }, [selected?.id, toast]);
 
-  async function handleUpgrade() {
+  useEffect(() => {
+    if (me?.role === "SUPER_ADMIN") return;
+    if (typeof window === "undefined" || !summary?.locked || !selected?.id) return;
+    const q = new URLSearchParams(window.location.search);
+    if (q.get("locked") !== "1") return;
+    const k = `hgh-billing-locked-toast-${selected.id}`;
+    if (sessionStorage.getItem(k)) return;
+    sessionStorage.setItem(k, "1");
+    toast.error("Your free trial has ended. Subscribe below to restore access.");
+  }, [summary?.locked, selected?.id, toast, me?.role]);
+
+  async function handleSubscribe() {
     if (!selected?.id) return;
     setCheckoutLoading(true);
     try {
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId: selected.id, targetTier: "GROWTH" }),
+        body: JSON.stringify({ companyId: selected.id }),
       });
       const data = await res.json();
       if (data.bypassed && data.message) {
@@ -109,17 +118,19 @@ export default function BillingPage() {
         <CardHeader>
           <CardTitle>Billing</CardTitle>
           <p className="mt-1 text-sm text-hgh-muted">
-            Select a company in the sidebar to view plan and usage.
+            Select a company in the sidebar to view trial and subscription status.
           </p>
         </CardHeader>
       </Card>
     );
   }
 
+  const trialEnd = summary?.trialEndsAt ? new Date(summary.trialEndsAt) : null;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <h2 className="text-xl font-semibold text-hgh-navy">Billing & plan</h2>
+        <h2 className="text-xl font-semibold text-hgh-navy">Billing</h2>
         <p className="mt-1 text-sm text-hgh-muted">
           Workspace: <span className="font-medium text-hgh-slate">{selected.name}</span>
         </p>
@@ -131,47 +142,79 @@ export default function BillingPage() {
             <CreditCard className="h-5 w-5 text-hgh-navy" />
           </div>
           <div className="min-w-0 flex-1">
-            <CardTitle className="text-lg">Current plan</CardTitle>
+            <CardTitle className="text-lg">Free trial & subscription</CardTitle>
             <p className="mt-1 text-sm text-hgh-muted">
-              Recorded tier: <span className="font-medium text-hgh-slate">{summary?.planTier ?? "—"}</span>
-              {summary?.subscriptionStatus && summary.subscriptionStatus !== "NONE" ? (
-                <>
-                  {" "}
-                  · Subscription:{" "}
-                  <span className="font-medium text-hgh-slate">{summary.subscriptionStatus}</span>
-                </>
-              ) : null}
+              Everyone gets the same product. New workspaces receive a {TRIAL_DAYS}-day trial with every feature.
+              After that, the workspace is locked until subscription is active.
             </p>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          {summary?.superAdminExempt ? (
+            <div className="rounded-lg border border-hgh-gold/35 bg-hgh-gold/10 px-4 py-3 text-sm text-hgh-navy">
+              <p className="font-semibold">Super admin — full access</p>
+              <p className="mt-1 text-hgh-muted">
+                Trial and subscription limits do not apply to your account. You can work in any company regardless of
+                workspace billing state. The status below is the real state for that tenant&apos;s admins and staff.
+              </p>
+            </div>
+          ) : null}
           <div className="rounded-lg border border-hgh-border bg-hgh-offwhite/80 px-4 py-3">
-            <p className="text-sm font-medium text-hgh-navy">{summary?.effectiveLabel ?? "—"}</p>
-            <p className="mt-1 text-xs text-hgh-muted">
-              {summary?.accessBypassed
-                ? "Limits and payment are not enforced yet — you have full access while we finish billing integration."
-                : `Up to ${formatCap(summary?.limits.maxEmployeesPerCompany ?? 0)} employees and ${formatCap(summary?.limits.maxPayrunsPerMonth ?? 0)} pay run(s) per month for this company.`}
+            <p className="text-sm font-medium text-hgh-navy">
+              {summary?.superAdminExempt
+                ? "Your access: unrestricted (operator)"
+                : summary?.subscribed
+                  ? "Subscribed — full access"
+                  : summary?.locked
+                    ? "Trial ended — locked"
+                    : "Trial active — full access"}
             </p>
+            <p className="mt-1 text-xs text-hgh-muted">
+              Subscription status:{" "}
+              <span className="font-medium text-hgh-slate">{summary?.subscriptionStatus ?? "—"}</span>
+              {trialEnd ? (
+                <>
+                  {" "}
+                  · Trial ends{" "}
+                  <time dateTime={trialEnd.toISOString()}>{trialEnd.toLocaleString()}</time>
+                </>
+              ) : null}
+            </p>
+            {summary && !summary.subscribed && !summary.locked && summary.msRemaining > 0 ? (
+              <p className="mt-2 text-xs text-hgh-muted">
+                About {Math.max(0, Math.ceil(summary.msRemaining / 86_400_000))} day(s) remaining in the trial
+                window.
+              </p>
+            ) : null}
           </div>
 
-          {summary && !summary.accessBypassed ? (
-            <p className="text-xs text-hgh-muted">
-              Tier caps: {formatCap(summary.tierLimits.maxEmployeesPerCompany)} employees,{" "}
-              {formatCap(summary.tierLimits.maxPayrunsPerMonth)} pay runs / month.
+          <div className="rounded-lg border border-dashed border-hgh-border bg-white px-4 py-3 text-xs text-hgh-muted">
+            <p>
+              <strong className="text-hgh-slate">Paying customers:</strong> when Stripe is connected, use the button
+              below to open checkout. Until then, your operator can set{" "}
+              <code className="rounded bg-hgh-offwhite px-1">subscriptionStatus</code> to{" "}
+              <code className="rounded bg-hgh-offwhite px-1">ACTIVE</code> for this company in the database to unlock
+              immediately after trial.
             </p>
-          ) : null}
+          </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={() => void handleUpgrade()} disabled={checkoutLoading}>
+            <Button type="button" onClick={() => void handleSubscribe()} disabled={checkoutLoading}>
               <Sparkles size={16} />
-              {checkoutLoading ? "Working…" : "Upgrade plan"}
+              {checkoutLoading ? "Working…" : summary?.subscribed ? "Manage billing (coming soon)" : "Subscribe"}
             </Button>
-            <p className="text-xs text-hgh-muted">
-              {summary?.accessBypassed
-                ? "When payments go live, this will open checkout. For now it confirms you are not blocked."
-                : "Opens checkout when Stripe is connected."}
-            </p>
+            {!summary?.paymentProviderConfigured ? (
+              <p className="text-xs text-hgh-muted">Online checkout activates when Stripe is configured.</p>
+            ) : null}
           </div>
+
+          <p className="text-xs text-hgh-muted">
+            Questions? See{" "}
+            <Link href="/dashboard/help" className="font-medium text-hgh-gold underline underline-offset-2">
+              Help
+            </Link>{" "}
+            or contact your administrator.
+          </p>
         </CardContent>
       </Card>
     </div>

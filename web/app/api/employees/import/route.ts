@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { guardEmployeeCreation } from "@/lib/billing/guards";
 import { allocateEmployeeCode } from "@/lib/employee-code";
 import { prisma } from "@/lib/prisma";
@@ -32,16 +32,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
   }
 
-  if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, companyId);
+  if (billing) return billing;
 
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) {
     return NextResponse.json({ error: "Company not found" }, { status: 404 });
   }
 
-  const blocked = await guardEmployeeCreation(company);
+  const blocked = guardEmployeeCreation(company, auth.dbUser.role);
   if (blocked) return blocked;
 
   try {

@@ -118,7 +118,10 @@ export default function EmployeeDetailPage() {
   const id = params.id as string;
   const router = useRouter();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"profile" | "components" | "docs" | "leave" | "loans">("profile");
+  const [activeTab, setActiveTab] = useState<
+    "profile" | "components" | "docs" | "onboarding" | "leave" | "loans"
+  >("profile");
+  const [newTaskTitle, setNewTaskTitle] = useState("");
   const [compDialogOpen, setCompDialogOpen] = useState(false);
   const [docDialogOpen, setDocDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -132,6 +135,16 @@ export default function EmployeeDetailPage() {
   );
   const { data: me } = useApi<{ id: string; role: string }>("/api/me");
   const { data: documents, mutate: mutateDocs } = useApi<EmployeeDocument[]>(`/api/employees/${id}/documents`);
+
+  const isPayrollAdmin =
+    me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN" || me?.role === "HR";
+  const { data: onboardingTasks, mutate: mutateTasks } = useApi<
+    { id: string; title: string; completed: boolean; sortOrder: number }[]
+  >(
+    isPayrollAdmin && activeTab === "onboarding"
+      ? `/api/employees/${id}/onboarding-tasks`
+      : null,
+  );
 
   function openEditProfile() {
     if (!employee) return;
@@ -169,6 +182,10 @@ export default function EmployeeDetailPage() {
   } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
   });
+
+  useEffect(() => {
+    if (!isPayrollAdmin && activeTab === "onboarding") setActiveTab("profile");
+  }, [isPayrollAdmin, activeTab]);
 
   // Sync profile form when employee data loads
   useEffect(() => {
@@ -304,8 +321,6 @@ export default function EmployeeDetailPage() {
   }
 
   const isSelfProfile = Boolean(employee.userId && me?.id === employee.userId);
-  const isPayrollAdmin =
-    me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN" || me?.role === "HR";
   const showFaceEnrollmentCard =
     employee.status === "ACTIVE" && (isPayrollAdmin || isSelfProfile);
 
@@ -327,8 +342,17 @@ export default function EmployeeDetailPage() {
         <Badge variant={employee.status === "ACTIVE" ? "success" : "warning"}>{employee.status}</Badge>
       </div>
 
-      <div className="flex border-b border-hgh-border">
-        {(["profile", "components", "docs", "leave", "loans"] as const).map((tab) => (
+      <div className="flex flex-wrap border-b border-hgh-border">
+        {(
+          [
+            "profile",
+            "components",
+            "docs",
+            ...(isPayrollAdmin ? (["onboarding"] as const) : []),
+            "leave",
+            "loans",
+          ] as const
+        ).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -338,7 +362,7 @@ export default function EmployeeDetailPage() {
                 : "text-hgh-muted hover:text-hgh-navy"
             }`}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === "onboarding" ? "Onboarding" : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
@@ -597,6 +621,91 @@ export default function EmployeeDetailPage() {
               </tbody>
             </table>
           </div>
+        </Card>
+      )}
+
+      {activeTab === "onboarding" && isPayrollAdmin && (
+        <Card>
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <CardTitle>Onboarding checklist</CardTitle>
+            <div className="flex w-full max-w-md gap-2 sm:w-auto">
+              <Input
+                placeholder="New task title"
+                value={newTaskTitle}
+                onChange={(e) => setNewTaskTitle(e.target.value)}
+              />
+              <Button
+                type="button"
+                onClick={async () => {
+                  const title = newTaskTitle.trim();
+                  if (!title) return;
+                  const res = await fetch(`/api/employees/${id}/onboarding-tasks`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title }),
+                  });
+                  if (!res.ok) {
+                    toast.error("Could not add task");
+                    return;
+                  }
+                  setNewTaskTitle("");
+                  mutateTasks();
+                  toast.success("Task added.");
+                }}
+              >
+                Add
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {!onboardingTasks?.length ? (
+              <p className="text-sm text-hgh-muted">No tasks yet.</p>
+            ) : (
+              onboardingTasks.map((t) => (
+                <div
+                  key={t.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-hgh-border px-3 py-2"
+                >
+                  <label className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={t.completed}
+                      className="rounded border-hgh-border"
+                      onChange={async (e) => {
+                        const res = await fetch(`/api/employees/${id}/onboarding-tasks/${t.id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ completed: e.target.checked }),
+                        });
+                        if (res.ok) mutateTasks();
+                      }}
+                    />
+                    <span className={t.completed ? "text-hgh-muted line-through" : "text-hgh-navy"}>
+                      {t.title}
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-hgh-danger"
+                    onClick={async () => {
+                      if (!confirm("Delete this task?")) return;
+                      const res = await fetch(`/api/employees/${id}/onboarding-tasks/${t.id}`, {
+                        method: "DELETE",
+                      });
+                      if (res.ok) {
+                        mutateTasks();
+                        toast.success("Removed.");
+                      }
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                </div>
+              ))
+            )}
+          </CardContent>
         </Card>
       )}
 

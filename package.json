@@ -17,5 +17,12 @@
   },
   "engines": {
     "node": ">=20.9.0"
+  },
+  "overrides": {
+    "face-api.js": {
+      "@tensorflow/tfjs-core": {
+        "node-fetch": "2.7.0"
+      }
+    }
   }
 }

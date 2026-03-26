@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireDbUser, canAccessCompany, canManagePayroll } from "@/lib/api-auth";
+import { requireDbUser, canManagePayroll, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -16,9 +16,8 @@ export async function GET(req: NextRequest) {
     if (!companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
-    if (!canAccessCompany(auth.dbUser, companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, companyId);
+    if (billing) return billing;
 
     const shifts = await prisma.shift.findMany({
       where: { companyId },
@@ -68,9 +67,8 @@ export async function POST(req: NextRequest) {
     if (!companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
-    if (!canAccessCompany(auth.dbUser, companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, companyId);
+    if (billing) return billing;
 
     const name = body.name as string;
     const startTime = body.startTime as string;

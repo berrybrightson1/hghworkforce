@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { IPAccessRequestStatus, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireDbUser, canAccessCompany, canApprovePayroll } from "@/lib/api-auth";
+import { requireDbUser, canApprovePayroll, gateCompanyBilling } from "@/lib/api-auth";
 
 /**
  * PATCH /api/ip-access-requests/[id]
@@ -42,9 +42,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Request already resolved" }, { status: 409 });
     }
 
-    if (!canAccessCompany(auth.dbUser, row.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, row.companyId);
+    if (billing) return billing;
 
     if (auth.dbUser.role === UserRole.SUPER_ADMIN) {
       // ok

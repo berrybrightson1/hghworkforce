@@ -1,7 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Shield, Calculator, FileText, Monitor, Network } from "lucide-react";
+import {
+  Shield,
+  Calculator,
+  FileText,
+  Monitor,
+  Network,
+  PiggyBank,
+  Webhook,
+  KeyRound,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -100,6 +110,28 @@ export default function SettingsPage() {
 
   const { data: auditLogs } = useApi<AuditEntry[]>("/api/audit-log");
   const logs = auditLogs ?? [];
+
+  const canCompanyPayrollSettings =
+    me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN";
+  const payrollSettingsUrl =
+    selected && canCompanyPayrollSettings
+      ? `/api/companies/${selected.id}/payroll-settings`
+      : null;
+  const { data: payrollSettings, mutate: mutPayrollSettings } = useApi<{
+    tier2PensionEnabled: boolean;
+    tier2EmployeePercent: number;
+    tier2EmployerPercent: number;
+  }>(payrollSettingsUrl);
+
+  const webhooksUrl =
+    selected && canCompanyPayrollSettings
+      ? `/api/companies/${selected.id}/webhooks`
+      : null;
+  const { data: companyWebhooks, mutate: mutWebhooks } = useApi<
+    { id: string; url: string; payrunApproved: boolean; isActive: boolean }[]
+  >(webhooksUrl);
+
+  const [newHookUrl, setNewHookUrl] = useState("");
 
   useEffect(() => {
     if (!isSuper && payeScope === "global") {
@@ -947,6 +979,201 @@ export default function SettingsPage() {
           </Card>
         </div>
       </div>
+
+      {selected && canCompanyPayrollSettings && payrollSettings && (
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2">
+            <PiggyBank className="text-hgh-gold" size={20} aria-hidden />
+            <CardTitle className="text-base">Tier 2 pension (occupational)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-hgh-muted">
+            <p>
+              When enabled, each payroll line deducts employee % and records employer % of{" "}
+              <strong>basic salary</strong> (same staff scope as SSNIT). Adjust in line with your
+              scheme rules.
+            </p>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={payrollSettings.tier2PensionEnabled}
+                onChange={async (e) => {
+                  const res = await fetch(`/api/companies/${selected.id}/payroll-settings`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ tier2PensionEnabled: e.target.checked }),
+                  });
+                  if (res.ok) mutPayrollSettings();
+                }}
+                className="rounded border-hgh-border"
+              />
+              Enable Tier 2 on pay runs
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-hgh-muted">
+                  Employee % of basic
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  defaultValue={payrollSettings.tier2EmployeePercent}
+                  id="tier2ee"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-hgh-muted">
+                  Employer % of basic
+                </label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  defaultValue={payrollSettings.tier2EmployerPercent}
+                  id="tier2er"
+                />
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={async () => {
+                const ee = Number((document.getElementById("tier2ee") as HTMLInputElement)?.value);
+                const er = Number((document.getElementById("tier2er") as HTMLInputElement)?.value);
+                const res = await fetch(`/api/companies/${selected.id}/payroll-settings`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    tier2EmployeePercent: ee,
+                    tier2EmployerPercent: er,
+                  }),
+                });
+                if (res.ok) {
+                  mutPayrollSettings();
+                  toast.success("Tier 2 rates saved. Regenerate draft pay runs to apply.");
+                } else toast.error("Save failed");
+              }}
+            >
+              Save rates
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {selected && canCompanyPayrollSettings && (
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2">
+            <Webhook className="text-hgh-gold" size={20} aria-hidden />
+            <CardTitle className="text-base">Webhooks (pay run approved)</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <p className="text-hgh-muted">
+              HTTPS endpoints receive JSON with event <code className="text-xs">payrun.approved</code>{" "}
+              and header <code className="text-xs">X-HGH-Signature: sha256=&lt;hmac&gt;</code> of the raw
+              body using your webhook secret (shown once when created).
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Input
+                className="max-w-md flex-1"
+                placeholder="https://hooks.example.com/hgh"
+                value={newHookUrl}
+                onChange={(e) => setNewHookUrl(e.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={async () => {
+                  const res = await fetch(`/api/companies/${selected.id}/webhooks`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: newHookUrl.trim() }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    toast.error(data.error || "Failed");
+                    return;
+                  }
+                  toast.success(
+                    data.secret
+                      ? `Webhook added. Copy secret now: ${data.secret}`
+                      : "Webhook added.",
+                  );
+                  setNewHookUrl("");
+                  mutWebhooks();
+                }}
+              >
+                Add webhook
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {(companyWebhooks ?? []).length === 0 ? (
+                <p className="text-hgh-muted">No webhooks.</p>
+              ) : (
+                (companyWebhooks ?? []).map((h) => (
+                  <div
+                    key={h.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-hgh-border px-3 py-2"
+                  >
+                    <span className="max-w-[280px] truncate text-xs">{h.url}</span>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={h.isActive ? "success" : "default"}>
+                        {h.isActive ? "on" : "off"}
+                      </Badge>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          await fetch(`/api/companies/${selected.id}/webhooks/${h.id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ isActive: !h.isActive }),
+                          });
+                          mutWebhooks();
+                        }}
+                      >
+                        Toggle
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-hgh-danger"
+                        onClick={async () => {
+                          if (!confirm("Delete this webhook?")) return;
+                          await fetch(`/api/companies/${selected.id}/webhooks/${h.id}`, {
+                            method: "DELETE",
+                          });
+                          mutWebhooks();
+                        }}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader className="flex flex-row items-center gap-2">
+          <KeyRound className="text-hgh-gold" size={20} aria-hidden />
+          <CardTitle className="text-base">Account security</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-hgh-muted">
+          <p>
+            Use a strong password. In Supabase you can turn on MFA for your email — see your project’s{" "}
+            <span className="font-medium text-hgh-navy">Authentication → Providers</span> settings.
+          </p>
+          <Link
+            href="/update-password"
+            className="inline-flex text-sm font-medium text-hgh-gold underline-offset-2 hover:underline"
+          >
+            Change password
+          </Link>
+        </CardContent>
+      </Card>
 
       {/* Edit Brackets Dialog */}
       <Dialog

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { canAccessCompany, canManageLeave, requireDbUser } from "@/lib/api-auth";
+import { canManageLeave, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
@@ -14,7 +14,7 @@ export async function PATCH(
   }
 
   const { id } = await ctx.params;
-  let body: { status?: string; rejectionNote?: string };
+  let body: { status?: string; rejectionNote?: string; approvalNote?: string };
   try {
     body = await req.json();
   } catch {
@@ -33,9 +33,9 @@ export async function PATCH(
     if (!lr) {
       return NextResponse.json({ error: "Leave request not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, lr.employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, lr.employee.companyId);
+    if (billing) return billing;
+
     if (lr.status !== "PENDING") {
       return NextResponse.json({ error: "Only pending requests can be updated" }, { status: 400 });
     }
@@ -47,6 +47,7 @@ export async function PATCH(
         approvedById: auth.dbUser.id,
         approvedAt: body.status === "APPROVED" ? new Date() : null,
         rejectionNote: body.status === "REJECTED" ? body.rejectionNote?.trim() || null : null,
+        approvalNote: body.status === "APPROVED" ? body.approvalNote?.trim() || null : null,
       },
     });
 

@@ -11,7 +11,10 @@ import {
   History,
   CalendarX,
   FileText,
+  ClipboardList,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { useCompany } from "@/components/company-context";
 import { DatePickerField } from "@/components/ui/date-picker";
@@ -72,6 +75,17 @@ type SummaryResponse = {
   };
 };
 
+type CorrectionRow = {
+  id: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  reason: string;
+  createdAt: string;
+  reviewNote: string | null;
+  employee: { employeeCode: string; name?: string | null };
+  checkIn: { id: string; clockIn: string; clockOut: string | null };
+  requestedBy: { name: string; email: string };
+};
+
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatTime(iso: string) {
@@ -96,6 +110,8 @@ type ViewMode = "daily" | "summary";
 
 export default function AttendancePage() {
   const { selected } = useCompany();
+  const { toast } = useToast();
+  const { data: me } = useApi<{ role: string }>("/api/me");
   const [view, setView] = useState<ViewMode>("daily");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [filter, setFilter] = useState<"all" | "CLOCKED_IN" | "CLOCKED_OUT">(
@@ -126,6 +142,41 @@ export default function AttendancePage() {
       : null;
   const { data: summary, isLoading: summaryLoading } =
     useApi<SummaryResponse>(summaryUrl);
+
+  const canReviewCorrections =
+    me &&
+    (me.role === "SUPER_ADMIN" || me.role === "COMPANY_ADMIN" || me.role === "HR");
+  const correctionsUrl =
+    selected && canReviewCorrections
+      ? `/api/attendance-corrections?companyId=${selected.id}`
+      : null;
+  const { data: corrections, mutate: mutateCorrections } = useApi<CorrectionRow[]>(
+    correctionsUrl,
+  );
+  const [corrBusy, setCorrBusy] = useState<string | null>(null);
+
+  async function patchCorrection(
+    id: string,
+    status: "APPROVED" | "REJECTED",
+    reviewNote?: string,
+  ) {
+    setCorrBusy(id);
+    try {
+      const res = await fetch(`/api/attendance-corrections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, reviewNote: reviewNote?.trim() || undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Failed");
+      toast.success(status === "APPROVED" ? "Correction applied." : "Request rejected.");
+      mutateCorrections();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setCorrBusy(null);
+    }
+  }
 
   // ── Daily filters ──
   const filteredByStatus =
@@ -615,6 +666,82 @@ export default function AttendancePage() {
             )}
           </div>
         </>
+      )}
+
+      {canReviewCorrections && (
+        <div className="overflow-hidden rounded-xl border border-hgh-border bg-white">
+          <div className="flex items-center gap-2 border-b border-hgh-border px-5 py-4">
+            <ClipboardList className="text-hgh-gold" size={20} aria-hidden />
+            <h3 className="font-semibold text-hgh-navy">Attendance correction requests</h3>
+          </div>
+          <div className="overflow-x-auto p-4">
+            {!corrections?.length ? (
+              <p className="text-sm text-hgh-muted">No requests yet.</p>
+            ) : (
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-hgh-border text-left">
+                    <th className="px-3 py-2 font-medium text-hgh-muted">Employee</th>
+                    <th className="px-3 py-2 font-medium text-hgh-muted">Reason</th>
+                    <th className="px-3 py-2 font-medium text-hgh-muted">Check-in</th>
+                    <th className="px-3 py-2 font-medium text-hgh-muted">Status</th>
+                    <th className="px-3 py-2 font-medium text-hgh-muted">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {corrections.map((r) => (
+                    <tr key={r.id} className="border-b border-hgh-border last:border-0">
+                      <td className="px-3 py-2">
+                        {employeeDisplayName({
+                          employeeCode: r.employee.employeeCode,
+                          name: r.employee.name,
+                          user: null,
+                        })}
+                      </td>
+                      <td className="max-w-[200px] px-3 py-2 text-xs text-hgh-slate">{r.reason}</td>
+                      <td className="px-3 py-2 text-xs text-hgh-muted">
+                        {new Date(r.checkIn.clockIn).toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs font-medium">{r.status}</td>
+                      <td className="px-3 py-2">
+                        {r.status === "PENDING" ? (
+                          <div className="flex flex-wrap gap-1">
+                            <Button
+                              size="sm"
+                              className="bg-emerald-600 text-white hover:bg-emerald-700"
+                              disabled={corrBusy !== null}
+                              onClick={() => patchCorrection(r.id, "APPROVED")}
+                            >
+                              {corrBusy === r.id ? "…" : "Approve"}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              disabled={corrBusy !== null}
+                              onClick={() =>
+                                patchCorrection(
+                                  r.id,
+                                  "REJECTED",
+                                  prompt("Optional note for employee") ?? undefined,
+                                )
+                              }
+                            >
+                              Reject
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-hgh-muted">
+                            {r.reviewNote || "—"}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

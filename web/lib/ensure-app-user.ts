@@ -7,6 +7,10 @@ import { prisma } from "@/lib/prisma";
  * Ensures a row exists in `User` for this Supabase account.
  * Also auto-accepts pending invitations matching the user's email.
  * Returns the database user so layouts can check role/company.
+ *
+ * New self-serve accounts default to COMPANY_ADMIN (not EMPLOYEE) so a paying
+ * owner can use the dashboard and complete onboarding without being treated as
+ * portal-only staff. Pending invitations still override role + company on first load.
  */
 export async function ensureAppUser(
   supabaseUser: SupabaseUser,
@@ -23,7 +27,7 @@ export async function ensureAppUser(
       authUserId: supabaseUser.id,
       email,
       name: displayName,
-      role: UserRole.EMPLOYEE,
+      role: UserRole.COMPANY_ADMIN,
       companyId: null,
     },
     update: {

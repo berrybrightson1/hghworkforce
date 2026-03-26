@@ -1,9 +1,24 @@
+import { addDays } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
+import { gateCompanyBilling, requireDbUser, canAccessCompany, canApprovePayroll } from "@/lib/api-auth";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
-import { requireDbUser, canAccessCompany, canApprovePayroll } from "@/lib/api-auth";
 
-const companyInclude = { _count: { select: { employees: true } } } as const;
+/** Explicit fields only — avoids stale clients querying dropped columns (e.g. legacy `planTier`). */
+const companyApiSelect = {
+  id: true,
+  name: true,
+  logoUrl: true,
+  registrationNumber: true,
+  address: true,
+  isActive: true,
+  subscriptionStatus: true,
+  trialEndsAt: true,
+  createdAt: true,
+  updatedAt: true,
+  _count: { select: { employees: true } },
+} as const;
 
 /**
  * GET /api/companies
@@ -17,7 +32,7 @@ export async function GET() {
     if (auth.dbUser.role === UserRole.SUPER_ADMIN) {
       const companies = await prisma.company.findMany({
         orderBy: { createdAt: "desc" },
-        include: companyInclude,
+        select: companyApiSelect,
       });
       return NextResponse.json(companies);
     }
@@ -35,7 +50,7 @@ export async function GET() {
 
     const company = await prisma.company.findUnique({
       where: { id: auth.dbUser.companyId },
-      include: companyInclude,
+      select: companyApiSelect,
     });
     return NextResponse.json(company ? [company] : []);
   } catch {
@@ -62,6 +77,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "A valid company name is required" }, { status: 400 });
     }
 
+    const trialEndsAt = addDays(new Date(), TRIAL_DAYS);
     const company = await prisma.company.create({
       data: {
         name,
@@ -69,8 +85,9 @@ export async function POST(req: NextRequest) {
           typeof body.registrationNumber === "string" ? body.registrationNumber.trim() || null : null,
         address: typeof body.address === "string" ? body.address.trim() || null : null,
         checkinLockToFirstIp: true,
+        trialEndsAt,
       },
-      include: companyInclude,
+      select: companyApiSelect,
     });
     return NextResponse.json(company, { status: 201 });
   } catch {
@@ -97,9 +114,8 @@ export async function PATCH(req: NextRequest) {
     if (!companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
-    if (!canAccessCompany(auth.dbUser, companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, companyId);
+    if (billing) return billing;
 
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = body.name;
@@ -108,6 +124,7 @@ export async function PATCH(req: NextRequest) {
     const updated = await prisma.company.update({
       where: { id: companyId },
       data,
+      select: companyApiSelect,
     });
 
     return NextResponse.json(updated);

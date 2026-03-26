@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarDays, Plus } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -83,10 +83,90 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
+type EntRow = {
+  id: string;
+  leaveType: string;
+  days: number;
+  monthlyAccrualRate: string | null;
+  maxBalanceDays: number | null;
+};
+
+function PolicyEntitlementRow({ row, onSaved }: { row: EntRow; onSaved: () => void }) {
+  const { toast } = useToast();
+  const [days, setDays] = useState(String(row.days));
+  const [accrual, setAccrual] = useState(
+    row.monthlyAccrualRate != null ? String(row.monthlyAccrualRate) : "",
+  );
+  const [cap, setCap] = useState(row.maxBalanceDays != null ? String(row.maxBalanceDays) : "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDays(String(row.days));
+    setAccrual(row.monthlyAccrualRate != null ? String(row.monthlyAccrualRate) : "");
+    setCap(row.maxBalanceDays != null ? String(row.maxBalanceDays) : "");
+  }, [row]);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/leave/entitlements/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          days: Number(days),
+          monthlyAccrualRate: accrual === "" ? null : Number(accrual),
+          maxBalanceDays: cap === "" ? null : Number(cap),
+        }),
+      });
+      if (!res.ok) throw new Error();
+      onSaved();
+    } catch {
+      toast.error("Save failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-hgh-border p-4">
+      <p className="mb-3 text-sm font-semibold text-hgh-navy">{row.leaveType}</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-hgh-muted">Base days</label>
+          <Input type="number" value={days} onChange={(e) => setDays(e.target.value)} />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-hgh-muted">Monthly accrual</label>
+          <Input
+            type="number"
+            step="0.01"
+            placeholder="e.g. 1.75"
+            value={accrual}
+            onChange={(e) => setAccrual(e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-hgh-muted">Max balance cap</label>
+          <Input
+            type="number"
+            placeholder="optional"
+            value={cap}
+            onChange={(e) => setCap(e.target.value)}
+          />
+        </div>
+      </div>
+      <Button className="mt-3" size="sm" disabled={saving} onClick={save}>
+        {saving ? "Saving…" : "Save"}
+      </Button>
+    </div>
+  );
+}
+
 export default function LeavePage() {
   const { selected } = useCompany();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"list" | "calendar" | "balances">("list");
+  const [activeTab, setActiveTab] = useState<"list" | "calendar" | "balances" | "policy">("list");
+  const [leaveApprove, setLeaveApprove] = useState<{ id: string; note: string } | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [actingId, setActingId] = useState<string | null>(null);
@@ -94,7 +174,7 @@ export default function LeavePage() {
   const leaveUrl = selected ? `/api/leave?companyId=${selected.id}` : null;
   const { data: requests, mutate } = useApi<LeaveRequest[]>(leaveUrl);
   const balanceUrl = selected ? `/api/leave/balances?companyId=${selected.id}` : null;
-  const { data: balances } = useApi<EmpBalance[]>(balanceUrl);
+  const { data: balances, mutate: mutateBalances } = useApi<EmpBalance[]>(balanceUrl);
   const empUrl = selected ? `/api/employees?companyId=${selected.id}&status=ACTIVE` : null;
   const { data: employees } = useApi<EmployeeOpt[]>(empUrl);
   const { data: me } = useApi<Me>("/api/me");
@@ -102,6 +182,24 @@ export default function LeavePage() {
   const canReview =
     me &&
     (me.role === "SUPER_ADMIN" || me.role === "COMPANY_ADMIN" || me.role === "HR");
+
+  const entitlementsUrl =
+    selected && canReview
+      ? `/api/leave/entitlements?companyId=${selected.id}`
+      : null;
+  const { data: entitlements, mutate: mutateEntitlements } = useApi<
+    {
+      id: string;
+      leaveType: string;
+      days: number;
+      monthlyAccrualRate: string | null;
+      maxBalanceDays: number | null;
+    }[]
+  >(entitlementsUrl);
+
+  useEffect(() => {
+    if (!canReview && activeTab === "policy") setActiveTab("list");
+  }, [canReview, activeTab]);
 
   const {
     register,
@@ -138,13 +236,25 @@ export default function LeavePage() {
     }
   });
 
-  async function patchLeave(id: string, status: "APPROVED" | "REJECTED") {
+  async function patchLeave(
+    id: string,
+    status: "APPROVED" | "REJECTED",
+    extras?: { approvalNote?: string; rejectionNote?: string },
+  ) {
     setActingId(id);
     try {
       const res = await fetch(`/api/leave/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({
+          status,
+          ...(status === "APPROVED" && extras?.approvalNote
+            ? { approvalNote: extras.approvalNote }
+            : {}),
+          ...(status === "REJECTED" && extras?.rejectionNote
+            ? { rejectionNote: extras.rejectionNote }
+            : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed");
@@ -177,8 +287,9 @@ export default function LeavePage() {
         </Button>
       </div>
 
-      <div className="flex border-b border-hgh-border">
-        {(["list", "calendar", "balances"] as const).map((tab) => (
+      <div className="flex flex-wrap border-b border-hgh-border">
+        {(["list", "calendar", "balances", ...(canReview ? (["policy"] as const) : [])] as const).map(
+          (tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -188,9 +299,10 @@ export default function LeavePage() {
                 : "text-hgh-muted hover:text-hgh-navy"
             }`}
           >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === "policy" ? "Policy" : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
-        ))}
+          ),
+        )}
       </div>
 
       {activeTab === "calendar" && <LeaveCalendar requests={requests || []} />}
@@ -224,6 +336,34 @@ export default function LeavePage() {
             </Card>
           ))}
         </div>
+      )}
+
+      {activeTab === "policy" && canReview && selected && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Leave policy</CardTitle>
+            <p className="text-xs text-hgh-muted">
+              Base days, optional monthly accrual (× months employed), and optional balance cap feed the Balances tab.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {(entitlements ?? []).length === 0 ? (
+              <p className="text-sm text-hgh-muted">No entitlement rows for this company.</p>
+            ) : (
+              (entitlements ?? []).map((e) => (
+                <PolicyEntitlementRow
+                  key={e.id}
+                  row={e}
+                  onSaved={() => {
+                    mutateEntitlements();
+                    mutateBalances();
+                    toast.success("Policy updated.");
+                  }}
+                />
+              ))
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === "list" && (
@@ -284,7 +424,7 @@ export default function LeavePage() {
                               size="sm"
                               className="bg-emerald-600 text-white hover:bg-emerald-700"
                               disabled={actingId !== null}
-                              onClick={() => patchLeave(lr.id, "APPROVED")}
+                              onClick={() => setLeaveApprove({ id: lr.id, note: "" })}
                             >
                               {actingId === lr.id ? "…" : "Approve"}
                             </Button>
@@ -438,6 +578,42 @@ export default function LeavePage() {
             </Button>
           </div>
         </form>
+      </Dialog>
+
+      <Dialog
+        open={leaveApprove !== null}
+        onClose={() => setLeaveApprove(null)}
+        title="Approve leave"
+      >
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-hgh-slate">Optional approval note</label>
+          <Input
+            value={leaveApprove?.note ?? ""}
+            onChange={(e) =>
+              leaveApprove && setLeaveApprove({ ...leaveApprove, note: e.target.value })
+            }
+            placeholder="Visible on the request record"
+          />
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="ghost" onClick={() => setLeaveApprove(null)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            disabled={actingId !== null}
+            onClick={async () => {
+              if (!leaveApprove) return;
+              await patchLeave(leaveApprove.id, "APPROVED", {
+                approvalNote: leaveApprove.note.trim() || undefined,
+              });
+              setLeaveApprove(null);
+            }}
+          >
+            Confirm approve
+          </Button>
+        </div>
       </Dialog>
     </div>
   );

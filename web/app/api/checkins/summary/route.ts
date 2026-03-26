@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireDbUser, canAccessCompany } from "@/lib/api-auth";
+import { requireDbUser, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -21,9 +21,8 @@ export async function GET(req: NextRequest) {
     if (!companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
-    if (!canAccessCompany(auth.dbUser, companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, companyId);
+    if (billing) return billing;
 
     // Default to current month if not provided
     const now = new Date();

@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+
+function monthsEmployedApprox(start: Date): number {
+  const now = new Date();
+  let m =
+    (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (now.getDate() < start.getDate()) m -= 1;
+  return Math.max(0, m);
+}
 
 export async function GET(req: NextRequest) {
   const auth = await requireDbUser();
@@ -14,9 +22,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Company ID required" }, { status: 400 });
   }
 
-  if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, companyId);
+  if (billing) return billing;
 
   try {
     const entitlements = await prisma.leaveEntitlement.findMany({
@@ -42,16 +49,26 @@ export async function GET(req: NextRequest) {
         });
 
     const balances = employees.map((emp) => {
+      const months = monthsEmployedApprox(new Date(emp.startDate));
       const empBalances = entitlements.map((ent) => {
         const used = approvedRequests
           .filter((r) => r.employeeId === emp.id && r.type === ent.leaveType)
           .reduce((sum, r) => sum + r.days, 0);
 
+        const accrual =
+          ent.monthlyAccrualRate !== null && ent.monthlyAccrualRate !== undefined
+            ? Number(ent.monthlyAccrualRate) * months
+            : 0;
+        let entitled = ent.days + Math.round(accrual * 100) / 100;
+        if (ent.maxBalanceDays !== null && ent.maxBalanceDays !== undefined) {
+          entitled = Math.min(entitled, ent.maxBalanceDays);
+        }
+
         return {
           type: ent.leaveType,
-          entitled: ent.days,
+          entitled,
           used,
-          remaining: ent.days - used,
+          remaining: Math.round((entitled - used) * 100) / 100,
         };
       });
 

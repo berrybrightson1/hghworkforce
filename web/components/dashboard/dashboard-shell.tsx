@@ -19,6 +19,7 @@ import {
   Clock,
   Menu,
   X,
+  Activity,
   type LucideIcon,
 } from "lucide-react";
 import { SidebarAccountMenu } from "@/components/dashboard/sidebar-account-menu";
@@ -27,6 +28,7 @@ import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
 import React, { useMemo } from "react";
 import { Breadcrumbs } from "@/components/dashboard/breadcrumbs";
+import { TrialBillingBanner } from "@/components/dashboard/trial-billing-banner";
 
 type NavItem = {
   href: string;
@@ -88,6 +90,12 @@ const navigation: NavGroup[] = [
         label: "Billing",
         icon: CreditCard,
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN"],
+      },
+      {
+        href: "/dashboard/platform-health",
+        label: "Platform health",
+        icon: Activity,
+        roles: ["SUPER_ADMIN"],
       },
     ],
   },
@@ -393,7 +401,10 @@ export function DashboardShell({
             </div>
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-8">{children}</main>
+        <main className="flex-1 p-4 md:p-8">
+          <TrialBillingBanner userRole={userRole} />
+          {children}
+        </main>
       </div>
     </div>
   );

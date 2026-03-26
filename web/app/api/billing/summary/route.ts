@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
+import { UserRole } from "@prisma/client";
 import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
 import {
-  isBillingEnforced,
-  isPaymentProviderConfigured,
-  shouldApplyPlanLimits,
-} from "@/lib/billing/enforcement";
-import { effectiveLimits, limitsForTier } from "@/lib/billing/plans";
+  companyHasFullAccess,
+  effectiveTrialEndsAt,
+  isSubscriptionActive,
+  msUntilTrialEnd,
+  TRIAL_DAYS,
+} from "@/lib/billing/access";
+import { isPaymentProviderConfigured } from "@/lib/billing/enforcement";
 import { prisma } from "@/lib/prisma";
 
 /**
  * GET /api/billing/summary?companyId=
- * Plan display + limits for the selected company (billing may be bypassed).
+ * Trial + subscription state (always reachable so locked workspaces can load billing).
  */
 export async function GET(req: NextRequest) {
   const auth = await requireDbUser();
@@ -29,38 +32,37 @@ export async function GET(req: NextRequest) {
     select: {
       id: true,
       name: true,
-      planTier: true,
       subscriptionStatus: true,
+      trialEndsAt: true,
+      createdAt: true,
     },
   });
   if (!company) {
     return NextResponse.json({ error: "Company not found" }, { status: 404 });
   }
 
-  const enforced = isBillingEnforced();
-  const paymentReady = isPaymentProviderConfigured();
-  const applyLimits = shouldApplyPlanLimits();
-  const effective = effectiveLimits(company.planTier, applyLimits);
-  const raw = limitsForTier(company.planTier);
+  const subscribed = isSubscriptionActive(company);
+  const trialEndsAt = effectiveTrialEndsAt(company);
+  const superAdminExempt = auth.dbUser.role === UserRole.SUPER_ADMIN;
+  const tenantHasAccess = companyHasFullAccess(company);
+  const fullAccess = superAdminExempt || tenantHasAccess;
+  const locked = !fullAccess;
+  const msRemaining =
+    !superAdminExempt && tenantHasAccess && Date.now() < trialEndsAt.getTime() && !subscribed
+      ? msUntilTrialEnd(company)
+      : 0;
 
   return NextResponse.json({
     companyId: company.id,
     companyName: company.name,
-    planTier: company.planTier,
     subscriptionStatus: company.subscriptionStatus,
-    billingEnforced: enforced,
-    paymentProviderConfigured: paymentReady,
-    /** When true, limits are not applied and checkout always bypasses. */
-    accessBypassed: !applyLimits,
-    effectiveLabel: effective.label,
-    limits: {
-      maxEmployeesPerCompany: effective.maxEmployeesPerCompany,
-      maxPayrunsPerMonth: effective.maxPayrunsPerMonth,
-    },
-    /** Shown when billing is enforced but user is still on raw tier limits. */
-    tierLimits: {
-      maxEmployeesPerCompany: raw.maxEmployeesPerCompany,
-      maxPayrunsPerMonth: raw.maxPayrunsPerMonth,
-    },
+    trialDays: TRIAL_DAYS,
+    trialEndsAt: trialEndsAt.toISOString(),
+    subscribed,
+    fullAccess,
+    locked,
+    superAdminExempt,
+    msRemaining,
+    paymentProviderConfigured: isPaymentProviderConfigured(),
   });
 }

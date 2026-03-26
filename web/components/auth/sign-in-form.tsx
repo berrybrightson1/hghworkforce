@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useToast } from "@/components/toast/useToast";
@@ -69,21 +69,40 @@ function safeNextPath(raw: string | null): string {
   return "/dashboard";
 }
 
+function isEmailNotConfirmedError(error: { message: string; code?: string; status?: number }) {
+  const msg = error.message.toLowerCase();
+  return (
+    error.code === "email_not_confirmed" ||
+    msg.includes("email not confirmed") ||
+    msg.includes("not confirmed")
+  );
+}
+
 export function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [resendEmail, setResendEmail] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
 
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { email: "", password: "" },
   });
+
+  const watchedEmail = watch("email");
+  useEffect(() => {
+    if (resendEmail && watchedEmail.trim().toLowerCase() !== resendEmail.trim().toLowerCase()) {
+      setResendEmail(null);
+    }
+  }, [watchedEmail, resendEmail]);
 
   const onSubmit = handleSubmit(async (values) => {
     setSubmitting(true);
@@ -95,10 +114,19 @@ export function SignInForm() {
     setSubmitting(false);
 
     if (error) {
+      if (isEmailNotConfirmedError(error)) {
+        setResendEmail(values.email);
+        toast.error(
+          "Confirm your email first. Open the link we sent when you signed up (check spam). Then try signing in again.",
+        );
+        return;
+      }
+      setResendEmail(null);
       toast.error(error.message);
       return;
     }
 
+    setResendEmail(null);
     const next = safeNextPath(searchParams.get("next"));
     router.push(next);
     router.refresh();
@@ -192,6 +220,39 @@ export function SignInForm() {
           )}
         </button>
       </form>
+
+      {resendEmail && (
+        <div
+          className="mt-5 rounded-lg border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-hgh-navy"
+          role="status"
+        >
+          <p className="font-medium text-hgh-navy">Email not verified yet</p>
+          <p className="mt-1 text-xs leading-relaxed text-hgh-slate">
+            We can send another confirmation message to <span className="font-medium">{resendEmail}</span>.
+          </p>
+          <button
+            type="button"
+            disabled={resending}
+            onClick={async () => {
+              setResending(true);
+              const supabase = createClient();
+              const { error: resendErr } = await supabase.auth.resend({
+                type: "signup",
+                email: resendEmail,
+              });
+              setResending(false);
+              if (resendErr) {
+                toast.error(resendErr.message);
+                return;
+              }
+              toast.success("Check your inbox for the confirmation link.");
+            }}
+            className="mt-3 text-xs font-semibold text-hgh-gold underline decoration-hgh-gold/40 underline-offset-2 hover:text-hgh-gold/80 disabled:opacity-60"
+          >
+            {resending ? "Sending…" : "Resend confirmation email"}
+          </button>
+        </div>
+      )}
 
       {/* Divider */}
       <div className="my-6 flex items-center gap-4">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import {
   HelpCircle,
@@ -8,14 +9,115 @@ import {
   Banknote,
   ShieldCheck,
   Calendar,
-  ChevronDown,
   ArrowRight,
   Plus,
   Minus,
+  Route,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+const roadmapSteps: {
+  step: number;
+  title: string;
+  summary: string;
+  href?: string;
+  hrefLabel?: string;
+  extra?: string;
+  moreLinks?: { href: string; label: string }[];
+}[] = [
+  {
+    step: 1,
+    title: "Account and email",
+    summary:
+      "Sign up, confirm your email from the message Supabase sends (check spam), then sign in. Without confirmation, sign-in will be blocked.",
+  },
+  {
+    step: 2,
+    title: "Create or join a workspace",
+    summary:
+      "On first login you complete onboarding: either create a new company or join an existing one with an invite code from your administrator.",
+    href: "/onboarding",
+    hrefLabel: "Open onboarding",
+    extra: "If you already have a dashboard, you can skip this—you only do onboarding once per account setup.",
+  },
+  {
+    step: 3,
+    title: "Company settings, payroll add-ons, and check-in",
+    summary:
+      "Configure company details, Ghana tax brackets, optional Tier 2 pension on basic (if your policy uses it), HTTPS webhooks for approved pay runs, check-in mode (kiosk, portal, optional IP rules and face verification), and office timezone for shift-based late and overtime.",
+    href: "/dashboard/settings",
+    hrefLabel: "Settings",
+  },
+  {
+    step: 4,
+    title: "Invite your team",
+    summary:
+      "Add COMPANY_ADMIN and HR users so payroll and attendance are not a single-person bottleneck. They sign in with their own accounts.",
+    href: "/dashboard/users",
+    hrefLabel: "Users",
+  },
+  {
+    step: 5,
+    title: "Employees and pay structure",
+    summary:
+      "Add employees one by one or import CSV. Enter basic salary, recurring components (allowances and deductions), and optional documents.",
+    href: "/dashboard/employees",
+    hrefLabel: "Employees",
+  },
+  {
+    step: 6,
+    title: "Shifts and assignments",
+    summary:
+      "Define work shifts, then assign employees. Check-in times are compared to these shifts for tardiness and overtime.",
+    href: "/dashboard/shifts",
+    hrefLabel: "Shifts",
+  },
+  {
+    step: 7,
+    title: "Attendance and check-in",
+    summary:
+      "Employees clock in from the portal or office kiosk; they can request attendance corrections with a reason. You review the daily log, correction requests, and summaries before payroll.",
+    href: "/dashboard/attendance",
+    hrefLabel: "Attendance",
+    extra:
+      "Employee self-service lives under /portal (payslips, leave, loans, check-in, corrections). Share the portal link with staff.",
+  },
+  {
+    step: 8,
+    title: "Leave (if you use it)",
+    summary:
+      "Staff request leave from the portal; managers approve or reject in Leave Management with optional notes. Use the Policy tab for accrual and balance caps where you need them; the Balances tab tracks usage.",
+    href: "/dashboard/leave",
+    hrefLabel: "Leave",
+  },
+  {
+    step: 9,
+    title: "Payroll run",
+    summary:
+      "Create a pay run, generate lines (salary, components, attendance, loans, leave), review overrides, then submit for approval. After approval the run locks, payslips are available, you can download a bank salary CSV, and configured webhooks fire.",
+    href: "/dashboard/payroll",
+    hrefLabel: "Payroll",
+  },
+  {
+    step: 10,
+    title: "Loans, insights, reports, and billing",
+    summary:
+      "Use the dashboard overview for headcount and payroll insights at a glance. Track staff loans if needed, export reports (PAYE, SSNIT, trends, attendance), and manage your workspace under Billing: each company has the same product with a time-limited full-access trial, then an active subscription to stay unlocked.",
+    href: "/dashboard/reports",
+    hrefLabel: "Reports",
+    extra:
+      "Super admins switch companies from Companies; platform operators can open Platform health for cross-tenant operational checks.",
+    moreLinks: [
+      { href: "/dashboard", label: "Dashboard" },
+      { href: "/dashboard/loans", label: "Loans" },
+      { href: "/dashboard/billing", label: "Billing" },
+      { href: "/dashboard/companies", label: "Companies" },
+      { href: "/dashboard/platform-health", label: "Platform health" },
+    ],
+  },
+];
 
 const sections = [
   {
@@ -36,6 +138,10 @@ const sections = [
       {
         title: "Configuring tax brackets",
         content: "HGH Workforce comes with default Ghana GRA tax brackets. If you need custom brackets, go to Settings -> Tax Brackets to adjust the rates and thresholds for different income levels."
+      },
+      {
+        title: "Tier 2 pension, webhooks, and security notes",
+        content: "In Settings, enable optional Ghana Tier 2 on basic salary when your payroll policy requires it, register HTTPS webhook URLs to receive signed payloads when a pay run is approved, and review the security summary for how sensitive fields are protected."
       },
     ],
   },
@@ -58,6 +164,10 @@ const sections = [
         title: "Uploading employee documents",
         content: "In the 'Docs' tab of an employee profile, you can upload ID cards, contracts, and certificates. Files are stored securely using Vercel Blob storage."
       },
+      {
+        title: "Onboarding checklist per employee",
+        content: "Use the Onboarding tab on an employee profile to create and track tasks (for example contract signed or bank details captured) so new-hire steps stay visible to HR."
+      },
     ],
   },
   {
@@ -77,7 +187,15 @@ const sections = [
       },
       {
         title: "Generating and downloading payslips",
-        content: "Once a pay run is approved, branded PDF payslips are automatically generated. Employees can download these from their portal, or admins can download them from the pay run details page."
+        content: "Once a pay run is approved, branded PDF payslips are generated. Employees download from the portal; admins bulk-download from the pay run detail page. Email delivery is available only when your deployment has email configured."
+      },
+      {
+        title: "Bank salary CSV after approval",
+        content: "From an approved pay run, use Bank CSV on the detail page to download a file formatted for batch salary uploads to your bank or internal treasury tooling."
+      },
+      {
+        title: "Approval notes and webhooks",
+        content: "Approvers can attach an optional note when locking a run. If webhooks are configured in Settings, approving triggers a signed POST to your endpoint for downstream automation."
       },
     ],
   },
@@ -90,15 +208,19 @@ const sections = [
     links: [
       {
         title: "Approving leave requests",
-        content: "Leave requests show up in the Leave Management page. Admins can approve or reject requests. Approved days are automatically deducted from the employee's remaining balance."
+        content: "Leave requests show up in Leave Management. Admins approve or reject with an optional note. Approved days update balances according to your rules."
       },
       {
-        title: "Tracking leave balances",
-        content: "The 'Balances' tab shows a breakdown of entitled vs. used days for each employee across different leave types (Annual, Sick, Maternity, etc.)."
+        title: "Leave policy and balances",
+        content: "Use the Policy tab for accrual and maximum balance caps where your organization needs them. The Balances tab shows entitled vs. used days by leave type."
       },
       {
         title: "Managing employee shifts",
         content: "Set up work shifts (e.g., Morning, Night) in the 'Shifts' page and assign employees to them. This allows the system to calculate lateness and overtime during check-ins."
+      },
+      {
+        title: "Attendance corrections",
+        content: "Employees submit correction requests from the portal with a reason. Review and resolve them from the dashboard Attendance view alongside normal clock events so payroll reflects approved adjustments."
       },
     ],
   },
@@ -120,9 +242,88 @@ export default function HelpPage() {
         </div>
         <h1 className="text-3xl font-bold">How can we help you?</h1>
         <p className="mt-4 text-white/70">
-          Search our knowledge base or browse the categories below to learn how HGH Workforce works.
+          New here? Start with the roadmap below—then dive into the topic guides for more detail.
         </p>
       </div>
+
+      {/* End-to-end roadmap */}
+      <Card className="overflow-hidden border-hgh-navy/15 shadow-sm">
+        <CardHeader className="border-b border-hgh-border bg-hgh-offwhite/80 pb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-hgh-navy text-hgh-gold">
+                <Route size={22} aria-hidden />
+              </div>
+              <div>
+                <CardTitle className="text-lg text-hgh-navy">How to use the app (start to finish)</CardTitle>
+                <p className="mt-1 text-sm text-hgh-muted leading-relaxed">
+                  Use this as your default path: account → workspace → settings → employees and shifts → attendance →
+                  leave (optional) → payroll → reports and insights. Skip what you do not use yet.
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <ol className="space-y-0">
+            {roadmapSteps.map((item, index) => (
+              <li
+                key={item.step}
+                className={cn(
+                  "flex gap-3 sm:gap-4",
+                  index < roadmapSteps.length - 1 && "border-b border-hgh-border/70 pb-6 mb-6",
+                )}
+              >
+                <span
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-hgh-gold/15 text-sm font-bold tabular-nums text-hgh-navy"
+                  aria-hidden
+                >
+                  {item.step}
+                </span>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <h2 className="text-base font-semibold text-hgh-navy">{item.title}</h2>
+                  <p className="text-sm leading-relaxed text-hgh-muted">{item.summary}</p>
+                  {item.extra ? (
+                    <p className="text-xs leading-relaxed text-hgh-muted">{item.extra}</p>
+                  ) : null}
+                  {item.step === 7 ? (
+                    <p className="text-sm">
+                      <Link
+                        href="/portal"
+                        className="font-medium text-hgh-gold underline decoration-hgh-gold/40 underline-offset-2 hover:text-hgh-gold/80"
+                      >
+                        Open employee portal (staff sign-in)
+                      </Link>
+                    </p>
+                  ) : null}
+                  {item.href ? (
+                    <Link
+                      href={item.href}
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-hgh-gold transition-colors hover:text-hgh-gold/80"
+                    >
+                      Go to {item.hrefLabel}
+                      <ArrowRight size={15} className="shrink-0" aria-hidden />
+                    </Link>
+                  ) : null}
+                  {item.moreLinks?.length ? (
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-xs">
+                      {item.moreLinks.map((l) => (
+                        <Link
+                          key={l.href}
+                          href={l.href}
+                          className="font-medium text-hgh-navy/80 underline decoration-hgh-border underline-offset-2 hover:text-hgh-gold"
+                        >
+                          {l.label}
+                        </Link>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
 
       {/* Categories Grid */}
       <div className="grid gap-6 md:grid-cols-2">
@@ -160,7 +361,7 @@ export default function HelpPage() {
                       <div
                         className={cn(
                           "overflow-hidden transition-all duration-200 ease-in-out",
-                          expandedItem === link.title ? "max-h-[200px] pb-4 opacity-100" : "max-h-0 opacity-0"
+                          expandedItem === link.title ? "max-h-[360px] pb-4 opacity-100" : "max-h-0 opacity-0"
                         )}
                       >
                         <p className="text-xs text-hgh-muted leading-relaxed bg-hgh-offwhite/50 p-3 rounded-lg border border-hgh-border/50">

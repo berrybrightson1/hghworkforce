@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import {
-  canAccessCompany,
   canApprovePayroll,
   canManagePayroll,
+  gateCompanyBilling,
   requireDbUser,
 } from "@/lib/api-auth";
+import { deliverCompanyWebhooks } from "@/lib/company-webhooks";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
@@ -42,9 +43,9 @@ export async function GET(
     if (!payrun) {
       return NextResponse.json({ error: "Pay run not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, payrun.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, payrun.companyId);
+    if (billing) return billing;
+
     return NextResponse.json(payrun);
   } catch {
     return NextResponse.json({ error: "Failed to load pay run" }, { status: 500 });
@@ -59,7 +60,7 @@ export async function PATCH(
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
 
-  let body: { action?: string; rejectionNote?: string };
+  let body: { action?: string; rejectionNote?: string; approvalNote?: string };
   try {
     body = await req.json();
   } catch {
@@ -84,9 +85,8 @@ export async function PATCH(
     if (!payrun) {
       return NextResponse.json({ error: "Pay run not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, payrun.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, payrun.companyId);
+    if (billing) return billing;
 
     if (action === "submit") {
       if (!canManagePayroll(auth.dbUser.role)) {
@@ -136,6 +136,7 @@ export async function PATCH(
             approvedById: auth.dbUser.id,
             approvedAt: now,
             lockedAt: now,
+            approvalNote: body.approvalNote?.trim() || null,
           },
         });
 
@@ -161,9 +162,29 @@ export async function PATCH(
           action: "PAYRUN_APPROVED",
           entityType: "Payrun",
           entityId: id,
-          afterState: { status: updated.status } as Prisma.InputJsonValue,
+          afterState: {
+            status: updated.status,
+            approvalNote: updated.approvalNote,
+          } as Prisma.InputJsonValue,
         },
       });
+
+      const lineAgg = await prisma.payrunLine.aggregate({
+        where: { payrunId: id },
+        _sum: { netPay: true },
+        _count: { id: true },
+      });
+
+      void deliverCompanyWebhooks(payrun.companyId, "payrun.approved", {
+        payrunId: id,
+        companyId: payrun.companyId,
+        periodStart: payrun.periodStart.toISOString(),
+        periodEnd: payrun.periodEnd.toISOString(),
+        lineCount: lineAgg._count.id,
+        totalNetPay: lineAgg._sum.netPay?.toString() ?? "0",
+        approvedByUserId: auth.dbUser.id,
+      });
+
       return NextResponse.json(updated);
     }
 

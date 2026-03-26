@@ -1,20 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { guardEmployeeCreation } from "@/lib/billing/guards";
 import { allocateEmployeeCode } from "@/lib/employee-code";
 import { prisma } from "@/lib/prisma";
 import { encrypt, maskSensitive } from "@/lib/crypto";
 
 export async function GET(req: NextRequest) {
+  const auth = await requireDbUser();
+  if (!auth.ok) return auth.response;
+
   try {
     const { searchParams } = req.nextUrl;
     const companyId = searchParams.get("companyId");
     const status = searchParams.get("status");
     const search = searchParams.get("q");
 
+    if (!companyId) {
+      return NextResponse.json({ error: "companyId is required" }, { status: 400 });
+    }
+    const billing = await gateCompanyBilling(auth.dbUser, companyId);
+    if (billing) return billing;
+
     const employees = await prisma.employee.findMany({
       where: {
-        ...(companyId ? { companyId } : {}),
+        companyId,
         ...(status ? { status: status as "ACTIVE" | "SUSPENDED" | "TERMINATED" } : {}),
         ...(search
           ? {
@@ -60,16 +69,15 @@ export async function POST(req: NextRequest) {
     if (!companyId) {
       return NextResponse.json({ error: "companyId is required" }, { status: 400 });
     }
-    if (!canAccessCompany(auth.dbUser, companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, companyId);
+    if (billing) return billing;
 
     const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    const blocked = await guardEmployeeCreation(company);
+    const blocked = guardEmployeeCreation(company, auth.dbUser.role);
     if (blocked) return blocked;
 
     const name =

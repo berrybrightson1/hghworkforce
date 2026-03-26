@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { del } from "@vercel/blob";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function DELETE(
@@ -21,9 +21,8 @@ export async function DELETE(
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
 
-    if (!canAccessCompany(auth.dbUser, document.employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, document.employee.companyId);
+    if (billing) return billing;
 
     // Delete from Vercel Blob
     await del(document.fileUrl).catch(() => {});

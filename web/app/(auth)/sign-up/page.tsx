@@ -1,12 +1,13 @@
 import { Suspense } from "react";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { SignUpForm } from "@/components/auth/sign-up-form";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 
 export default function SignUpPage() {
   return (
     <AuthLayout
       heading="Create your account"
-      subheading="Create your workspace, add companies, and invite your team."
+      subheading={`New companies get a ${TRIAL_DAYS}-day full-access trial, then subscribe under Billing to stay unlocked.`}
     >
       <Suspense
         fallback={

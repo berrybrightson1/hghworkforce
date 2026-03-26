@@ -3,6 +3,7 @@ import { Building2, CalendarClock, FileSpreadsheet, Fingerprint, Users, Wallet }
 import { HeroProductNotices } from "@/components/landing/hero-product-notices";
 import { cn } from "@/lib/utils";
 import type { LandingAuth } from "@/lib/landing-auth";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 
 const TRUSTED_BY_NAMES = [
   "Hobort Auto Parts",
@@ -104,9 +105,11 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
           <div className="flex max-w-md items-start gap-2.5 text-left">
             <span className="mt-0.5 h-[2.35rem] w-0.5 shrink-0 rounded-full bg-hgh-gold" aria-hidden />
             <div className="min-w-0">
-              <p className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-hgh-muted">People ops</p>
+              <p className="text-[0.5625rem] font-semibold uppercase tracking-[0.12em] text-hgh-muted">
+                Your workforce, simplified
+              </p>
               <p className="mt-1 text-[0.8125rem] font-semibold leading-snug text-hgh-navy sm:text-[13px] sm:leading-snug">
-                Payroll, time, and statutory runs — one connected flow.
+                Payroll management and employee check-in—one flow from clock-in to payslip.
               </p>
             </div>
           </div>
@@ -118,8 +121,8 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-hgh-muted">
-          From small teams to multi-company operations — run compliant Ghana payroll, track attendance through the
-          employee portal and optional office kiosk (face-verified), and keep everyone aligned from one dashboard.
+          Payroll and attendance for Ghana teams—one place for pay runs, clock-ins, and staff self-service. Works great on
+          mobile. Try the full product free for {TRIAL_DAYS} days; subscribe when you&apos;re ready to keep going.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
@@ -128,36 +131,27 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
               href={auth.appHref}
               className="inline-flex items-center justify-center rounded-full bg-hgh-navy px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-hgh-navy/25 transition hover:bg-hgh-navy-light"
             >
-              {auth.label}
+              You&apos;re signed in — open your workspace.
             </Link>
           ) : (
-            <Link
-              href="/sign-up"
-              className="inline-flex items-center justify-center rounded-full bg-hgh-navy px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-hgh-navy/25 transition hover:bg-hgh-navy-light"
-            >
-              Get started free
-            </Link>
+            <>
+              <Link
+                href="/sign-up"
+                className="inline-flex items-center justify-center rounded-full bg-hgh-navy px-8 py-3.5 text-sm font-semibold text-white shadow-lg shadow-hgh-navy/25 transition hover:bg-hgh-navy-light"
+              >
+                Start {TRIAL_DAYS}-day full-access trial
+              </Link>
+              <a
+                href="mailto:?subject=HGH%20WorkForce%20%E2%80%94%20Talk%20to%20sales"
+                className="inline-flex items-center justify-center rounded-full border border-hgh-border bg-white px-8 py-3.5 text-sm font-semibold text-hgh-navy shadow-sm transition hover:border-hgh-gold/40 hover:bg-hgh-offwhite"
+              >
+                Talk to sales team
+              </a>
+            </>
           )}
-          <a
-            href="mailto:?subject=HGH%20WorkForce%20%E2%80%94%20Talk%20to%20sales"
-            className="inline-flex items-center justify-center rounded-full border border-hgh-border bg-white px-8 py-3.5 text-sm font-semibold text-hgh-navy shadow-sm transition hover:border-hgh-gold/40 hover:bg-hgh-offwhite"
-          >
-            Talk to sales team
-          </a>
         </div>
 
-        {auth.loggedIn ? (
-          <p className="mt-6 text-sm text-hgh-muted">
-            You&apos;re signed in —{" "}
-            <Link
-              href={auth.appHref}
-              className="font-medium text-hgh-navy underline decoration-hgh-gold/50 underline-offset-2 hover:text-hgh-gold"
-            >
-              open your workspace
-            </Link>
-            .
-          </p>
-        ) : (
+        {!auth.loggedIn ? (
           <p className="mt-6 text-sm text-hgh-muted">
             Employees:{" "}
             <Link
@@ -174,7 +168,7 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
               Manager sign-in
             </Link>
           </p>
-        )}
+        ) : null}
 
         <HeroProductNotices />
       </div>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { Prisma, UserRole } from "@prisma/client";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { guardPayrunCreation } from "@/lib/billing/guards";
 import { prisma } from "@/lib/prisma";
 
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
     const requestedCompanyId = searchParams.get("companyId");
 
     let where: Prisma.PayrunWhereInput = {};
-    if (auth.dbUser.role === "SUPER_ADMIN") {
+    if (auth.dbUser.role === UserRole.SUPER_ADMIN) {
       where = requestedCompanyId ? { companyId: requestedCompanyId } : {};
     } else if (!auth.dbUser.companyId) {
       if (!requestedCompanyId) {
@@ -27,6 +27,14 @@ export async function GET(req: NextRequest) {
       where = { companyId: auth.dbUser.companyId };
     }
 
+    const gateCompanyId =
+      typeof where.companyId === "string" ? where.companyId : requestedCompanyId;
+
+    if (gateCompanyId) {
+      const g = await gateCompanyBilling(auth.dbUser, gateCompanyId);
+      if (g) return g;
+    }
+
     const payruns = await prisma.payrun.findMany({
       where,
       include: {
@@ -36,6 +44,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take: 50,
     });
+
     return NextResponse.json(payruns);
   } catch {
     return NextResponse.json({ error: "Failed to load payruns" }, { status: 500 });
@@ -52,16 +61,15 @@ export async function POST(req: NextRequest) {
     if (!companyId) {
       return NextResponse.json({ error: "companyId required" }, { status: 400 });
     }
-    if (!canAccessCompany(auth.dbUser, companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, companyId);
+    if (billing) return billing;
 
     const company = await prisma.company.findUnique({ where: { id: companyId } });
     if (!company) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
     }
 
-    const payrunBlocked = await guardPayrunCreation(company);
+    const payrunBlocked = guardPayrunCreation(company, auth.dbUser.role);
     if (payrunBlocked) return payrunBlocked;
 
     const payrun = await prisma.payrun.create({

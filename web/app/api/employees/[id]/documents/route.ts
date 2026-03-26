@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
@@ -19,9 +19,8 @@ export async function GET(
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billing) return billing;
 
     const documents = await prisma.employeeDocument.findMany({
       where: { employeeId: id },
@@ -57,9 +56,8 @@ export async function POST(
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billing) return billing;
 
     // Upload to Vercel Blob
     const blob = await put(`documents/${id}/${file.name}`, file, {

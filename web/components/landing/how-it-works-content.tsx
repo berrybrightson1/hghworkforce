@@ -60,10 +60,11 @@ export function HowItWorksContent() {
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-hgh-gold">Step 3</p>
           <h2 className="mb-2 text-lg font-semibold text-hgh-navy">One product, both services</h2>
           <p className="text-sm leading-relaxed text-hgh-muted">
-            You don&apos;t need to &quot;add check-in later&quot; as a second purchase —{" "}
-            <strong className="font-medium text-hgh-slate">payroll and attendance</strong> live in the same platform.
-            HR and admins use the dashboard; employees use the self-service portal for check-in, leave, and payslips,
-            based on their role.
+            You don&apos;t need to &quot;add check-in later&quot; as a second product —{" "}
+            <strong className="font-medium text-hgh-slate">payroll and attendance</strong> are included in the same
+            subscription once you move past the trial. HR and admins use the dashboard (insights, pay runs,
+            corrections); employees use the self-service portal for check-in, leave, payslips, and onboarding tasks —
+            works great on phones; you can add the site to your home screen for an app-like experience.
           </p>
         </div>
       </div>

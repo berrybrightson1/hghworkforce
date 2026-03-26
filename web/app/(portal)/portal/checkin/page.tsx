@@ -83,6 +83,9 @@ export default function PortalCheckInPage() {
   const [checkinCtx, setCheckinCtx] = useState<CheckinContext | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [devFaceJson, setDevFaceJson] = useState("");
+  const [corrCheckInId, setCorrCheckInId] = useState("");
+  const [corrReason, setCorrReason] = useState("");
+  const [corrBusy, setCorrBusy] = useState(false);
   const sentTabHidden = useRef(false);
 
   const now = useLiveClock();
@@ -490,6 +493,68 @@ export default function PortalCheckInPage() {
           </div>
         )}
       </div>
+
+      {checkins && checkins.length > 0 && (
+        <div className="rounded-xl border border-hgh-border bg-white p-5">
+          <h2 className="text-sm font-semibold text-hgh-navy">Request a time correction</h2>
+          <p className="mt-1 text-xs text-hgh-muted">
+            HR can approve adjustments to your recorded times. Describe the issue; optional proposed
+            times can be added later from the dashboard.
+          </p>
+          <div className="mt-4 space-y-3">
+            <select
+              aria-label="Session to correct"
+              className="w-full rounded-lg border border-hgh-border bg-white px-3 py-2 text-sm"
+              value={corrCheckInId}
+              onChange={(e) => setCorrCheckInId(e.target.value)}
+            >
+              <option value="">Select today&apos;s session…</option>
+              {checkins.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {formatTime(c.clockIn)}
+                  {c.clockOut ? ` – ${formatTime(c.clockOut)}` : " (in progress)"}
+                </option>
+              ))}
+            </select>
+            <textarea
+              className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm"
+              rows={3}
+              placeholder="What needs to be fixed? (min 3 characters)"
+              value={corrReason}
+              onChange={(e) => setCorrReason(e.target.value)}
+            />
+            <button
+              type="button"
+              disabled={corrBusy || !corrCheckInId || corrReason.trim().length < 3}
+              onClick={async () => {
+                setCorrBusy(true);
+                try {
+                  const res = await fetch("/api/attendance-corrections", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      checkInId: corrCheckInId,
+                      reason: corrReason.trim(),
+                    }),
+                  });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) throw new Error(data.error || "Failed");
+                  toast.success("Request submitted for review.");
+                  setCorrReason("");
+                  setCorrCheckInId("");
+                } catch (e) {
+                  toast.error(e instanceof Error ? e.message : "Failed");
+                } finally {
+                  setCorrBusy(false);
+                }
+              }}
+              className="rounded-lg bg-hgh-navy px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-hgh-navy/90 disabled:opacity-50"
+            >
+              {corrBusy ? "Sending…" : "Submit request"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

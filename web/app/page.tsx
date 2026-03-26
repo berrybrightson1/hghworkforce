@@ -16,20 +16,21 @@ import {
   Rocket,
   UserPlus,
 } from "lucide-react";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 
 const services = [
   {
     icon: "payroll" as const,
     title: "Payroll Management",
     description:
-      "End-to-end payroll processing for Ghana-based teams. Automated PAYE, SSNIT, P9A certificates, salary components, and multi-company support - all GRA-compliant out of the box.",
+      "End-to-end payroll for Ghana-based teams: PAYE, SSNIT, optional Tier 2 pension on basic salary, P9A certificates, components, and multi-company workspaces — GRA-aligned with approval gates and audit-friendly exports.",
     highlights: [
-      "Automated PAYE and SSNIT calculations",
-      "Branded PDF payslip generation and email delivery",
-      "Multi-company payrun workflow with approval gates",
-      "P9A annual tax certificate generation",
-      "Leave, loan, and salary component tracking",
-      "Excel/CSV export for GRA filing",
+      "Automated PAYE, SSNIT, and optional Ghana Tier 2 on basic",
+      "Branded PDF payslips (portal + admin download; bulk ZIP)",
+      "Bank-ready salary CSV after approval; HTTPS webhooks on approve",
+      "Pay run and leave approvals can include reviewer notes",
+      "P9A annual tax certificates and filing-friendly exports",
+      "Leave, loans, and recurring components roll into each run",
     ],
     accentColor: "gold" as const,
   },
@@ -37,14 +38,14 @@ const services = [
     icon: "checkin" as const,
     title: "Employee Check-in",
     description:
-      "Attendance that ties straight into payroll. Employees check in from the employee portal (signed-in) or your on-site office kiosk with face verification, optional IP controls, and shift-based late and overtime rules.",
+      "Attendance that feeds payroll: portal or office kiosk (face verification), optional IP controls, shift-based late and overtime, correction requests when something was logged wrong, and exports your ops team already use.",
     highlights: [
       "Office kiosk: shared device with name, code, and face match",
-      "Portal check-in for employees on their own accounts",
+      "Portal check-in and correction requests from self-service",
       "Enterprise options: IP allowlists, audit sessions, face verification",
       "Automatic overtime and tardiness vs assigned shifts",
       "Shift scheduling and roster management",
-      "Attendance summaries and reports exportable to Excel/CSV/PDF",
+      "Daily log, summaries, and Excel/CSV/PDF exports",
     ],
     accentColor: "success" as const,
   },
@@ -79,13 +80,13 @@ const features = [
     icon: "payslip" as const,
     title: "Payslip Generation",
     description:
-      "Branded PDF payslips generated instantly with full earnings and deductions breakdown. Bulk download as ZIP or email directly to employees.",
+      "Branded PDF payslips with full earnings and deductions. Employees download from the portal; admins bulk-ZIP from approved runs.",
   },
   {
     icon: "selfService" as const,
     title: "Employee Self-Service",
     description:
-      "Employees view payslips, check in from the portal, request leave, track loans, and access documents from a mobile-friendly workspace.",
+      "Payslips, check-in, leave requests, loan balances, documents, and onboarding task checklists — mobile-friendly; add to home screen like an app.",
   },
   {
     icon: "shifts" as const,
@@ -97,7 +98,31 @@ const features = [
     icon: "reports" as const,
     title: "Reports & Analytics",
     description:
-      "SSNIT reports, PAYE summaries, payroll cost trends, headcount charts, attendance summaries, and exportable Excel/CSV/PDF reports.",
+      "SSNIT and PAYE summaries, payroll cost trends, headcount charts, attendance exports — plus dashboard insights at a glance.",
+  },
+  {
+    icon: "integrations" as const,
+    title: "Exports & automations",
+    description:
+      "Bank salary CSV from approved pay runs, signed webhooks when payroll locks, Tier 2 toggles per company — fewer spreadsheets, fewer manual handoffs.",
+  },
+  {
+    icon: "leave" as const,
+    title: "Leave management",
+    description:
+      "Staff request leave from the portal; managers approve with notes. Policies and balances stay visible; approved leave can flow straight into the next pay run.",
+  },
+  {
+    icon: "loans" as const,
+    title: "Loans & advances",
+    description:
+      "Track salary loans and advances with scheduled installments. Deductions roll into pay runs automatically until balances are cleared.",
+  },
+  {
+    icon: "audit" as const,
+    title: "Approvals & audit trail",
+    description:
+      "Pay runs move from draft to approval with optional reviewer notes, then lock. Key actions are logged so your team stays accountable.",
   },
 ];
 
@@ -119,13 +144,15 @@ const workflow = [
     step: "03",
     icon: CheckCircle2,
     title: "Approve & Lock",
-    description: "Company admin reviews and approves. Once locked, records become immutable for audit compliance.",
+    description:
+      "Company admin reviews with an optional approval note. Once locked, the run is immutable; configured webhooks fire for downstream systems.",
   },
   {
     step: "04",
     icon: Download,
-    title: "Generate & Distribute",
-    description: "Branded PDF payslips are generated with full breakdowns and can be downloaded or emailed to employees.",
+    title: "Payslips & bank file",
+    description:
+      "PDF payslips go to the portal and admin bulk download; download a bank-ready salary CSV for the approved run.",
   },
 ];
 
@@ -134,40 +161,40 @@ const roles = [
     icon: "superAdmin" as const,
     role: "Super Admin",
     access: [
-      "All companies overview",
+      "All companies overview and platform health (ops)",
       "GRA tax bracket editor",
       "Full audit log viewer",
-      "Payroll trend and headcount analytics",
+      "Cross-company payroll trends and headcount analytics",
     ],
   },
   {
     icon: "companyAdmin" as const,
     role: "Company Admin",
     access: [
-      "Company data, check-in security, and kiosk settings",
-      "Approve or reject payruns",
-      "Attendance oversight with summary reports",
-      "Company-level reports and P9A certificates",
+      "Company data, Tier 2, webhooks, check-in, and kiosk settings",
+      "Approve or reject pay runs (with optional notes)",
+      "Attendance oversight, corrections, and summary reports",
+      "Reports, P9A, and bank CSV from approved runs",
     ],
   },
   {
     icon: "hrManager" as const,
     role: "HR Manager",
     access: [
-      "Create payrun drafts",
-      "Manage employees, shifts, and documents",
-      "Leave calendar and loan management",
-      "Bulk CSV import and attendance reports",
+      "Create pay run drafts and payroll lines",
+      "Employees, onboarding tasks, shifts, and documents",
+      "Leave policy, calendar, balances, and loans",
+      "Bulk CSV import and attendance exports",
     ],
   },
   {
     icon: "employee" as const,
     role: "Employee",
     access: [
-      "Clock in and out from the portal or kiosk flow",
+      "Clock in from the portal or kiosk; request attendance fixes",
       "View and download payslips",
-      "Request leave and view calendar",
-      "Track loan balance",
+      "Request leave and follow onboarding checklists",
+      "Track loan balance from self-service",
     ],
   },
 ];
@@ -313,7 +340,7 @@ export default async function LandingPage() {
             <>
               <h2 className="mb-4 text-3xl font-bold text-white">Continue in HGH WorkForce</h2>
               <p className="mx-auto mb-10 max-w-xl leading-relaxed text-white/55">
-                Pick up payroll, attendance, and reports — everything stays synced to your account.
+                Pick up payroll, attendance, insights, and exports — everything stays scoped to your workspace.
               </p>
               <Link
                 href={auth.appHref}
@@ -328,8 +355,9 @@ export default async function LandingPage() {
                 Ready to unify your workforce operations?
               </h2>
               <p className="mx-auto mb-10 max-w-xl leading-relaxed text-white/55">
-                Create an account to add your companies, track attendance, and run compliant payroll - all from one
-                platform.
+                Create an account to add companies, track attendance, and run compliant payroll — one platform for the
+                whole cycle. New workspaces get a {TRIAL_DAYS}-day trial with every feature; subscribe from Billing to
+                stay unlocked after that.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-4">
                 <Link
@@ -337,7 +365,7 @@ export default async function LandingPage() {
                   className="inline-flex items-center gap-2 rounded-full bg-hgh-gold px-10 py-4 text-lg font-semibold text-hgh-navy shadow-lg shadow-hgh-gold/25 transition-all hover:bg-hgh-gold/90"
                 >
                   <UserPlus size={22} />
-                  Get started free
+                  Start {TRIAL_DAYS}-day trial
                 </Link>
                 <Link
                   href="/sign-in"

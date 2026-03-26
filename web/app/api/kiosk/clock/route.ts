@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
+import { companyHasFullAccess } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
 import { getClientIpFromRequest } from "@/lib/checkin-ip";
 import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
@@ -68,11 +69,25 @@ export async function POST(req: NextRequest) {
         kioskOfficeClosesAt: true,
         kioskCutoffTime: true,
         kioskTimezone: true,
+        subscriptionStatus: true,
+        trialEndsAt: true,
+        createdAt: true,
       },
     });
 
     if (!company) {
       return NextResponse.json({ error: "Company not found" }, { status: 404 });
+    }
+
+    if (!companyHasFullAccess(company)) {
+      return NextResponse.json(
+        {
+          error:
+            "This workspace’s free trial has ended. Ask your administrator to subscribe before check-in is available again.",
+          code: "SUBSCRIPTION_REQUIRED",
+        },
+        { status: 402 },
+      );
     }
 
     const clientIp = getClientIpFromRequest(req);

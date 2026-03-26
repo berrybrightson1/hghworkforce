@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronDown } from "lucide-react";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 
 const categories = ["General", "Payroll", "Check-in", "Employees", "Compliance"] as const;
 type Category = (typeof categories)[number];
@@ -12,7 +13,7 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "What is HGH WorkForce?",
       answer:
-        "HGH WorkForce is a unified payroll and attendance platform for organizations in Ghana. It combines payroll processing, employee check-in tracking, shift management, and self-service into a single system - with each customer's companies and data kept isolated.",
+        "HGH WorkForce is a unified payroll and attendance platform for organizations in Ghana. It combines payroll, check-in, shifts, leave, loans, onboarding tasks, dashboard insights, and optional automations (bank salary CSV exports and HTTPS webhooks on pay run approval) — with each customer's companies and data kept isolated.",
     },
     {
       question: "Can I run payroll for more than one company?",
@@ -25,16 +26,25 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
         "HGH WorkForce supports four roles: Super Admins who oversee the whole platform, Company Admins who approve pay runs for their business, HR Managers who handle day-to-day payroll and attendance operations, and Employees who use self-service for check-ins, payslips, leave, and loan balances.",
     },
     {
+      question: "How do trials and billing work?",
+      answer: `There is a single product for everyone — no feature tiers. Each new company workspace gets a ${TRIAL_DAYS}-day free trial with full access to payroll, attendance, portal, and exports. When the trial ends, that workspace locks until a company admin completes subscription under Dashboard → Billing. Super admins can also grant paid access for support cases.`,
+    },
+    {
       question: "How do I get started?",
       answer:
-        "Create an account with your work email, then add your organization and companies. Invite teammates with the right roles, import employees individually or bulk-import via CSV, turn on check-in options that fit your business (portal, kiosk, IP rules, face verification), and start tracking attendance and drafting pay runs. If you already have an account, sign in and pick the company you want to work in.",
+        "Create an account with your work email, then add your organization and companies. Your workspace trial starts when the company is created. Invite teammates with the right roles, import employees individually or bulk-import via CSV, turn on check-in options that fit your business (portal, kiosk, IP rules, face verification), configure payroll settings (including optional Ghana Tier 2 pension on basic and webhooks if you use them), and start tracking attendance and drafting pay runs. If you already have an account, sign in and pick the company you want to work in.",
+    },
+    {
+      question: "Can I install HGH WorkForce on my phone?",
+      answer:
+        "The dashboard and portal are mobile-friendly web apps. On many phones and tablets you can use your browser's Add to Home Screen option for an app-like shortcut (PWA). You still sign in securely through the same accounts as on desktop.",
     },
   ],
   Payroll: [
     {
       question: "How does the payrun workflow work?",
       answer:
-        "HR creates a draft payrun, and the system auto-calculates gross pay, SSNIT contributions, PAYE tax, and net pay for every employee. HR reviews the calculations, submits for approval, and the Company Admin either approves or rejects it. Approved payruns are locked and become immutable.",
+        "HR creates a draft pay run, and the system auto-calculates gross pay, SSNIT, optional Tier 2 pension on basic (if enabled for the company), PAYE, and net pay. HR reviews line items, submits for approval, and the Company Admin approves or rejects — optionally adding an approval note. Approved pay runs lock and become immutable.",
     },
     {
       question: "Can I override individual payroll calculations?",
@@ -44,12 +54,22 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "What happens after a payrun is approved?",
       answer:
-        "Once approved, the payrun is locked with a timestamp and becomes immutable. Branded PDF payslips are automatically generated for each employee and can be bulk-downloaded as a ZIP file or emailed directly to employees via the system.",
+        "Once approved, the pay run is locked with a timestamp and becomes immutable. Branded PDF payslips are generated for each employee. Admins can bulk-download payslips as a ZIP; employees download their own from the self-service portal. If your environment has transactional email configured, admins may also send payslips by email from the product — otherwise use PDF download.",
     },
     {
       question: "How are payslips generated and distributed?",
       answer:
-        "Payslips are generated as branded PDF documents using the HGH template - including earnings breakdown, salary components (allowances and deductions), SSNIT contributions, PAYE, and net pay. They can be downloaded individually, bulk-exported as a ZIP, or emailed to employees.",
+        "Payslips are branded PDFs with earnings, components, deductions, SSNIT, PAYE, Tier 2 (when applicable), and net pay. Distribution is primarily PDF download: individually, as a bulk ZIP for admins, or via the employee portal. Email delivery is available when your deployment has email provider credentials configured.",
+    },
+    {
+      question: "Can I export a bank file for salary payments?",
+      answer:
+        "Yes. After a pay run is approved, Company Admins can download a bank-ready salary CSV from the pay run detail page to upload to your bank or treasury workflow (format is suited to batch salary disbursements).",
+    },
+    {
+      question: "What are pay run webhooks?",
+      answer:
+        "Company Admins can register HTTPS endpoints in Settings. When a pay run is approved, the system POSTs a signed payload to your endpoint so finance or internal tools can react automatically — for example updating an ERP or notifying treasury.",
     },
   ],
   "Check-in": [
@@ -57,6 +77,11 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
       question: "How does employee check-in work?",
       answer:
         "Employees can check in from the self-service portal (signed in) or from an office kiosk link: they enter name and employee code, then confirm with a face match against their enrolled profile. Companies can add enterprise controls such as IP allowlists and optional audit sessions. Tardiness and overtime follow assigned shift rules, and attendance feeds payroll in real time.",
+    },
+    {
+      question: "What if someone needs to correct a check-in or clock-out?",
+      answer:
+        "Employees can submit an attendance correction request from the portal (with a reason). Managers review those requests on the dashboard Attendance experience alongside the daily log and summaries, so fixes stay auditable instead of ad-hoc spreadsheet edits.",
     },
     {
       question: "Can I set up shift schedules and kiosk hours?",
@@ -83,7 +108,12 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "How do leave requests work?",
       answer:
-        "Employees submit leave requests through the portal, specifying the type (Annual, Sick, Maternity, Paternity, Compassionate, or Unpaid) and dates. HR or the Company Admin reviews and approves or rejects the request. Approved unpaid leave automatically creates a deduction in the next payrun.",
+        "Employees submit leave requests through the portal, choosing the type and dates. HR or the Company Admin approves or rejects — optionally adding a note. Leave balances respect your company's leave policy (accrual and caps) where configured. Approved unpaid leave can flow into payroll as deductions on the next run.",
+    },
+    {
+      question: "Is there onboarding tracking for new hires?",
+      answer:
+        "Yes. On each employee profile, HR can use the Onboarding tab to track per-person tasks (for example ID upload or contract signed) so hiring steps don't live only in email threads.",
     },
     {
       question: "How are loans and salary advances tracked?",
@@ -105,7 +135,12 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "What is SSNIT and how is it calculated?",
       answer:
-        "SSNIT (Social Security and National Insurance Trust) contributions are mandatory in Ghana. The employee contributes 5.5% of basic salary and the employer contributes 13%. HGH Payroll calculates both automatically and includes them on every payslip.",
+        "SSNIT (Social Security and National Insurance Trust) contributions are mandatory in Ghana. The employee contributes 5.5% of basic salary and the employer contributes 13%. HGH WorkForce calculates both automatically and includes them on every payslip.",
+    },
+    {
+      question: "What is Ghana Tier 2 pension in the product?",
+      answer:
+        "When enabled in company payroll settings, Tier 2 is calculated as a percentage of basic salary and shown on payslips alongside other statutory lines — useful for employers that operate Tier 2 alongside SSNIT Tier 1 in their payroll policy.",
     },
     {
       question: "Are audit trails maintained?",

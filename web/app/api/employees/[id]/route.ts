@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { Prisma } from "@prisma/client";
+import { canAccessCompany, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt, maskSensitive } from "@/lib/crypto";
 
@@ -32,6 +33,9 @@ export async function GET(
     if (!isSelf && !isCompanyAdmin) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+
+    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billing) return billing;
 
     const data: Record<string, unknown> = { ...employee };
     delete data.faceDescriptor;
@@ -84,7 +88,7 @@ export async function PATCH(
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
 
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
@@ -96,12 +100,11 @@ export async function PATCH(
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billing) return billing;
 
     // Prepare update data
-    const updateData: any = { ...body };
+    const updateData: Record<string, unknown> = { ...body };
     delete updateData.companyId;
     delete updateData.employeeCode;
     delete updateData.userId;
@@ -110,11 +113,11 @@ export async function PATCH(
     delete updateData.faceRegisteredAt;
 
     // Handle sensitive fields
-    if ("ssnit" in body) updateData.ssnitEncrypted = encrypt(body.ssnit);
-    if ("tin" in body) updateData.tinEncrypted = encrypt(body.tin);
-    if ("bankName" in body) updateData.bankNameEncrypted = encrypt(body.bankName);
-    if ("bankAccount" in body) updateData.bankAccountEncrypted = encrypt(body.bankAccount);
-    if ("bankBranch" in body) updateData.bankBranchEncrypted = encrypt(body.bankBranch);
+    if ("ssnit" in body) updateData.ssnitEncrypted = encrypt(body.ssnit as string);
+    if ("tin" in body) updateData.tinEncrypted = encrypt(body.tin as string);
+    if ("bankName" in body) updateData.bankNameEncrypted = encrypt(body.bankName as string);
+    if ("bankAccount" in body) updateData.bankAccountEncrypted = encrypt(body.bankAccount as string);
+    if ("bankBranch" in body) updateData.bankBranchEncrypted = encrypt(body.bankBranch as string);
 
     // Remove raw fields from updateData
     delete updateData.ssnit;
@@ -134,7 +137,7 @@ export async function PATCH(
         action: "EMPLOYEE_UPDATED",
         entityType: "Employee",
         entityId: id,
-        afterState: updated as any,
+        afterState: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
       },
     });
 
@@ -157,11 +160,10 @@ export async function DELETE(
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billing) return billing;
 
-    const updated = await prisma.employee.update({
+    await prisma.employee.update({
       where: { id },
       data: { deletedAt: new Date(), status: "TERMINATED" },
     });

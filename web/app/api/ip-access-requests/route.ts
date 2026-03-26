@@ -4,8 +4,8 @@ import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   requireDbUser,
-  canAccessCompany,
   canManageCheckinSecurity,
+  gateCompanyBilling,
 } from "@/lib/api-auth";
 
 /**
@@ -32,10 +32,14 @@ export async function GET(req: NextRequest) {
           ? { companyId: auth.dbUser.companyId }
           : { companyId: "__none__" };
 
-    if (auth.dbUser.role !== UserRole.SUPER_ADMIN && companyIdParam) {
-      if (!canAccessCompany(auth.dbUser, companyIdParam)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (auth.dbUser.role === UserRole.SUPER_ADMIN) {
+      if (companyIdParam) {
+        const billing = await gateCompanyBilling(auth.dbUser, companyIdParam);
+        if (billing) return billing;
       }
+    } else if (auth.dbUser.companyId) {
+      const billing = await gateCompanyBilling(auth.dbUser, auth.dbUser.companyId);
+      if (billing) return billing;
     }
 
     const rows = await prisma.iPAccessRequest.findMany({
@@ -77,9 +81,11 @@ export async function POST(req: NextRequest) {
   const requestedIp = typeof body.requestedIp === "string" ? body.requestedIp.trim() : "";
   const note = typeof body.note === "string" ? body.note.trim() || null : null;
 
-  if (!companyId || !canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!companyId) {
+    return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
+  const postBilling = await gateCompanyBilling(auth.dbUser, companyId);
+  if (postBilling) return postBilling;
   if (!requestedIp || isIP(requestedIp) === 0) {
     return NextResponse.json({ error: "Valid IPv4 or IPv6 address required" }, { status: 400 });
   }

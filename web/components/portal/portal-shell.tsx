@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useLayoutEffect, useState } from "react";
 import {
   CalendarDays,
   FileText,
@@ -9,12 +10,14 @@ import {
   Home,
   Landmark,
   LogOut,
+  Loader2,
   User,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/useToast";
 import { createClient } from "@/lib/supabase/client";
+import { useCompany } from "@/components/company-context";
 
 const nav = [
   { href: "/portal", label: "Home", icon: Home, exact: true },
@@ -36,6 +39,51 @@ export function PortalShell({
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
+  const { selected, loading: companyLoading } = useCompany();
+  const [billingReady, setBillingReady] = useState(false);
+  const [locked, setLocked] = useState(false);
+
+  useEffect(() => {
+    if (companyLoading || !selected?.id) return;
+    let cancelled = false;
+    setBillingReady(false);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/billing/summary?companyId=${encodeURIComponent(selected.id)}`);
+        const data = (await res.json()) as { locked?: boolean };
+        if (cancelled) return;
+        setLocked(Boolean(data.locked));
+      } catch {
+        if (!cancelled) setLocked(false);
+      } finally {
+        if (!cancelled) setBillingReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [companyLoading, selected?.id]);
+
+  useLayoutEffect(() => {
+    if (!billingReady || companyLoading) return;
+    const onSubPage = pathname === "/portal/subscription-required";
+    if (locked && !onSubPage) {
+      router.replace("/portal/subscription-required");
+    } else if (!locked && onSubPage) {
+      router.replace("/portal");
+    }
+  }, [billingReady, companyLoading, locked, pathname, router]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !billingReady || !locked || !selected?.id) return;
+    if (pathname !== "/portal/subscription-required") return;
+    const k = `hgh-portal-trial-ended-toast-${selected.id}`;
+    if (sessionStorage.getItem(k)) return;
+    sessionStorage.setItem(k, "1");
+    toast.error(
+      "This workspace's free trial has ended. Ask your admin to subscribe in Dashboard → Billing to restore access.",
+    );
+  }, [billingReady, locked, pathname, selected?.id, toast]);
 
   async function handleSignOut() {
     const supabase = createClient();
@@ -43,6 +91,19 @@ export function PortalShell({
     toast.info("Signed out successfully");
     router.push("/sign-in");
     router.refresh();
+  }
+
+  const onSubscriptionPage = pathname === "/portal/subscription-required";
+  const routingToLock = billingReady && locked && !onSubscriptionPage;
+  const routingFromLock = billingReady && !locked && onSubscriptionPage;
+
+  if (companyLoading || !billingReady || routingToLock || routingFromLock) {
+    return (
+      <div className="flex min-h-screen min-h-[100dvh] flex-col items-center justify-center gap-3 bg-hgh-offwhite text-muted-foreground">
+        <Loader2 className="h-8 w-8 animate-spin text-hgh-navy" aria-hidden />
+        <p className="text-sm">Loading portal…</p>
+      </div>
+    );
   }
 
   return (

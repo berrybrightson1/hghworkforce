@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { canAccessCompany, canManagePayroll, requireDbUser } from "@/lib/api-auth";
+import { canManagePayroll, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { regeneratePayrunLines } from "@/lib/payroll-lines";
 
@@ -17,9 +17,8 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
     if (!payrun) {
       return NextResponse.json({ error: "Pay run not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, payrun.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, payrun.companyId);
+    if (billing) return billing;
 
     const result = await regeneratePayrunLines(id, auth.dbUser.id);
     return NextResponse.json(result);

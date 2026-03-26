@@ -41,6 +41,7 @@ interface PayrunDetail {
   periodEnd: string;
   note: string | null;
   rejectionNote: string | null;
+  approvalNote: string | null;
   company: { name: string };
   lines: Line[];
   _count: { lines: number };
@@ -65,6 +66,8 @@ export default function PayrunDetailPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectNote, setRejectNote] = useState("");
+  const [approveOpen, setApproveOpen] = useState(false);
+  const [approveNote, setApproveNote] = useState("");
 
   const url = id ? `/api/payruns/${id}` : null;
   const { data: payrun, mutate, isLoading, error } = useApi<PayrunDetail>(url);
@@ -175,6 +178,11 @@ export default function PayrunDetailPage() {
           <span className="font-medium">Rejection reason:</span> {payrun.rejectionNote}
         </p>
       )}
+      {payrun.status === "APPROVED" && payrun.approvalNote && (
+        <p className="text-sm text-emerald-800">
+          <span className="font-medium">Approval note:</span> {payrun.approvalNote}
+        </p>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
@@ -207,7 +215,7 @@ export default function PayrunDetailPage() {
                   size="sm"
                   className="bg-emerald-600 text-white hover:bg-emerald-700"
                   disabled={busy !== null}
-                  onClick={() => postAction("approve")}
+                  onClick={() => setApproveOpen(true)}
                 >
                   <Check size={16} />
                   Approve
@@ -235,13 +243,28 @@ export default function PayrunDetailPage() {
               </Button>
             )}
             {canManage && payrun.status === "APPROVED" && payrun.lines.length > 0 && (
-              <a
-                href={`/api/payruns/${id}/payslips-zip`}
-                className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "inline-flex no-underline")}
-              >
-                <Download size={16} />
-                Download payslips (ZIP)
-              </a>
+              <>
+                <a
+                  href={`/api/payruns/${id}/bank-export`}
+                  className={cn(
+                    buttonVariants({ variant: "secondary", size: "sm" }),
+                    "inline-flex no-underline",
+                  )}
+                >
+                  <Download size={16} />
+                  Bank CSV
+                </a>
+                <a
+                  href={`/api/payruns/${id}/payslips-zip`}
+                  className={cn(
+                    buttonVariants({ variant: "secondary", size: "sm" }),
+                    "inline-flex no-underline",
+                  )}
+                >
+                  <Download size={16} />
+                  Payslips (ZIP)
+                </a>
+              </>
             )}
           </div>
         </CardHeader>
@@ -305,6 +328,31 @@ export default function PayrunDetailPage() {
           </table>
         </div>
       </Card>
+
+      <Dialog open={approveOpen} onClose={() => setApproveOpen(false)} title="Approve pay run">
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-hgh-slate">
+            Optional note (audit / approver comment)
+          </label>
+          <Input value={approveNote} onChange={(e) => setApproveNote(e.target.value)} />
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setApproveOpen(false)}>
+            Cancel
+          </Button>
+          <Button
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+            disabled={busy !== null}
+            onClick={async () => {
+              await postAction("approve", { approvalNote: approveNote });
+              setApproveOpen(false);
+              setApproveNote("");
+            }}
+          >
+            Confirm approve
+          </Button>
+        </div>
+      </Dialog>
 
       <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} title="Reject pay run">
         <div className="space-y-3">

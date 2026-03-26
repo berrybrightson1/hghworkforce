@@ -22,9 +22,9 @@ export function LandingFooter() {
             <span className="font-medium text-white/80">HGH WorkForce</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-sm text-white/40 md:justify-end">
-            <span>Payroll + Attendance</span>
+            <span>Payroll + attendance + exports</span>
             <span className="hidden md:inline">·</span>
-            <span>Ghana - GRA-aligned</span>
+            <span>Ghana · GRA-aligned</span>
             <span className="hidden md:inline">·</span>
             <span>Secure by design</span>
           </div>

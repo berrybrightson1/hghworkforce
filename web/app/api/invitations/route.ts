@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireDbUser, canAccessCompany } from "@/lib/api-auth";
+import { requireDbUser, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { generateInviteCode } from "@/lib/invite-code";
 
@@ -23,9 +23,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
 
-  if (!canAccessCompany(dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const getInvBill = await gateCompanyBilling(dbUser, companyId);
+  if (getInvBill) return getInvBill;
 
   const invitations = await prisma.invitation.findMany({
     where: { companyId },
@@ -72,10 +71,8 @@ export async function POST(req: Request) {
     );
   }
 
-  // COMPANY_ADMIN can only invite for their own company
-  if (!canAccessCompany(dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const postInvBilling = await gateCompanyBilling(dbUser, companyId);
+  if (postInvBilling) return postInvBilling;
 
   // COMPANY_ADMIN cannot invite other COMPANY_ADMINs
   if (dbUser.role === "COMPANY_ADMIN" && role === "COMPANY_ADMIN") {
@@ -149,9 +146,8 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "Invitation not found" }, { status: 404 });
   }
 
-  if (!canAccessCompany(dbUser, invitation.companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const patchBilling = await gateCompanyBilling(dbUser, invitation.companyId);
+  if (patchBilling) return patchBilling;
 
   if (invitation.status !== "PENDING") {
     return NextResponse.json({ error: "Can only revoke pending invitations" }, { status: 400 });

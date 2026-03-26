@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
@@ -19,9 +19,8 @@ export async function GET(
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billing) return billing;
 
     const components = await prisma.salaryComponent.findMany({
       where: { employeeId: id },
@@ -56,9 +55,8 @@ export async function POST(
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billing) return billing;
 
     const component = await prisma.salaryComponent.create({
       data: {
@@ -73,7 +71,7 @@ export async function POST(
         action: "SALARY_COMPONENT_CREATED",
         entityType: "SalaryComponent",
         entityId: component.id,
-        afterState: component as any,
+        afterState: JSON.parse(JSON.stringify(component)) as Prisma.InputJsonValue,
       },
     });
 

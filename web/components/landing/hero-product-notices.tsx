@@ -86,7 +86,7 @@ type NoticeSet = {
 const NOTICE_SETS: NoticeSet[] = [
   {
     id: "payrun",
-    label: "Payrun and SSNIT export",
+    label: "Pay run approval and bank file",
     back: {
       initials: "JM",
       bubbleClass:
@@ -111,7 +111,7 @@ const NOTICE_SETS: NoticeSet[] = [
       icon: "spreadsheet",
       iconWrapClass: "rounded-2xl bg-rose-50 ring-1 ring-rose-100",
       iconClass: "text-rose-600",
-      title: "SSNIT filing export ready for review",
+      title: "Bank salary CSV generated after approval",
       meta: "Meridian Logistics · 2 min ago",
     },
   },
@@ -142,7 +142,7 @@ const NOTICE_SETS: NoticeSet[] = [
       icon: "users",
       iconWrapClass: "rounded-2xl bg-slate-100 ring-1 ring-hgh-border",
       iconClass: "text-hgh-navy",
-      title: "Leave balances refreshed after public holiday",
+      title: "Leave policy & balances updated for the team",
       meta: "Coastal Foods · 6 min ago",
     },
   },
@@ -173,7 +173,7 @@ const NOTICE_SETS: NoticeSet[] = [
       icon: "calendar",
       iconWrapClass: "rounded-2xl bg-amber-50 ring-1 ring-amber-100",
       iconClass: "text-amber-700",
-      title: "Weekly attendance summary ready to export",
+      title: "Attendance correction reviewed on the dashboard",
       meta: "Axis Retail · 4 min ago",
     },
   },

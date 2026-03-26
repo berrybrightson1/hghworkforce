@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireDbUser, canAccessCompany, canManageCheckinSecurity } from "@/lib/api-auth";
+import { requireDbUser, canManageCheckinSecurity, gateCompanyBilling } from "@/lib/api-auth";
 
 /**
  * DELETE /api/companies/[companyId]/allowed-ips/[allowedIpId]
@@ -13,9 +13,9 @@ export async function DELETE(
   if (!auth.ok) return auth.response;
 
   const { companyId, allowedIpId } = await ctx.params;
-  if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, companyId);
+  if (billing) return billing;
+
   if (!canManageCheckinSecurity(auth.dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

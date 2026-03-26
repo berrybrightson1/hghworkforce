@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requireDbUser, canAccessCompany } from "@/lib/api-auth";
+import { requireDbUser, canAccessCompany, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { getClientIpFromRequest } from "@/lib/checkin-ip";
 import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
@@ -35,11 +35,12 @@ export async function GET(req: NextRequest) {
     const where: Prisma.CheckInWhereInput = {};
 
     if (companyId) {
-      if (!canAccessCompany(auth.dbUser, companyId)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+      const billing = await gateCompanyBilling(auth.dbUser, companyId);
+      if (billing) return billing;
       where.companyId = companyId;
     } else if (auth.dbUser.companyId) {
+      const billing = await gateCompanyBilling(auth.dbUser, auth.dbUser.companyId);
+      if (billing) return billing;
       where.companyId = auth.dbUser.companyId;
     }
 
@@ -135,6 +136,9 @@ export async function POST(req: NextRequest) {
     if (employee.status !== "ACTIVE") {
       return NextResponse.json({ error: "Employee account is not active" }, { status: 403 });
     }
+
+    const billingGate = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billingGate) return billingGate;
 
     const company = await prisma.company.findUnique({
       where: { id: employee.companyId },

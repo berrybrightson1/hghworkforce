@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import type { User, UserRole } from "@prisma/client";
+import { UserRole, type User } from "@prisma/client";
+import { companyHasFullAccess } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
 
@@ -54,4 +55,36 @@ export function canAccessCompany(dbUser: User, companyId: string): boolean {
   if (dbUser.role === "SUPER_ADMIN") return true;
   if (!dbUser.companyId) return false;
   return dbUser.companyId === companyId;
+}
+
+export function subscriptionRequiredResponse(): NextResponse {
+  return NextResponse.json(
+    {
+      error:
+        "Your 3-day free trial has ended. Subscribe to restore access to HGH WorkForce for this workspace.",
+      code: "SUBSCRIPTION_REQUIRED",
+      trialEnded: true,
+    },
+    { status: 402 },
+  );
+}
+
+/**
+ * Blocks when the workspace trial has expired and subscription is not ACTIVE.
+ * Includes company access check (same rules as canAccessCompany).
+ */
+export async function gateCompanyBilling(dbUser: User, companyId: string): Promise<NextResponse | null> {
+  if (!canAccessCompany(dbUser, companyId)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (dbUser.role === UserRole.SUPER_ADMIN) {
+    return null;
+  }
+  const row = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { subscriptionStatus: true, trialEndsAt: true, createdAt: true },
+  });
+  if (!row) return NextResponse.json({ error: "Company not found" }, { status: 404 });
+  if (!companyHasFullAccess(row)) return subscriptionRequiredResponse();
+  return null;
 }

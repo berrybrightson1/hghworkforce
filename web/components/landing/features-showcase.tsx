@@ -4,11 +4,15 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCarouselAutoplay } from "@/hooks/use-carousel-autoplay";
 import {
+  Banknote,
   Building2,
+  CalendarDays,
+  ClipboardList,
   Clock,
   CreditCard,
   Fingerprint,
   Receipt,
+  Share2,
   ShieldCheck,
   TrendingUp,
   Users,
@@ -23,6 +27,10 @@ const FEATURE_ICONS = {
   selfService: Users,
   shifts: Clock,
   reports: TrendingUp,
+  integrations: Share2,
+  leave: CalendarDays,
+  loans: Banknote,
+  audit: ClipboardList,
 } as const;
 
 export type FeatureIconId = keyof typeof FEATURE_ICONS;

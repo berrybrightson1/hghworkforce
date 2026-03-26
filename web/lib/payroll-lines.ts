@@ -51,6 +51,15 @@ export async function regeneratePayrunLines(
 ): Promise<{ created: number }> {
   const payrun = await prisma.payrun.findUnique({
     where: { id: payrunId },
+    include: {
+      company: {
+        select: {
+          tier2PensionEnabled: true,
+          tier2EmployeePercent: true,
+          tier2EmployerPercent: true,
+        },
+      },
+    },
   });
   if (!payrun) throw new Error("Pay run not found");
   if (payrun.status !== "DRAFT") {
@@ -105,7 +114,23 @@ export async function regeneratePayrunLines(
         applySsnit,
       });
 
-      const totalDed = calc.ssnitEmployee + calc.payeTax + provident + loanMonthly + otherDed;
+      const tier2On =
+        payrun.company.tier2PensionEnabled &&
+        applySsnit &&
+        emp.employmentType !== "CONTRACTOR";
+      const t2eePct = Number(payrun.company.tier2EmployeePercent) / 100;
+      const t2erPct = Number(payrun.company.tier2EmployerPercent) / 100;
+      const tier2Employee = tier2On ? Math.round(basic * t2eePct * 100) / 100 : 0;
+      const tier2Employer = tier2On ? Math.round(basic * t2erPct * 100) / 100 : 0;
+
+      const totalDed =
+        calc.ssnitEmployee +
+        calc.payeTax +
+        provident +
+        loanMonthly +
+        otherDed +
+        tier2Employee;
+      const netPay = calc.netPay - tier2Employee;
 
       await tx.payrunLine.create({
         data: {
@@ -119,8 +144,10 @@ export async function regeneratePayrunLines(
           provident: moneyDec(provident),
           loanDeductions: moneyDec(loanMonthly),
           otherDeductions: moneyDec(otherDed),
+          tier2Employee: moneyDec(tier2Employee),
+          tier2Employer: moneyDec(tier2Employer),
           totalDeductions: moneyDec(totalDed),
-          netPay: moneyDec(calc.netPay),
+          netPay: moneyDec(netPay),
           salarySnapshot: JSON.parse(
             JSON.stringify({
               basicSalary: basic,
@@ -129,6 +156,9 @@ export async function regeneratePayrunLines(
               provident,
               loanDeductions: loanMonthly,
               otherDeductions: otherDed,
+              tier2Employee,
+              tier2Employer,
+              tier2Enabled: tier2On,
               payeBracketsYear: year,
               breakdown: calc.breakdown,
               chargeableIncome: calc.chargeableIncome,

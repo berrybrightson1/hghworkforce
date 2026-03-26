@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(
@@ -22,9 +22,8 @@ export async function POST(
     return NextResponse.json({ error: "Payslip not found" }, { status: 404 });
   }
 
-  if (!canAccessCompany(auth.dbUser, line.payrun.companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, line.payrun.companyId);
+  if (billing) return billing;
 
   if (line.payrun.status !== "APPROVED") {
     return NextResponse.json(

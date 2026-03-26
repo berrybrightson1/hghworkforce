@@ -14,7 +14,6 @@ DO $$ BEGIN CREATE TYPE "LeaveType" AS ENUM ('ANNUAL', 'SICK', 'MATERNITY', 'PAT
 DO $$ BEGIN CREATE TYPE "LeaveStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "LoanType" AS ENUM ('LOAN', 'ADVANCE'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "LoanStatus" AS ENUM ('ACTIVE', 'COMPLETED', 'CANCELLED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN CREATE TYPE "PlanTier" AS ENUM ('FREE', 'STARTER', 'GROWTH', 'ENTERPRISE'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "SubscriptionStatus" AS ENUM ('NONE', 'ACTIVE', 'TRIAL', 'PAST_DUE', 'CANCELED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE TYPE "InvitationStatus" AS ENUM ('PENDING', 'ACCEPTED', 'REVOKED', 'EXPIRED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
@@ -26,8 +25,8 @@ CREATE TABLE IF NOT EXISTS "Company" (
     "registrationNumber" TEXT,
     "address" TEXT,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "planTier" "PlanTier" NOT NULL DEFAULT 'FREE',
     "subscriptionStatus" "SubscriptionStatus" NOT NULL DEFAULT 'NONE',
+    "trialEndsAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 

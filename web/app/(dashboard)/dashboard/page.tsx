@@ -26,6 +26,18 @@ export default function DashboardPage() {
   const { data: trends } = useApi<any[]>(
     selected ? `/api/reports/payroll-trends?companyId=${selected.id}` : null,
   );
+  const { data: insights } = useApi<{
+    headcount: number;
+    attendanceRateApprox: number;
+    checkInSessionsApprox: number;
+    pendingAttendanceCorrections: number;
+    lastApprovedPayrun: {
+      id: string;
+      periodEnd: string;
+      totalNet: string;
+      lineCount: number;
+    } | null;
+  }>(selected ? `/api/dashboard/insights?companyId=${selected.id}` : null);
 
   const empCount = employees?.length ?? 0;
   const pendingLeave = leaveRequests?.filter((r) => r.status === "PENDING").length ?? 0;
@@ -72,6 +84,47 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
+      {selected && insights && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Insights (approx.)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <p className="text-xs text-hgh-muted">Active headcount</p>
+              <p className="text-lg font-semibold text-hgh-navy">{insights.headcount}</p>
+            </div>
+            <div>
+              <p className="text-xs text-hgh-muted">Attendance rate (30d, rough)</p>
+              <p className="text-lg font-semibold text-hgh-navy">{insights.attendanceRateApprox}%</p>
+            </div>
+            <div>
+              <p className="text-xs text-hgh-muted">Check-in days recorded</p>
+              <p className="text-lg font-semibold text-hgh-navy">{insights.checkInSessionsApprox}</p>
+            </div>
+            <div>
+              <p className="text-xs text-hgh-muted">Pending attendance fixes</p>
+              <p className="text-lg font-semibold text-hgh-navy">
+                {insights.pendingAttendanceCorrections}
+              </p>
+            </div>
+            {insights.lastApprovedPayrun && (
+              <div className="rounded-lg border border-hgh-border/80 bg-hgh-offwhite/50 p-3 sm:col-span-2 lg:col-span-4">
+                <p className="text-xs text-hgh-muted">Latest approved pay run</p>
+                <p className="mt-1 font-medium text-hgh-navy">
+                  End {new Date(insights.lastApprovedPayrun.periodEnd).toLocaleDateString()} ·{" "}
+                  {insights.lastApprovedPayrun.lineCount} lines · GHS{" "}
+                  {Number(insights.lastApprovedPayrun.totalNet).toLocaleString("en-GH", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  net
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Chart */}
       {selected && trends && trends.length > 0 && (

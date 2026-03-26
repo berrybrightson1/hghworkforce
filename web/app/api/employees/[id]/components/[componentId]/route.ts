@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
@@ -26,9 +26,8 @@ export async function PATCH(
     if (!component || component.employeeId !== id) {
       return NextResponse.json({ error: "Component not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, component.employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, component.employee.companyId);
+    if (billing) return billing;
 
     const updated = await prisma.salaryComponent.update({
       where: { id: componentId },
@@ -41,7 +40,7 @@ export async function PATCH(
         action: "SALARY_COMPONENT_UPDATED",
         entityType: "SalaryComponent",
         entityId: componentId,
-        afterState: updated as any,
+        afterState: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
       },
     });
 
@@ -67,9 +66,8 @@ export async function DELETE(
     if (!component || component.employeeId !== id) {
       return NextResponse.json({ error: "Component not found" }, { status: 404 });
     }
-    if (!canAccessCompany(auth.dbUser, component.employee.companyId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const billing = await gateCompanyBilling(auth.dbUser, component.employee.companyId);
+    if (billing) return billing;
 
     await prisma.salaryComponent.delete({
       where: { id: componentId },

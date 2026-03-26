@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderToStream } from "@react-pdf/renderer";
 import { createElement } from "react";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { canAccessCompany, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { buildPayslipPdfData } from "@/lib/payslip-pdf-data";
 import { prisma } from "@/lib/prisma";
 import { PayslipDocument } from "@/components/payroll/PayslipDocument";
@@ -43,6 +43,9 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const billing = await gateCompanyBilling(auth.dbUser, line.payrun.companyId);
+    if (billing) return billing;
+
     if (line.payrun.status !== "APPROVED") {
       return NextResponse.json({ error: "Payslip not yet available" }, { status: 400 });
     }
@@ -59,7 +62,7 @@ export async function GET(
       data: { downloadCount: { increment: 1 } },
     }).catch(() => {});
 
-    return new NextResponse(stream as any, {
+    return new NextResponse(stream as unknown as ReadableStream, {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="payslip-${line.employee.employeeCode}-${line.payrun.periodEnd.toISOString().split("T")[0]}.pdf"`,

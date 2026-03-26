@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderToStream } from "@react-pdf/renderer";
 import { createElement } from "react";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { ReportDocument } from "@/components/payroll/ReportDocument";
 
@@ -27,9 +27,8 @@ export async function GET(
   if (!companyId) {
     return NextResponse.json({ error: "companyId required" }, { status: 400 });
   }
-  if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const billing = await gateCompanyBilling(auth.dbUser, companyId);
+  if (billing) return billing;
 
   const lineReports = [
     "payroll-summary",
@@ -200,7 +199,7 @@ export async function GET(
       const stream = await renderToStream(
         createElement(ReportDocument, { data: reportData }) as Parameters<typeof renderToStream>[0],
       );
-      return new NextResponse(stream as any, {
+      return new NextResponse(stream as unknown as ReadableStream, {
         headers: {
           "Content-Type": "application/pdf",
           "Content-Disposition": `attachment; filename="${key}.pdf"`,

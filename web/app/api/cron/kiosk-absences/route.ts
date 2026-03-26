@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { companyHasFullAccess } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
 import {
   endOfLocalDayUtc,
@@ -17,6 +18,9 @@ async function runKioskAbsenceJob() {
       kioskTimezone: true,
       kioskCutoffTime: true,
       kioskLastAbsentRunDate: true,
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      createdAt: true,
     },
   });
 
@@ -24,6 +28,8 @@ async function runKioskAbsenceJob() {
 
   for (const c of companies) {
     try {
+      if (!companyHasFullAccess(c)) continue;
+
       const tz = c.kioskTimezone || "Africa/Accra";
       const localDate = localDateString(now, tz);
       const cutM = parseHHmmToMinutes(c.kioskCutoffTime);

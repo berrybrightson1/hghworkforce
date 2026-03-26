@@ -7,7 +7,7 @@ import { getLandingAuth } from "@/lib/landing-auth";
 export const metadata: Metadata = {
   title: "How it works",
   description:
-    "Sign up once for payroll and attendance. Learn how onboarding, company setup, and invites work on HGH WorkForce.",
+    "Sign up once for payroll and attendance. Learn how onboarding, trials, billing, company setup, and invites work on HGH WorkForce.",
 };
 
 export default async function HowItWorksPage() {

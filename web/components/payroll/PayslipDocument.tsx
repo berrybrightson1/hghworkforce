@@ -6,8 +6,6 @@ import {
   Text,
   View,
   StyleSheet,
-  Font,
-  Image,
 } from "@react-pdf/renderer";
 
 // Register fonts if needed (using default ones for now)
