@@ -1,6 +1,6 @@
 export default function DashboardLoading() {
   return (
-    <div className="space-y-6 animate-pulse">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="space-y-2">
           <div className="h-6 w-32 bg-hgh-border rounded" />

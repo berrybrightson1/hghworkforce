@@ -68,6 +68,17 @@ const roadmapSteps: {
   },
   {
     step: 6,
+    title: "Face profile for check-in (do this early)",
+    summary:
+      "For each active employee, open their profile → scroll to Check-in & kiosk face profile → register their face. Staff need this before the office kiosk can verify them; it is easy to miss if you jump straight to shifts or payroll.",
+    href: "/dashboard/employees",
+    hrefLabel: "Employees",
+    extra:
+      "After adding someone new, open their record right away—we send you there with a “next step” hint. Portal check-in may also use face match when your settings require it.",
+    moreLinks: [{ href: "/dashboard/setup-wizard", label: "Setup wizard (guided)" }],
+  },
+  {
+    step: 7,
     title: "Shifts and assignments",
     summary:
       "Define work shifts, then assign employees. Check-in times are compared to these shifts for tardiness and overtime.",
@@ -75,7 +86,7 @@ const roadmapSteps: {
     hrefLabel: "Shifts",
   },
   {
-    step: 7,
+    step: 8,
     title: "Attendance and check-in",
     summary:
       "Employees clock in from the portal or office kiosk; they can request attendance corrections with a reason. You review the daily log, correction requests, and summaries before payroll.",
@@ -85,7 +96,7 @@ const roadmapSteps: {
       "Employee self-service lives under /portal (payslips, leave, loans, check-in, corrections). Share the portal link with staff.",
   },
   {
-    step: 8,
+    step: 9,
     title: "Leave (if you use it)",
     summary:
       "Staff request leave from the portal; managers approve or reject in Leave Management with optional notes. Use the Policy tab for accrual and balance caps where you need them; the Balances tab tracks usage.",
@@ -93,7 +104,7 @@ const roadmapSteps: {
     hrefLabel: "Leave",
   },
   {
-    step: 9,
+    step: 10,
     title: "Payroll run",
     summary:
       "Create a pay run, generate lines (salary, components, attendance, loans, leave), review overrides, then submit for approval. After approval the run locks, payslips are available, you can download a bank salary CSV, and configured webhooks fire.",
@@ -101,7 +112,7 @@ const roadmapSteps: {
     hrefLabel: "Payroll",
   },
   {
-    step: 10,
+    step: 11,
     title: "Loans, insights, reports, and billing",
     summary:
       "Use the dashboard overview for headcount and payroll insights at a glance. Track staff loans if needed, export reports (PAYE, SSNIT, trends, attendance), and manage your workspace under Billing: each company has the same product with a time-limited full-access trial, then an active subscription to stay unlocked.",
@@ -286,7 +297,7 @@ export default function HelpPage() {
                   {item.extra ? (
                     <p className="text-xs leading-relaxed text-hgh-muted">{item.extra}</p>
                   ) : null}
-                  {item.step === 7 ? (
+                  {item.step === 8 ? (
                     <p className="text-sm">
                       <Link
                         href="/portal"

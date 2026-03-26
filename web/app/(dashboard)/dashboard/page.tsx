@@ -11,6 +11,7 @@ import {
   PayrollTrendChart,
   type TrendData,
 } from "@/components/dashboard/PayrollTrendChart";
+import { EmployeeSetupReminder } from "@/components/dashboard/employee-setup-reminder";
 
 export default function DashboardPage() {
   const { companies, selected } = useCompany();
@@ -65,6 +66,8 @@ export default function DashboardPage() {
         </div>
         <Badge variant="success">Live</Badge>
       </div>
+
+      <EmployeeSetupReminder companyId={selected?.id ?? null} />
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

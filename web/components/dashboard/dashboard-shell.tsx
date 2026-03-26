@@ -20,6 +20,7 @@ import {
   Menu,
   X,
   Activity,
+  ListChecks,
   type LucideIcon,
 } from "lucide-react";
 import { SidebarAccountMenu } from "@/components/dashboard/sidebar-account-menu";
@@ -46,7 +47,15 @@ type NavGroup = {
 const navigation: NavGroup[] = [
   {
     label: "Main",
-    items: [{ href: "/dashboard", label: "Overview", icon: LayoutDashboard }],
+    items: [
+      { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+      {
+        href: "/dashboard/setup-wizard",
+        label: "Setup wizard",
+        icon: ListChecks,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
+    ],
   },
   {
     label: "Workforce & Ops",
@@ -177,6 +186,24 @@ function getVisibleNavigation(role: UserRole): NavGroup[] {
 }
 
 function pageTitle(pathname: string, groups: NavGroup[]): string {
+  if (pathname.startsWith("/dashboard/settings")) {
+    const parts = pathname.split("/").filter(Boolean);
+    const leaf = parts[parts.length - 1];
+    const map: Record<string, string> = {
+      settings: "Settings",
+      taxes: "PAYE brackets",
+      "office-kiosk": "Office kiosk",
+      "checkin-security": "Check-in security",
+      ssnit: "SSNIT rates",
+      audit: "Audit log",
+      roles: "Roles & access",
+      "tier2-pension": "Tier 2 pension",
+      webhooks: "Webhooks",
+      account: "Account security",
+    };
+    if (leaf && map[leaf]) return map[leaf];
+    return "Settings";
+  }
   for (const group of groups) {
     const match = group.items.find(
       (n) =>
@@ -366,8 +393,8 @@ export function DashboardShell({
       </aside>
 
       {/* Main area */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overscroll-y-contain">
-        <header className="shrink-0 border-b border-hgh-border bg-white px-4 py-3 md:px-8">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-40 shrink-0 border-b border-hgh-border bg-white/95 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-white/85 md:px-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2">
               <button
@@ -401,7 +428,7 @@ export function DashboardShell({
             </div>
           </div>
         </header>
-        <main className="flex-1 p-4 md:p-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 md:p-8">
           <TrialBillingBanner userRole={userRole} />
           {children}
         </main>

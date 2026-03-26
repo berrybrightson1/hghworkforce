@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { AuthSubmitSpinner } from "@/components/auth/auth-submit-spinner";
 import { useToast } from "@/components/toast/useToast";
 import { createClient } from "@/lib/supabase/client";
 
@@ -111,9 +112,9 @@ export function SignInForm() {
       email: values.email,
       password: values.password,
     });
-    setSubmitting(false);
 
     if (error) {
+      setSubmitting(false);
       if (isEmailNotConfirmedError(error)) {
         setResendEmail(values.email);
         toast.error(
@@ -133,7 +134,7 @@ export function SignInForm() {
   });
 
   return (
-    <div>
+    <div className="relative">
       <form onSubmit={onSubmit} className="space-y-5">
         {/* Email */}
         <div>
@@ -208,12 +209,12 @@ export function SignInForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-hgh-gold font-semibold text-hgh-navy transition-all hover:bg-hgh-gold/90 focus:outline-none focus:ring-2 focus:ring-hgh-gold focus:ring-offset-2 disabled:opacity-60"
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-hgh-gold font-semibold text-hgh-navy transition-all hover:bg-hgh-gold/90 focus:outline-none focus:ring-2 focus:ring-hgh-gold focus:ring-offset-2 disabled:opacity-80 disabled:pointer-events-none"
         >
           {submitting ? (
             <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-hgh-navy/30 border-t-hgh-navy" />
-              Signing in...
+              <AuthSubmitSpinner />
+              Signing in…
             </>
           ) : (
             "Sign in"

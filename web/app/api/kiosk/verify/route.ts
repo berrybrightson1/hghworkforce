@@ -6,6 +6,14 @@ import { getKioskAuditActorId } from "@/lib/kiosk-audit-actor";
 import { signKioskSessionToken } from "@/lib/kiosk-token";
 import { normalizeKioskCompanyId } from "@/lib/kiosk-company-id";
 
+/** Trim, strip BOM, normalize unicode dashes to ASCII hyphen for pasted codes. */
+function normalizeKioskEmployeeCodeInput(raw: string): string {
+  return raw
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .replace(/[\u2010-\u2015\u2212]/g, "-");
+}
+
 function normalizePersonName(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -34,7 +42,10 @@ export async function POST(req: NextRequest) {
   const companyId = normalizeKioskCompanyId(
     typeof body.companyId === "string" ? body.companyId : undefined,
   );
-  const employeeCode = typeof body.employeeCode === "string" ? body.employeeCode.trim() : "";
+  const employeeCode =
+    typeof body.employeeCode === "string"
+      ? normalizeKioskEmployeeCodeInput(body.employeeCode)
+      : "";
   const displayName = typeof body.displayName === "string" ? body.displayName : "";
 
   if (!companyId || !employeeCode || !displayName.trim()) {
@@ -103,7 +114,7 @@ export async function POST(req: NextRequest) {
 
     const employee = await prisma.employee.findFirst({
       where: {
-        employeeCode,
+        employeeCode: { equals: employeeCode, mode: "insensitive" },
         companyId,
         deletedAt: null,
       },
@@ -114,13 +125,30 @@ export async function POST(req: NextRequest) {
 
     if (!employee || employee.status !== "ACTIVE") {
       return NextResponse.json(
-        { error: "Employee not found or inactive for this company" },
+        {
+          error: "Employee not found or inactive for this company",
+          hint:
+            "Enter the full auto-assigned code (three parts with hyphens, e.g. PREFIX-ABC123-0001) exactly as shown on Dashboard → Employees or your payslip—not your email, portal password, or phone number.",
+          faceEnrollmentUnrelated: true,
+          kioskContextNote:
+            "This is not a face enrollment problem. The kiosk has not used the camera yet—it only checks your employee code and company link on this screen.",
+        },
         { status: 401 },
       );
     }
 
     if (!nameMatchesEmployee(displayName, employee.name, employee.user?.name ?? null)) {
-      return NextResponse.json({ error: "Name does not match our records for this code" }, { status: 401 });
+      return NextResponse.json(
+        {
+          error: "Name does not match our records for this code",
+          hint:
+            "Type your full name exactly as it appears on your employee profile (same spelling and order as HR saved it).",
+          faceEnrollmentUnrelated: true,
+          kioskContextNote:
+            "This is not a face enrollment problem. The camera step comes only after your name matches the record for this employee code.",
+        },
+        { status: 401 },
+      );
     }
 
     const storedFace = employee.faceDescriptor != null;

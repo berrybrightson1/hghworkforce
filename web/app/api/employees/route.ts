@@ -45,13 +45,16 @@ export async function GET(req: NextRequest) {
       take: 100,
     });
 
-    // Mask sensitive fields for the list view
-    const masked = employees.map((emp) => ({
-      ...emp,
-      ssnitEncrypted: emp.ssnitEncrypted ? maskSensitive("SSNIT") : null,
-      tinEncrypted: emp.tinEncrypted ? maskSensitive("TIN") : null,
-      bankAccountEncrypted: emp.bankAccountEncrypted ? maskSensitive("BANK") : null,
-    }));
+    // List view: no face vectors; flag only for admin UX (kiosk checklist)
+    const masked = employees.map(
+      ({ faceDescriptor, ssnitEncrypted, tinEncrypted, bankAccountEncrypted, ...rest }) => ({
+        ...rest,
+        hasFaceEnrolled: faceDescriptor != null,
+        ssnitEncrypted: ssnitEncrypted ? maskSensitive("SSNIT") : null,
+        tinEncrypted: tinEncrypted ? maskSensitive("TIN") : null,
+        bankAccountEncrypted: bankAccountEncrypted ? maskSensitive("BANK") : null,
+      }),
+    );
 
     return NextResponse.json(masked);
   } catch {

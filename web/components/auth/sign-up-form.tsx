@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
+import { AuthSubmitSpinner } from "@/components/auth/auth-submit-spinner";
 import { useToast } from "@/components/toast/useToast";
 import { createClient } from "@/lib/supabase/client";
 
@@ -101,9 +102,9 @@ export function SignUpForm() {
         },
       },
     });
-    setSubmitting(false);
 
     if (error) {
+      setSubmitting(false);
       toast.error(error.message);
       return;
     }
@@ -116,7 +117,7 @@ export function SignUpForm() {
     "flex h-11 w-full rounded-lg border border-hgh-border bg-white px-4 text-sm text-hgh-slate shadow-sm transition-colors placeholder:text-hgh-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold";
 
   return (
-    <div>
+    <div className="relative">
       <form onSubmit={onSubmit} className="space-y-5">
         {/* Full name */}
         <div>
@@ -231,12 +232,12 @@ export function SignUpForm() {
         <button
           type="submit"
           disabled={submitting}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-hgh-gold font-semibold text-hgh-navy transition-all hover:bg-hgh-gold/90 focus:outline-none focus:ring-2 focus:ring-hgh-gold focus:ring-offset-2 disabled:opacity-60"
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-hgh-gold font-semibold text-hgh-navy transition-all hover:bg-hgh-gold/90 focus:outline-none focus:ring-2 focus:ring-hgh-gold focus:ring-offset-2 disabled:opacity-80 disabled:pointer-events-none"
         >
           {submitting ? (
             <>
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-hgh-navy/30 border-t-hgh-navy" />
-              Creating account...
+              <AuthSubmitSpinner />
+              Creating account…
             </>
           ) : (
             "Create account"

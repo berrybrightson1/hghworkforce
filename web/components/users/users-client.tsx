@@ -6,6 +6,7 @@ import { Send, UserPlus } from "lucide-react";
 import { useToast } from "@/components/toast/useToast";
 import { useCompany } from "@/components/company-context";
 import { Button } from "@/components/ui/button";
+import { CopyIconButton } from "@/components/ui/copy-button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -202,15 +203,6 @@ export function UsersClient({
     } else {
       const data = await res.json();
       toast.error(data.error ?? "Failed to revoke");
-    }
-  };
-
-  const copyCode = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      toast.success("Invite code copied");
-    } catch {
-      toast.error("Could not copy");
     }
   };
 
@@ -498,17 +490,11 @@ export function UsersClient({
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <code className="rounded bg-hgh-offwhite px-2 py-0.5 font-mono text-xs text-hgh-slate">
+                        <div className="flex max-w-[240px] items-center gap-1">
+                          <code className="min-w-0 flex-1 truncate rounded bg-hgh-offwhite px-2 py-0.5 font-mono text-xs text-hgh-slate">
                             {inv.code}
                           </code>
-                          <button
-                            type="button"
-                            onClick={() => copyCode(inv.code)}
-                            className="text-xs font-medium text-hgh-navy underline-offset-2 hover:underline"
-                          >
-                            Copy
-                          </button>
+                          <CopyIconButton text={inv.code} label={`Copy invite code ${inv.code}`} />
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-6 py-4 text-hgh-muted">

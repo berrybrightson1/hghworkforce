@@ -25,6 +25,8 @@ function KioskInner() {
   const [clockInHint, setClockInHint] = useState<string | null>(null);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Shown when verify fails before face step (code/name), so users don’t blame face enrollment. */
+  const [verifyContextAlert, setVerifyContextAlert] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [modelsLoaded, setModelsLoaded] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
@@ -111,6 +113,7 @@ function KioskInner() {
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setVerifyContextAlert(null);
     setBusy(true);
     try {
       const res = await fetch("/api/kiosk/verify", {
@@ -128,16 +131,29 @@ function KioskInner() {
         token?: string;
         clockedIn?: boolean;
         displayLabel?: string;
+        faceEnrollmentUnrelated?: boolean;
+        kioskContextNote?: string;
       };
       if (!res.ok) {
-        const msg = [data.error, data.hint].filter(Boolean).join(" ");
-        throw new Error(msg || "Verify failed");
+        const note =
+          typeof data.kioskContextNote === "string" && data.kioskContextNote.trim()
+            ? data.kioskContextNote.trim()
+            : data.faceEnrollmentUnrelated
+              ? "This is not a face enrollment problem. Fix your code or name on this screen first—the camera is only used after Continue succeeds."
+              : null;
+        setVerifyContextAlert(note);
+        const msg = [data.error, data.hint].filter(Boolean).join(" ").trim();
+        setError(msg || "Verify failed");
+        return;
       }
+      setVerifyContextAlert(null);
+      setError(null);
       setToken(data.token!);
       setClockedIn(Boolean(data.clockedIn));
       setLabel(String(data.displayLabel || ""));
       await startCamera();
     } catch (e) {
+      setVerifyContextAlert(null);
       setError(e instanceof Error ? e.message : "Verification failed");
     } finally {
       setBusy(false);
@@ -182,6 +198,7 @@ function KioskInner() {
     setLabel("");
     setModelsLoaded(false);
     setError(null);
+    setVerifyContextAlert(null);
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     setCameraOn(false);
@@ -217,26 +234,44 @@ function KioskInner() {
         {!token ? (
           <form onSubmit={(e) => void handleVerify(e)} className="space-y-4 rounded-xl bg-slate-800 p-6">
             <div>
-              <label className="text-xs text-slate-400">Your name (as on record)</label>
+              <label className="text-xs text-slate-400">Your name</label>
               <Input
                 className="mt-1 border-slate-600 bg-slate-900 text-white placeholder:text-slate-600"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 autoComplete="name"
+                placeholder="Exact spelling as on your employee record (e.g. Kwame Ankomah Mensah)"
                 required
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400">Employee code</label>
+              <label className="text-xs text-slate-400">Employee code (assigned by system)</label>
               <Input
                 className="mt-1 border-slate-600 bg-slate-900 text-white placeholder:text-slate-600"
                 value={employeeCode}
                 onChange={(e) => setEmployeeCode(e.target.value)}
                 autoComplete="off"
+                placeholder="Full code with hyphens, e.g. ACME-F4E2D1-0001 — from Dashboard → Employees, not email"
                 required
               />
+              <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+                Must be your company’s auto-assigned code (letters, numbers, two hyphens). Uppercase or lowercase is
+                fine.
+              </p>
             </div>
-            {error ? <p className="text-sm text-red-300">{error}</p> : null}
+            {verifyContextAlert || error ? (
+              <div role="alert" className="space-y-3">
+                {verifyContextAlert ? (
+                  <div className="rounded-lg border border-sky-400/50 bg-sky-500/15 px-3 py-2.5 text-sm text-sky-50 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-sky-200/90">
+                      Not a face issue
+                    </p>
+                    <p className="mt-1.5 leading-snug text-sky-50/95">{verifyContextAlert}</p>
+                  </div>
+                ) : null}
+                {error ? <p className="text-sm text-red-300">{error}</p> : null}
+              </div>
+            ) : null}
             <Button
               type="submit"
               disabled={busy || !!linkError}

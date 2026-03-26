@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Plus, Search, Upload } from "lucide-react";
+import Link from "next/link";
+import { Users, Plus, Search, Upload, Fingerprint } from "lucide-react";
 import Papa from "papaparse";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Dialog } from "@/components/ui/dialog";
+import { CopyableCode } from "@/components/ui/copy-button";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
@@ -35,6 +37,7 @@ interface Employee {
   basicSalary: string;
   status: "ACTIVE" | "SUSPENDED" | "TERMINATED";
   company?: { name: string };
+  hasFaceEnrolled?: boolean;
 }
 
 const schema = z.object({
@@ -98,10 +101,15 @@ export default function EmployeesPage() {
         created && typeof created === "object" && "employeeCode" in created
           ? employeeDisplayName(created as Employee)
           : values.name;
+      const newId =
+        created && typeof created === "object" && "id" in created ? String((created as { id: string }).id) : null;
       toast.success(`${label} added · code ${(created as Employee)?.employeeCode ?? "assigned"}`);
       reset();
       setDialogOpen(false);
       mutate();
+      if (newId) {
+        router.push(`/dashboard/employees/${newId}?setup=face`);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create employee.");
     } finally {
@@ -191,13 +199,14 @@ export default function EmployeesPage() {
                 <th className="px-5 py-3 font-medium text-hgh-muted">Department</th>
                 <th className="px-5 py-3 font-medium text-hgh-muted">Job Title</th>
                 <th className="px-5 py-3 font-medium text-hgh-muted">Basic Salary</th>
+                <th className="px-5 py-3 font-medium text-hgh-muted">Face</th>
                 <th className="px-5 py-3 font-medium text-hgh-muted">Status</th>
               </tr>
             </thead>
             <tbody>
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-hgh-muted">
+                  <td colSpan={7} className="px-5 py-12 text-center text-hgh-muted">
                     <Users size={32} className="mx-auto mb-3 text-hgh-border" />
                     <p>{selected ? "No employees found." : "Select a company from the sidebar."}</p>
                   </td>
@@ -210,11 +219,32 @@ export default function EmployeesPage() {
                     onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
                   >
                     <td className="px-5 py-3 font-medium text-hgh-navy">{employeeDisplayName(emp)}</td>
-                    <td className="px-5 py-3 text-hgh-muted tabular-nums">{emp.employeeCode}</td>
+                    <td
+                      className="px-5 py-3 text-hgh-muted"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <CopyableCode value={emp.employeeCode} />
+                    </td>
                     <td className="px-5 py-3">{emp.department}</td>
                     <td className="px-5 py-3">{emp.jobTitle}</td>
                     <td className="px-5 py-3 tabular-nums">
                       GHS {Number(emp.basicSalary).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-5 py-3">
+                      {emp.status === "ACTIVE" && emp.hasFaceEnrolled === false ? (
+                        <Link
+                          href={`/dashboard/employees/${emp.id}?setup=face`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 rounded-md bg-hgh-gold/15 px-2 py-0.5 text-xs font-medium text-hgh-navy ring-1 ring-hgh-gold/30 hover:bg-hgh-gold/25"
+                        >
+                          <Fingerprint className="h-3.5 w-3.5" aria-hidden />
+                          Set up
+                        </Link>
+                      ) : emp.hasFaceEnrolled ? (
+                        <span className="text-xs font-medium text-hgh-success">Registered</span>
+                      ) : (
+                        <span className="text-xs text-hgh-muted">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <Badge variant={statusBadge[emp.status]}>{emp.status}</Badge>

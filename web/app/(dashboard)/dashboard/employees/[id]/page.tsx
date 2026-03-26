@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
-  Briefcase,
-  Building2,
   Calendar,
   CreditCard,
   Eye,
@@ -17,7 +15,7 @@ import {
   User,
   Wallet,
 } from "lucide-react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,6 +36,9 @@ import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
 import { FaceEnrollmentCapture } from "@/components/face-enrollment-capture";
+import Link from "next/link";
+import { CopyableCode } from "@/components/ui/copy-button";
+import { GhanaBankField, GhanaBranchField } from "@/components/ui/ghana-bank-combobox";
 
 interface SalaryComponent {
   id: string;
@@ -113,10 +114,12 @@ const profileSchema = z.object({
 });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
-export default function EmployeeDetailPage() {
+function EmployeeDetailPageContent() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const setupFace = searchParams.get("setup") === "face";
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
     "profile" | "components" | "docs" | "onboarding" | "leave" | "loans"
@@ -183,9 +186,22 @@ export default function EmployeeDetailPage() {
     resolver: zodResolver(profileSchema),
   });
 
+  const bankNameWatch = useWatch({ control: controlProfile, name: "bankName" });
+
   useEffect(() => {
     if (!isPayrollAdmin && activeTab === "onboarding") setActiveTab("profile");
   }, [isPayrollAdmin, activeTab]);
+
+  useEffect(() => {
+    if (!setupFace || !employee?.id || employee.hasFaceEnrolled) return;
+    const idFrame = requestAnimationFrame(() => {
+      document.getElementById("face-enrollment-section")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+    return () => cancelAnimationFrame(idFrame);
+  }, [setupFace, employee?.id, employee?.hasFaceEnrolled]);
 
   // Sync profile form when employee data loads
   useEffect(() => {
@@ -326,6 +342,25 @@ export default function EmployeeDetailPage() {
 
   return (
     <div className="space-y-6">
+      {setupFace && employee && !employee.hasFaceEnrolled && (
+        <div
+          role="status"
+          className="flex flex-wrap items-start gap-3 rounded-xl border border-hgh-gold/40 bg-hgh-gold/10 px-4 py-3 text-sm text-hgh-navy"
+        >
+          <Fingerprint className="mt-0.5 h-5 w-5 shrink-0 text-hgh-gold" aria-hidden />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="font-semibold">Next: register face check-in</p>
+            <p className="text-xs leading-relaxed text-hgh-slate">
+              Scroll to <strong>Check-in & kiosk face profile</strong> on this page, or open the{" "}
+              <Link href="/dashboard/help" className="font-medium text-hgh-gold underline-offset-2 hover:underline">
+                setup guide
+              </Link>{" "}
+              for the full order of steps.
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/employees")}>
@@ -391,9 +426,9 @@ export default function EmployeeDetailPage() {
                   <p className="text-xs text-hgh-muted">Name</p>
                   <p className="font-medium text-hgh-navy">{employeeDisplayName(employee)}</p>
                 </div>
-                <div>
+                <div className="min-w-0 sm:col-span-2">
                   <p className="text-xs text-hgh-muted">Employee Code</p>
-                  <p className="font-medium text-hgh-navy">{employee.employeeCode}</p>
+                  <CopyableCode value={employee.employeeCode} className="mt-1" />
                 </div>
                 <div>
                   <p className="text-xs text-hgh-muted">Employment Type</p>
@@ -471,7 +506,7 @@ export default function EmployeeDetailPage() {
             </Card>
 
             {showFaceEnrollmentCard && (
-              <Card>
+              <Card id="face-enrollment-section" className="scroll-mt-6">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Fingerprint size={18} />
@@ -888,20 +923,35 @@ export default function EmployeeDetailPage() {
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
+                <div className="sm:col-span-2">
                   <label className="mb-1 block text-sm font-medium text-hgh-slate">Bank Name</label>
-                  <Input
-                    {...regProfile("bankName")}
-                    placeholder={revealed ? "" : "Loading…"}
-                    disabled={!revealed}
+                  <Controller
+                    name="bankName"
+                    control={controlProfile}
+                    render={({ field }) => (
+                      <GhanaBankField
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        disabled={!revealed}
+                        placeholder={revealed ? "Select or type bank" : "Loading…"}
+                      />
+                    )}
                   />
                 </div>
-                <div>
+                <div className="sm:col-span-2">
                   <label className="mb-1 block text-sm font-medium text-hgh-slate">Bank Branch</label>
-                  <Input
-                    {...regProfile("bankBranch")}
-                    placeholder={revealed ? "" : "Loading…"}
-                    disabled={!revealed}
+                  <Controller
+                    name="bankBranch"
+                    control={controlProfile}
+                    render={({ field }) => (
+                      <GhanaBranchField
+                        bankName={(bankNameWatch ?? "").trim()}
+                        value={field.value ?? ""}
+                        onChange={field.onChange}
+                        disabled={!revealed}
+                        placeholder={revealed ? "Branch (type or pick suggestion)" : "Loading…"}
+                      />
+                    )}
                   />
                 </div>
               </div>
@@ -929,5 +979,20 @@ export default function EmployeeDetailPage() {
         </form>
       </Dialog>
     </div>
+  );
+}
+
+export default function EmployeeDetailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 w-48 rounded bg-hgh-border" />
+          <div className="h-64 rounded-xl bg-hgh-border" />
+        </div>
+      }
+    >
+      <EmployeeDetailPageContent />
+    </Suspense>
   );
 }

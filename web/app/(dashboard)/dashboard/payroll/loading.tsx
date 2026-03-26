@@ -1,6 +1,6 @@
 export default function PayrollLoading() {
   return (
-    <div className="space-y-6 animate-pulse">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="h-8 w-40 bg-hgh-border rounded" />
         <div className="h-10 w-32 bg-hgh-border rounded" />
