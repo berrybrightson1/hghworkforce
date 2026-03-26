@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ToastProvider } from "@/components/toast/ToastProvider";
+import { AppProviders } from "./providers";
 import { TRIAL_DAYS } from "@/lib/billing/access";
 import "./globals.css";
 
@@ -39,7 +39,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
-        <ToastProvider>{children}</ToastProvider>
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   );

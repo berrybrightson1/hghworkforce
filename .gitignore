@@ -5,9 +5,19 @@
 **/dist/
 **/.turbo/
 
-# Env / secrets
-.env*
+# Env / secrets (never commit real keys — only web/.env.example with placeholders)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+web/.env
+web/.env.local
+web/.env.development.local
+web/.env.test.local
+web/.env.production.local
 !.env.example
+!web/.env.example
 
 # OS / IDE
 .DS_Store

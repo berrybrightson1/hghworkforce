@@ -18,8 +18,17 @@ const nextConfig: NextConfig = {
   // Compress responses with gzip (reduces transfer size)
   compress: true,
 
-  // Aggressive static asset caching
+  // Security + caching
   headers: async () => [
+    {
+      source: "/:path*",
+      headers: [
+        { key: "X-Content-Type-Options", value: "nosniff" },
+        { key: "X-Frame-Options", value: "SAMEORIGIN" },
+        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        { key: "Permissions-Policy", value: "camera=(self), microphone=(), geolocation=()" },
+      ],
+    },
     {
       source: "/:all*(svg|jpg|jpeg|png|gif|ico|webp|woff|woff2)",
       headers: [

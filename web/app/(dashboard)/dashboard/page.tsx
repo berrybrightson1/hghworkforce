@@ -7,7 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
-import { PayrollTrendChart } from "@/components/dashboard/PayrollTrendChart";
+import {
+  PayrollTrendChart,
+  type TrendData,
+} from "@/components/dashboard/PayrollTrendChart";
 
 export default function DashboardPage() {
   const { companies, selected } = useCompany();
@@ -23,7 +26,7 @@ export default function DashboardPage() {
   const { data: loans } = useApi<{ id: string; status: string }[]>(
     selected ? `/api/loans?companyId=${selected.id}` : null,
   );
-  const { data: trends } = useApi<any[]>(
+  const { data: trends } = useApi<TrendData[]>(
     selected ? `/api/reports/payroll-trends?companyId=${selected.id}` : null,
   );
   const { data: insights } = useApi<{

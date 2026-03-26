@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "next dev --turbopack",
     "dev:network": "next dev --turbopack -H 0.0.0.0",
     "dev:webpack": "next dev",
-    "build": "prisma generate && next build",
+    "build": "next build",
+    "build:generate": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",

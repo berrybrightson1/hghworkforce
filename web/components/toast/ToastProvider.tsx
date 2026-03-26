@@ -1,21 +1,9 @@
 "use client";
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
 import type { ToastMessage, ToastVariant } from "./toast-types";
-
-interface ToastContextValue {
-  add: (t: Omit<ToastMessage, "id">) => void;
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null);
+import { ToastContext } from "./toast-context";
 
 function ToastIcon({ variant }: { variant: ToastVariant }) {
   const cls = "shrink-0";
@@ -96,12 +84,4 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       </div>
     </ToastContext.Provider>
   );
-}
-
-export function useToastContext() {
-  const ctx = useContext(ToastContext);
-  if (!ctx) {
-    throw new Error("ToastProvider is required for toast context");
-  }
-  return ctx;
 }

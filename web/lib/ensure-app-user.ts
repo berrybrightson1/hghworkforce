@@ -21,20 +21,69 @@ export async function ensureAppUser(
 
   const userCountBefore = await prisma.user.count();
 
-  let row = await prisma.user.upsert({
+  // findFirst: tolerate rare duplicate rows in DB (findUnique can throw P2002).
+  const byAuth = await prisma.user.findFirst({
     where: { authUserId: supabaseUser.id },
-    create: {
-      authUserId: supabaseUser.id,
-      email,
-      name: displayName,
-      role: UserRole.COMPANY_ADMIN,
-      companyId: null,
-    },
-    update: {
-      email,
-      name: displayName,
-    },
   });
+  const byEmail =
+    byAuth == null
+      ? await prisma.user.findFirst({
+          where: { email },
+          orderBy: { createdAt: "asc" },
+        })
+      : null;
+
+  /** Another row holds this email; free it so the signed-in user can use it. */
+  async function releaseEmailIfBlockedByOtherRow(forUserId: string) {
+    const blocker = await prisma.user.findFirst({
+      where: { email, NOT: { id: forUserId } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (blocker) {
+      await prisma.user.update({
+        where: { id: blocker.id },
+        data: {
+          email: `${blocker.id}-superseded@auth.placeholder`,
+        },
+      });
+    }
+  }
+
+  let row: User;
+  if (byAuth) {
+    if (byAuth.email !== email) {
+      await releaseEmailIfBlockedByOtherRow(byAuth.id);
+    }
+    row = await prisma.user.update({
+      where: { id: byAuth.id },
+      data: { email, name: displayName },
+    });
+  } else if (byEmail) {
+    // Same email, new Supabase auth user (re-signup / auth user recreated)
+    row = await prisma.user.update({
+      where: { id: byEmail.id },
+      data: { authUserId: supabaseUser.id, email, name: displayName },
+    });
+  } else {
+    for (const stray of await prisma.user.findMany({
+      where: { email },
+      select: { id: true },
+    })) {
+      await prisma.user.update({
+        where: { id: stray.id },
+        data: { email: `${stray.id}-superseded@auth.placeholder` },
+      });
+    }
+    row = await prisma.user.create({
+      data: {
+        authUserId: supabaseUser.id,
+        email,
+        name: displayName,
+        role: UserRole.COMPANY_ADMIN,
+        companyId: null,
+      },
+    });
+  }
 
   // First ever user becomes SUPER_ADMIN
   if (userCountBefore === 0 && row.role !== UserRole.SUPER_ADMIN) {

@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface TrendData {
+export interface TrendData {
   month: string;
   gross: number;
   net: number;
