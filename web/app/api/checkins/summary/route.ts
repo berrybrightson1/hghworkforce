@@ -6,8 +6,7 @@ import { prisma } from "@/lib/prisma";
  * GET /api/checkins/summary?companyId=...&from=YYYY-MM-DD&to=YYYY-MM-DD
  *
  * Returns per-employee attendance summary for the given date range:
- *   - totalHours, daysPresent, lateCount, earlyDepartCount, overtimeHours,
- *     outsideGeofenceCount, avgHoursPerDay
+ *   - totalHours, daysPresent, lateCount, earlyDepartCount, overtimeHours, avgHoursPerDay
  */
 export async function GET(req: NextRequest) {
   const auth = await requireDbUser();
@@ -72,7 +71,6 @@ export async function GET(req: NextRequest) {
         overtimeHours: number;
         lateCount: number;
         earlyDepartCount: number;
-        outsideGeofenceCount: number;
         days: Set<string>;
       }
     >();
@@ -85,7 +83,6 @@ export async function GET(req: NextRequest) {
           overtimeHours: 0,
           lateCount: 0,
           earlyDepartCount: 0,
-          outsideGeofenceCount: 0,
           days: new Set(),
         });
       }
@@ -94,7 +91,6 @@ export async function GET(req: NextRequest) {
       entry.overtimeHours += c.overtimeHours ? Number(c.overtimeHours) : 0;
       if (c.lateMinutes && c.lateMinutes > 0) entry.lateCount++;
       if (c.earlyDepartMinutes && c.earlyDepartMinutes > 0) entry.earlyDepartCount++;
-      if (c.outsideGeofence) entry.outsideGeofenceCount++;
       entry.days.add(c.clockIn.toISOString().slice(0, 10));
     }
 
@@ -105,7 +101,6 @@ export async function GET(req: NextRequest) {
       daysPresent: e.days.size,
       lateCount: e.lateCount,
       earlyDepartCount: e.earlyDepartCount,
-      outsideGeofenceCount: e.outsideGeofenceCount,
       avgHoursPerDay: e.days.size > 0 ? Math.round((e.totalHours / e.days.size) * 100) / 100 : 0,
     }));
 

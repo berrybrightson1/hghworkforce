@@ -150,33 +150,16 @@ function KioskInner() {
     return detectFaceDescriptorFromVideo(video);
   }
 
-  function getOptionalGeo(): Promise<{ lat: number; lng: number } | Record<string, never>> {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        resolve({});
-        return;
-      }
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        },
-        () => resolve({}),
-        { maximumAge: 60_000, timeout: 8_000 },
-      );
-    });
-  }
-
   async function doClock(action: "clock-in" | "clock-out") {
     if (!token) return;
     setError(null);
     setBusy(true);
     try {
       const faceDescriptor = await getFaceDescriptor();
-      const geo = await getOptionalGeo();
       const res = await fetch("/api/kiosk/clock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, action, faceDescriptor, ...geo }),
+        body: JSON.stringify({ token, action, faceDescriptor }),
       });
       const data = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
       if (!res.ok) {

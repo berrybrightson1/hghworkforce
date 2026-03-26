@@ -13,17 +13,6 @@ import {
   endOfLocalDayUtc,
 } from "@/lib/kiosk-time";
 
-function haversineMetres(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 function parseHHmm(t: string) {
   const [h, m] = t.split(":").map(Number);
   return { hours: h, minutes: m };
@@ -40,15 +29,13 @@ function dateToMinutesUTC(d: Date) {
 
 /**
  * POST /api/kiosk/clock
- * Body: { token, action: "clock-in" | "clock-out", faceDescriptor: number[], lat?, lng? }
+ * Body: { token, action: "clock-in" | "clock-out", faceDescriptor: number[], note? }
  */
 export async function POST(req: NextRequest) {
   let body: {
     token?: string;
     action?: string;
     faceDescriptor?: unknown;
-    lat?: number;
-    lng?: number;
     note?: string;
   };
   try {
@@ -59,8 +46,6 @@ export async function POST(req: NextRequest) {
 
   const token = typeof body.token === "string" ? body.token : "";
   const action = body.action;
-  const lat = body.lat;
-  const lng = body.lng;
   const note = typeof body.note === "string" ? body.note : undefined;
   const faceDescriptorRaw = body.faceDescriptor;
 
@@ -80,9 +65,6 @@ export async function POST(req: NextRequest) {
     const company = await prisma.company.findUnique({
       where: { id: payload.companyId },
       select: {
-        officeLat: true,
-        officeLng: true,
-        geofenceRadius: true,
         checkinLockToFirstIp: true,
         checkinBoundIp: true,
         checkinEnterpriseEnabled: true,
@@ -170,23 +152,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Face did not match enrolled profile" }, { status: 403 });
     }
 
-    let outsideGeofence = false;
-    if (
-      company.officeLat &&
-      company.officeLng &&
-      company.geofenceRadius &&
-      lat != null &&
-      lng != null
-    ) {
-      const distance = haversineMetres(
-        Number(company.officeLat),
-        Number(company.officeLng),
-        lat,
-        lng,
-      );
-      outsideGeofence = distance > company.geofenceRadius;
-    }
-
     const tz = company.kioskTimezone || "Africa/Accra";
     const now = new Date();
 
@@ -256,9 +221,6 @@ export async function POST(req: NextRequest) {
           companyId: employee.companyId,
           clockIn: now,
           status: "CLOCKED_IN",
-          clockInLat: lat != null ? new Prisma.Decimal(lat.toFixed(7)) : null,
-          clockInLng: lng != null ? new Prisma.Decimal(lng.toFixed(7)) : null,
-          outsideGeofence,
           lateMinutes,
           shiftAssignmentId: activeAssignment.id,
           note: note ?? null,
@@ -270,7 +232,6 @@ export async function POST(req: NextRequest) {
         {
           ...checkIn,
           _meta: {
-            outsideGeofence,
             lateMinutes,
             shiftName: activeAssignment.shift
               ? `${activeAssignment.shift.startTime} - ${activeAssignment.shift.endTime}`
@@ -312,9 +273,6 @@ export async function POST(req: NextRequest) {
       data: {
         clockOut,
         status: "CLOCKED_OUT",
-        clockOutLat: lat != null ? new Prisma.Decimal(lat.toFixed(7)) : null,
-        clockOutLng: lng != null ? new Prisma.Decimal(lng.toFixed(7)) : null,
-        outsideGeofence: outsideGeofence || openCheckIn.outsideGeofence,
         hoursWorked: new Prisma.Decimal(hoursWorked.toFixed(2)),
         overtimeHours: overtimeHours != null ? new Prisma.Decimal(overtimeHours.toFixed(2)) : null,
         earlyDepartMinutes,
@@ -325,7 +283,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ...updated,
       _meta: {
-        outsideGeofence: outsideGeofence || openCheckIn.outsideGeofence,
         overtimeHours,
         earlyDepartMinutes,
       },

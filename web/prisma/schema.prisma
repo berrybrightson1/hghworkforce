@@ -1,4 +1,4 @@
-// HGH Payroll — PostgreSQL on Supabase (use pooled DATABASE_URL + DIRECT_URL for migrations)
+// HGH Payroll — PostgreSQL on Supabase (pooled DATABASE_URL + DIRECT_URL for migrations)
 // See: https://supabase.com/docs/guides/database/connecting-to-postgres
 
 generator client {
@@ -104,10 +104,6 @@ model Company {
   taxBrackets       TaxBracket[]
   leaveEntitlements LeaveEntitlement[]
   invitations       Invitation[]
-  /// Geofence: office coordinates and radius (metres) for check-in validation
-  officeLat          Decimal?             @db.Decimal(10, 7)
-  officeLng          Decimal?             @db.Decimal(10, 7)
-  geofenceRadius     Int?                 /// metres; null = geofence disabled
 
   /// Enterprise check-in (IP allowlist, audit sessions, optional face match)
   checkinEnterpriseEnabled       Boolean  @default(false)
@@ -413,12 +409,6 @@ model CheckIn {
   clockIn      DateTime      @default(now())
   clockOut     DateTime?
   status       CheckInStatus @default(CLOCKED_IN)
-  /// GPS coordinates at clock-in (lat,lng)
-  clockInLat   Decimal?      @db.Decimal(10, 7)
-  clockInLng   Decimal?      @db.Decimal(10, 7)
-  /// GPS coordinates at clock-out (lat,lng)
-  clockOutLat  Decimal?      @db.Decimal(10, 7)
-  clockOutLng  Decimal?      @db.Decimal(10, 7)
   /// Total hours worked (computed on clock-out)
   hoursWorked  Decimal?      @db.Decimal(6, 2)
   /// Overtime hours beyond scheduled shift (computed on clock-out)
@@ -427,8 +417,6 @@ model CheckIn {
   lateMinutes   Int?
   /// Minutes early departure relative to shift end
   earlyDepartMinutes Int?
-  /// Whether check-in was outside geofence
-  outsideGeofence Boolean   @default(false)
   note         String?
   /// If linked to a shift assignment
   shiftAssignmentId String?

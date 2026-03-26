@@ -1,5 +1,7 @@
--- HGH WorkForce: Check-in & Shift tables
+-- HGH WorkForce: Check-in & Shift tables (historical one-off)
 -- Paste into Supabase -> SQL -> New query -> Run
+-- NOTE: Current app schema no longer uses GPS/geofence columns on CheckIn. For existing DBs that still
+-- have those columns, run web/prisma/drop-geofence-gps.sql after deploying matching code.
 
 -- Enums
 CREATE TYPE "CheckInStatus" AS ENUM ('CLOCKED_IN', 'CLOCKED_OUT');
@@ -35,7 +37,7 @@ CREATE TABLE "ShiftAssignment" (
 CREATE INDEX "ShiftAssignment_employeeId_startDate_idx" ON "ShiftAssignment"("employeeId", "startDate");
 CREATE INDEX "ShiftAssignment_shiftId_idx" ON "ShiftAssignment"("shiftId");
 
--- Check-in records (clock in/out with optional GPS)
+-- Check-in records (legacy script may include GPS columns; see drop-geofence-gps.sql to remove)
 CREATE TABLE "CheckIn" (
     "id"                TEXT NOT NULL DEFAULT gen_random_uuid()::text,
     "employeeId"        TEXT NOT NULL,

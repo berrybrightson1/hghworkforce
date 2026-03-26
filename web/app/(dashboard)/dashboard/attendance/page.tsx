@@ -1,18 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { 
-  Search, 
-  CircleDot, 
-  CheckCircle2, 
-  Users, 
-  Clock, 
-  TimerOff, 
-  History, 
-  CalendarX, 
+import {
+  Search,
+  CircleDot,
+  CheckCircle2,
+  Users,
+  Clock,
+  TimerOff,
+  History,
+  CalendarX,
   FileText,
-  MapPin,
-  MapPinOff
 } from "lucide-react";
 import { useApi } from "@/lib/swr";
 import { useCompany } from "@/components/company-context";
@@ -32,9 +30,6 @@ type CheckInRecord = {
   overtimeHours: string | null;
   lateMinutes: number | null;
   earlyDepartMinutes: number | null;
-  outsideGeofence: boolean;
-  clockInLat: string | null;
-  clockInLng: string | null;
   note: string | null;
   employee: {
     id: string;
@@ -61,7 +56,6 @@ type SummaryEmployee = {
   daysPresent: number;
   lateCount: number;
   earlyDepartCount: number;
-  outsideGeofenceCount: number;
   avgHoursPerDay: number;
 };
 
@@ -396,9 +390,6 @@ export default function AttendancePage() {
                         OT
                       </th>
                       <th className="px-4 py-3 font-medium text-hgh-muted">
-                        GPS
-                      </th>
-                      <th className="px-4 py-3 font-medium text-hgh-muted">
                         Status
                       </th>
                     </tr>
@@ -454,17 +445,6 @@ export default function AttendancePage() {
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          {c.clockInLat ? (
-                            c.outsideGeofence ? (
-                              <MapPinOff size={16} className="text-hgh-danger" />
-                            ) : (
-                              <MapPin size={16} className="text-hgh-success" />
-                            )
-                          ) : (
-                            <MapPin size={16} className="text-hgh-muted opacity-50" />
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
                           <span
                             className={cn(
                               "inline-block rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -491,7 +471,7 @@ export default function AttendancePage() {
         <>
           {/* Summary stat cards */}
           {summary && (
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
               <div className="rounded-xl border border-hgh-border bg-white p-4">
                 <div className="text-xs text-hgh-muted">Employees</div>
                 <p className="mt-1 text-xl font-bold text-hgh-navy">
@@ -572,9 +552,6 @@ export default function AttendancePage() {
                       <th className="px-4 py-3 font-medium text-hgh-muted">
                         Early dept
                       </th>
-                      <th className="px-4 py-3 font-medium text-hgh-muted">
-                        Outside geo
-                      </th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-hgh-border">
@@ -625,15 +602,6 @@ export default function AttendancePage() {
                           {e.earlyDepartCount > 0 ? (
                             <span className="rounded bg-hgh-danger/10 px-1.5 py-0.5 text-xs font-medium text-hgh-danger">
                               {e.earlyDepartCount}x
-                            </span>
-                          ) : (
-                            <span className="text-xs text-hgh-muted">-</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {e.outsideGeofenceCount > 0 ? (
-                            <span className="rounded bg-hgh-danger/10 px-1.5 py-0.5 text-xs font-medium text-hgh-danger">
-                              {e.outsideGeofenceCount}x
                             </span>
                           ) : (
                             <span className="text-xs text-hgh-muted">-</span>

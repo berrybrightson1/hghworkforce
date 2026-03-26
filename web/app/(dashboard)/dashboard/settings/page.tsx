@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Shield, Calculator, FileText, MapPin, Monitor, Network } from "lucide-react";
+import { Shield, Calculator, FileText, Monitor, Network } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -76,12 +76,6 @@ export default function SettingsPage() {
   const [bracketsLoading, setBracketsLoading] = useState(false);
   const [savingBrackets, setSavingBrackets] = useState(false);
 
-  // Geofence state
-  const [geoLat, setGeoLat] = useState("");
-  const [geoLng, setGeoLng] = useState("");
-  const [geoRadius, setGeoRadius] = useState("");
-  const [savingGeo, setSavingGeo] = useState(false);
-
   const checkinSettingsUrl =
     selected && canEditCheckin
       ? `/api/companies/${selected.id}/checkin-settings`
@@ -103,55 +97,6 @@ export default function SettingsPage() {
   const [requestIp, setRequestIp] = useState("");
   const [requestNote, setRequestNote] = useState("");
   const [submittingIpRequest, setSubmittingIpRequest] = useState(false);
-
-  // Load geofence values when company changes
-  useEffect(() => {
-    if (!selected) return;
-    setGeoLat(selected.officeLat ? String(selected.officeLat) : "");
-    setGeoLng(selected.officeLng ? String(selected.officeLng) : "");
-    setGeoRadius(selected.geofenceRadius ? String(selected.geofenceRadius) : "");
-  }, [selected]);
-
-  async function handleSaveGeofence() {
-    if (!selected) return;
-    setSavingGeo(true);
-    try {
-      const res = await fetch("/api/companies", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyId: selected.id,
-          officeLat: geoLat ? parseFloat(geoLat) : null,
-          officeLng: geoLng ? parseFloat(geoLng) : null,
-          geofenceRadius: geoRadius ? parseInt(geoRadius, 10) : null,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Save failed");
-      toast.success("Geofence settings saved");
-      mutateCompanies();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not save geofence settings");
-    } finally {
-      setSavingGeo(false);
-    }
-  }
-
-  function handleUseMyLocation() {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation is not supported by your browser");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setGeoLat(pos.coords.latitude.toFixed(7));
-        setGeoLng(pos.coords.longitude.toFixed(7));
-        toast.success("Location captured");
-      },
-      () => toast.error("Could not get your location"),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  }
 
   const { data: auditLogs } = useApi<AuditEntry[]>("/api/audit-log");
   const logs = auditLogs ?? [];
@@ -509,81 +454,6 @@ export default function SettingsPage() {
         </Card>
 
         <div className="space-y-4">
-          {/* Geofence Settings */}
-          <Card>
-            <CardHeader className="flex flex-row items-center gap-3">
-              <MapPin size={20} className="shrink-0 text-hgh-gold" />
-              <div>
-                <CardTitle>Geofence Settings</CardTitle>
-                <p className="mt-0.5 text-xs text-hgh-muted">
-                  Set office location for check-in validation. Employees outside the radius will be flagged.
-                </p>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-hgh-muted">Latitude</label>
-                  <Input
-                    type="number"
-                    step="0.0000001"
-                    placeholder="e.g. 5.6037"
-                    value={geoLat}
-                    onChange={(e) => setGeoLat(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-hgh-muted">Longitude</label>
-                  <Input
-                    type="number"
-                    step="0.0000001"
-                    placeholder="e.g. -0.1870"
-                    value={geoLng}
-                    onChange={(e) => setGeoLng(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-hgh-muted">Radius (metres)</label>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="e.g. 200"
-                  value={geoRadius}
-                  onChange={(e) => setGeoRadius(e.target.value)}
-                />
-                <p className="mt-1 text-xs text-hgh-muted">
-                  Leave empty to disable geofence validation.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  size="sm"
-                  onClick={() => void handleSaveGeofence()}
-                  disabled={savingGeo || !selected}
-                >
-                  {savingGeo ? "Saving..." : "Save Geofence"}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleUseMyLocation}
-                  disabled={!selected}
-                >
-                  <MapPin size={14} />
-                  Use My Location
-                </Button>
-              </div>
-              {geoLat && geoLng && geoRadius && (
-                <div className="rounded-lg border border-hgh-border bg-hgh-offwhite p-3 text-xs text-hgh-slate">
-                  <p className="font-medium">Active geofence:</p>
-                  <p>Center: {geoLat}, {geoLng}</p>
-                  <p>Radius: {geoRadius}m</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Office kiosk — above the long "Check-in security" card so the bookmark stays visible */}
           {canEditCheckin && selected && (
             <Card>

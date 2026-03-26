@@ -6,9 +6,6 @@ interface Company {
   id: string;
   name: string;
   isActive: boolean;
-  officeLat?: string | null;
-  officeLng?: string | null;
-  geofenceRadius?: number | null;
   _count?: { employees: number };
 }
 

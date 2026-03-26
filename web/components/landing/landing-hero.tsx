@@ -118,8 +118,8 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-hgh-muted">
-          From small teams to multi-company operations — run compliant Ghana payroll, capture every clock-in, and keep
-          everyone moving with a single dashboard and employee portal.
+          From small teams to multi-company operations — run compliant Ghana payroll, track attendance through the
+          employee portal and optional office kiosk (face-verified), and keep everyone aligned from one dashboard.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">

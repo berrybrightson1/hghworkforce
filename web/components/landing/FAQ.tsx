@@ -27,7 +27,7 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "How do I get started?",
       answer:
-        "Create an account with your work email, then add your organization and companies. Invite teammates with the right roles, import employees individually or bulk-import via CSV, configure your office geofence, and start tracking attendance and drafting pay runs. If you already have an account, sign in and pick the company you want to work in.",
+        "Create an account with your work email, then add your organization and companies. Invite teammates with the right roles, import employees individually or bulk-import via CSV, turn on check-in options that fit your business (portal, kiosk, IP rules, face verification), and start tracking attendance and drafting pay runs. If you already have an account, sign in and pick the company you want to work in.",
     },
   ],
   Payroll: [
@@ -56,12 +56,12 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "How does employee check-in work?",
       answer:
-        "Employees clock in and out from any device - mobile or desktop. Each check-in is verified against your company's GPS geofence, so you know whether the employee was within the office area. Tardiness and overtime are calculated automatically based on assigned shifts. All attendance data syncs in real time and feeds directly into payroll calculations.",
+        "Employees can check in from the self-service portal (signed in) or from an office kiosk link: they enter name and employee code, then confirm with a face match against their enrolled profile. Companies can add enterprise controls such as IP allowlists and optional audit sessions. Tardiness and overtime follow assigned shift rules, and attendance feeds payroll in real time.",
     },
     {
-      question: "Can I set up shift schedules and geofences?",
+      question: "Can I set up shift schedules and kiosk hours?",
       answer:
-        "Yes. HR managers can create shift templates, assign employees to shifts, and manage rosters by department. Company admins can also configure a GPS geofence by setting an office location and radius. The system tracks scheduled versus actual hours, flags late arrivals (with a 5-minute grace period), detects early departures, and calculates overtime automatically.",
+        "Yes. HR managers can create shift templates, assign employees to shifts, and manage rosters by department. Company admins can configure office kiosk open/close windows, cut-off times for new clock-ins, time zone, and optional IP rules and face verification. The system tracks scheduled versus actual hours, flags late arrivals (with a 5-minute grace period), detects early departures, and calculates overtime automatically.",
     },
     {
       question: "How does attendance connect to payroll?",
@@ -71,14 +71,14 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "What attendance reports are available?",
       answer:
-        "You can view a daily attendance log with status filters and search, or switch to a summary view showing per-employee stats over a date range - including total hours, overtime, late count, early departures, and geofence violations. Reports are exportable to Excel, CSV, or PDF.",
+        "You can view a daily attendance log with status filters and search, or switch to a summary view showing per-employee stats over a date range - including total hours, overtime, late count, and early departures. Reports are exportable to Excel, CSV, or PDF.",
     },
   ],
   Employees: [
     {
       question: "What can employees access through the self-service portal?",
       answer:
-        "Employees can view and download their payslips from a dedicated payslip history page, check in and out with GPS verification, submit leave requests, view leave balances via a calendar, and track loan or salary advance repayment progress - all from a mobile-friendly portal.",
+        "Employees can view and download their payslips from a dedicated payslip history page, check in and out from the portal (or your company’s kiosk flow in the office), submit leave requests, view leave balances via a calendar, and track loan or salary advance repayment progress - all from a mobile-friendly portal.",
     },
     {
       question: "How do leave requests work?",

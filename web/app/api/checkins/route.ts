@@ -8,23 +8,6 @@ import { faceDescriptorsMatch, parseFaceDescriptor } from "@/lib/face-math";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Haversine distance in metres between two lat/lng points. */
-function haversineMetres(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
-  const R = 6_371_000; // earth radius in metres
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 /** Parse "HH:mm" into { hours, minutes }. */
 function parseHHmm(t: string) {
   const [h, m] = t.split(":").map(Number);
@@ -127,9 +110,8 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/checkins
- * Body: { action: "clock-in" | "clock-out", lat?, lng?, note?, sessionId?, faceDescriptor? }
+ * Body: { action: "clock-in" | "clock-out", note?, sessionId?, faceDescriptor? }
  * Employees clock in/out. Only one open check-in at a time.
- * - Validates GPS against company geofence (if configured).
  * - Enterprise: IP allowlist, CheckinSession + events, optional face descriptor match.
  * - Auto-links to active shift assignment.
  * - Computes tardiness on clock-in, overtime/early departure on clock-out.
@@ -141,8 +123,6 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const action = body.action as string;
-    const lat = body.lat as number | undefined;
-    const lng = body.lng as number | undefined;
     const note = body.note as string | undefined;
     const sessionId = typeof body.sessionId === "string" ? body.sessionId : undefined;
     const faceDescriptorRaw = body.faceDescriptor;
@@ -169,9 +149,6 @@ export async function POST(req: NextRequest) {
     const company = await prisma.company.findUnique({
       where: { id: employee.companyId },
       select: {
-        officeLat: true,
-        officeLng: true,
-        geofenceRadius: true,
         checkinLockToFirstIp: true,
         checkinBoundIp: true,
         checkinEnterpriseEnabled: true,
@@ -297,24 +274,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Face did not match enrolled profile" }, { status: 403 });
     }
 
-    // ── Geofence check ──
-    let outsideGeofence = false;
-    if (
-      company?.officeLat &&
-      company?.officeLng &&
-      company?.geofenceRadius &&
-      lat != null &&
-      lng != null
-    ) {
-      const distance = haversineMetres(
-        Number(company.officeLat),
-        Number(company.officeLng),
-        lat,
-        lng,
-      );
-      outsideGeofence = distance > company.geofenceRadius;
-    }
-
     // ── Find active shift assignment for today ──
     const now = new Date();
     const todayStart = new Date(now);
@@ -365,9 +324,6 @@ export async function POST(req: NextRequest) {
           companyId: employee.companyId,
           clockIn: now,
           status: "CLOCKED_IN",
-          clockInLat: lat != null ? new Prisma.Decimal(lat.toFixed(7)) : null,
-          clockInLng: lng != null ? new Prisma.Decimal(lng.toFixed(7)) : null,
-          outsideGeofence,
           lateMinutes,
           shiftAssignmentId: activeAssignment?.id ?? null,
           note: note || null,
@@ -385,7 +341,6 @@ export async function POST(req: NextRequest) {
         {
           ...checkIn,
           _meta: {
-            outsideGeofence,
             lateMinutes,
             shiftName: activeAssignment?.shift
               ? `${activeAssignment.shift.startTime} - ${activeAssignment.shift.endTime}`
@@ -457,9 +412,6 @@ export async function POST(req: NextRequest) {
       data: {
         clockOut,
         status: "CLOCKED_OUT",
-        clockOutLat: lat != null ? new Prisma.Decimal(lat.toFixed(7)) : null,
-        clockOutLng: lng != null ? new Prisma.Decimal(lng.toFixed(7)) : null,
-        outsideGeofence: outsideGeofence || openCheckIn.outsideGeofence,
         hoursWorked: new Prisma.Decimal(hoursWorked.toFixed(2)),
         overtimeHours: overtimeHours != null ? new Prisma.Decimal(overtimeHours.toFixed(2)) : null,
         earlyDepartMinutes,
@@ -480,7 +432,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       ...updated,
       _meta: {
-        outsideGeofence: outsideGeofence || openCheckIn.outsideGeofence,
         overtimeHours,
         earlyDepartMinutes,
       },

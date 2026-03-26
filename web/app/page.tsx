@@ -12,7 +12,7 @@ import {
   Download,
   Edit,
   LogIn,
-  MapPin,
+  Monitor,
   Rocket,
   UserPlus,
 } from "lucide-react";
@@ -37,14 +37,14 @@ const services = [
     icon: "checkin" as const,
     title: "Employee Check-in",
     description:
-      "Real-time attendance tracking with GPS geofencing that connects directly to payroll. Employees clock in and out from any device, and hours, overtime, and tardiness flow straight into pay calculations.",
+      "Attendance that ties straight into payroll. Employees check in from the employee portal (signed-in) or your on-site office kiosk with face verification, optional IP controls, and shift-based late and overtime rules.",
     highlights: [
-      "Mobile and desktop clock-in/out",
-      "GPS geofence enforcement per company",
-      "Automatic overtime and tardiness tracking",
+      "Office kiosk: shared device with name, code, and face match",
+      "Portal check-in for employees on their own accounts",
+      "Enterprise options: IP allowlists, audit sessions, face verification",
+      "Automatic overtime and tardiness vs assigned shifts",
       "Shift scheduling and roster management",
-      "Attendance summary reports with heatmaps",
-      "Direct integration with payroll runs",
+      "Attendance summaries and reports exportable to Excel/CSV/PDF",
     ],
     accentColor: "success" as const,
   },
@@ -61,7 +61,7 @@ const features = [
     icon: "attendance" as const,
     title: "Attendance Tracking",
     description:
-      "Employees check in from any device with GPS geofence enforcement. Tardiness and overtime are auto-calculated, with daily and summary reports linked to payroll.",
+      "Clock in from the portal or the office kiosk. Tardiness and overtime follow shift rules; managers get daily and summary views that feed payroll.",
   },
   {
     icon: "taxCompliance" as const,
@@ -85,7 +85,7 @@ const features = [
     icon: "selfService" as const,
     title: "Employee Self-Service",
     description:
-      "Employees view and download payslips, check in, request leave, track loan balances, and access documents from a mobile-friendly portal.",
+      "Employees view payslips, check in from the portal, request leave, track loans, and access documents from a mobile-friendly workspace.",
   },
   {
     icon: "shifts" as const,
@@ -104,9 +104,10 @@ const features = [
 const workflow = [
   {
     step: "01",
-    icon: MapPin,
+    icon: Monitor,
     title: "Check In",
-    description: "Employees clock in from any device with GPS geofence verification. Tardiness and overtime are tracked automatically.",
+    description:
+      "Employees use the portal or the office kiosk (face-verified). Shift-based late and overtime rules apply automatically.",
   },
   {
     step: "02",
@@ -143,7 +144,7 @@ const roles = [
     icon: "companyAdmin" as const,
     role: "Company Admin",
     access: [
-      "Own company data and geofence settings",
+      "Company data, check-in security, and kiosk settings",
       "Approve or reject payruns",
       "Attendance oversight with summary reports",
       "Company-level reports and P9A certificates",
@@ -163,7 +164,7 @@ const roles = [
     icon: "employee" as const,
     role: "Employee",
     access: [
-      "GPS-verified clock in and out",
+      "Clock in and out from the portal or kiosk flow",
       "View and download payslips",
       "Request leave and view calendar",
       "Track loan balance",

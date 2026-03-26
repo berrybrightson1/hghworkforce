@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma, UserRole } from "@prisma/client";
+import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireDbUser, canAccessCompany, canApprovePayroll } from "@/lib/api-auth";
 
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
 /**
  * PATCH /api/companies
- * Body: { companyId, officeLat?, officeLng?, geofenceRadius?, name?, address? }
+ * Body: { companyId, name?, address? }
  * Update company settings (admin only).
  */
 export async function PATCH(req: NextRequest) {
@@ -104,17 +104,6 @@ export async function PATCH(req: NextRequest) {
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = body.name;
     if (body.address !== undefined) data.address = body.address || null;
-    if (body.officeLat !== undefined) {
-      data.officeLat =
-        body.officeLat != null ? new Prisma.Decimal(Number(body.officeLat).toFixed(7)) : null;
-    }
-    if (body.officeLng !== undefined) {
-      data.officeLng =
-        body.officeLng != null ? new Prisma.Decimal(Number(body.officeLng).toFixed(7)) : null;
-    }
-    if (body.geofenceRadius !== undefined) {
-      data.geofenceRadius = body.geofenceRadius != null ? Number(body.geofenceRadius) : null;
-    }
 
     const updated = await prisma.company.update({
       where: { id: companyId },

@@ -2,15 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  AlertTriangle,
-  BadgeCheck,
   CheckCircle2,
   Circle,
   Clock,
   LogIn,
   LogOut,
-  MapPin,
-  MapPinOff,
   Repeat,
   TimerOff,
 } from "lucide-react";
@@ -42,12 +38,9 @@ type CheckInRecord = {
   clockOut: string | null;
   status: "CLOCKED_IN" | "CLOCKED_OUT";
   hoursWorked: string | null;
-  clockInLat: string | null;
-  clockInLng: string | null;
   lateMinutes: number | null;
   earlyDepartMinutes: number | null;
   overtimeHours: string | null;
-  outsideGeofence: boolean;
   note: string | null;
   shiftAssignment: ShiftInfo;
 };
@@ -91,15 +84,6 @@ export default function PortalCheckInPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [devFaceJson, setDevFaceJson] = useState("");
   const sentTabHidden = useRef(false);
-  const [gpsStatus, setGpsStatus] = useState<
-    "idle" | "fetching" | "granted" | "denied"
-  >("idle");
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
-    null,
-  );
-  const [geofenceResult, setGeofenceResult] = useState<
-    "unknown" | "inside" | "outside"
-  >("unknown");
 
   const now = useLiveClock();
   const today = new Date().toISOString().slice(0, 10);
@@ -199,25 +183,6 @@ export default function PortalCheckInPage() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [sessionId, postSessionEvent]);
 
-  // Request GPS on mount
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      setGpsStatus("denied");
-      return;
-    }
-    setGpsStatus("fetching");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setGpsStatus("granted");
-      },
-      () => {
-        setGpsStatus("denied");
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  }, []);
-
   const parseDevFaceDescriptor = useCallback((): number[] | undefined => {
     if (!isDev || !devFaceJson.trim()) return undefined;
     try {
@@ -258,11 +223,7 @@ export default function PortalCheckInPage() {
 
       setLoading(true);
       try {
-        const body: Record<string, unknown> = {
-          action,
-          lat: coords?.lat,
-          lng: coords?.lng,
-        };
+        const body: Record<string, unknown> = { action };
         if (enterprise && sessionId) body.sessionId = sessionId;
         if (faceDescriptor) body.faceDescriptor = faceDescriptor;
 
@@ -275,22 +236,9 @@ export default function PortalCheckInPage() {
         if (!res.ok) {
           throw new Error(data.error || "Request failed");
         }
-        // Show geofence result
-        if (data._meta?.outsideGeofence) {
-          setGeofenceResult("outside");
-          toast.warning(
-            action === "clock-in"
-              ? "Clocked in - but you are outside the office area"
-              : "Clocked out - outside the office area",
-          );
-        } else {
-          setGeofenceResult("inside");
-          toast.success(
-            action === "clock-in"
-              ? "Clocked in successfully"
-              : "Clocked out successfully",
-          );
-        }
+        toast.success(
+          action === "clock-in" ? "Clocked in successfully" : "Clocked out successfully",
+        );
         // Show overtime/late info
         if (action === "clock-out" && data._meta?.overtimeHours) {
           toast.info(
@@ -315,15 +263,7 @@ export default function PortalCheckInPage() {
         setLoading(false);
       }
     },
-    [
-      coords,
-      toast,
-      mutate,
-      checkinCtx,
-      sessionId,
-      parseDevFaceDescriptor,
-      postSessionEvent,
-    ],
+    [toast, mutate, checkinCtx, sessionId, parseDevFaceDescriptor, postSessionEvent],
   );
 
   const timeString = now.toLocaleTimeString("en-GB", {
@@ -354,38 +294,6 @@ export default function PortalCheckInPage() {
             Shift: {currentShift.startTime} - {currentShift.endTime}
           </div>
         )}
-
-        {/* GPS + Geofence indicator */}
-        <div className="mt-4 flex items-center justify-center gap-4 text-xs text-hgh-muted">
-          <span className="flex items-center gap-1">
-            {gpsStatus === "granted" ? (
-              <MapPin className={cn("h-4 w-4", "text-hgh-success")} aria-hidden />
-            ) : (
-              <MapPinOff className={cn("h-4 w-4", "text-hgh-muted")} aria-hidden />
-            )}
-            {gpsStatus === "fetching" && "Getting location..."}
-            {gpsStatus === "granted" && "GPS active"}
-            {gpsStatus === "denied" && "Location unavailable"}
-            {gpsStatus === "idle" && "Checking location..."}
-          </span>
-          {geofenceResult !== "unknown" && (
-            <span
-              className={cn(
-                "flex items-center gap-1 rounded-full px-2 py-0.5 font-medium",
-                geofenceResult === "inside"
-                  ? "bg-hgh-success/10 text-hgh-success"
-                  : "bg-hgh-danger/10 text-hgh-danger",
-              )}
-            >
-              {geofenceResult === "inside" ? (
-                <BadgeCheck className="h-3.5 w-3.5" aria-hidden />
-              ) : (
-                <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
-              )}
-              {geofenceResult === "inside" ? "In office area" : "Outside office area"}
-            </span>
-          )}
-        </div>
 
         {checkinCtx?.checkinEnterpriseEnabled && (
           <p className="mt-3 text-center text-xs text-hgh-muted">
@@ -553,12 +461,6 @@ export default function PortalCheckInPage() {
                         ? "In progress"
                         : formatDuration(c.hoursWorked)}
                     </span>
-                    {c.clockInLat && (
-                      <span className="flex items-center gap-0.5">
-                        <MapPin className="h-3 w-3" aria-hidden />
-                        GPS
-                      </span>
-                    )}
                     {c.lateMinutes && c.lateMinutes > 0 && (
                       <span className="rounded bg-hgh-danger/10 px-1.5 py-0.5 text-hgh-danger">
                         Late {c.lateMinutes}m
@@ -567,11 +469,6 @@ export default function PortalCheckInPage() {
                     {c.overtimeHours && parseFloat(c.overtimeHours) > 0 && (
                       <span className="rounded bg-hgh-gold/10 px-1.5 py-0.5 text-hgh-gold">
                         OT {c.overtimeHours}h
-                      </span>
-                    )}
-                    {c.outsideGeofence && (
-                      <span className="rounded bg-hgh-danger/10 px-1.5 py-0.5 text-hgh-danger">
-                        Outside area
                       </span>
                     )}
                   </div>
