@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { canApprovePayroll, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { encodeWebhookSecretForStorage } from "@/lib/webhook-secret";
 
 export async function GET(
   _req: NextRequest,
@@ -62,24 +63,23 @@ export async function POST(
   }
 
   try {
-    const secret = crypto.randomBytes(32).toString("hex");
+    const plainSecret = crypto.randomBytes(32).toString("hex");
     const row = await prisma.companyWebhook.create({
       data: {
         companyId,
         url,
-        secret,
+        secret: encodeWebhookSecretForStorage(plainSecret),
         payrunApproved: body.payrunApproved !== false,
       },
       select: {
         id: true,
         url: true,
-        secret: true,
         payrunApproved: true,
         isActive: true,
         createdAt: true,
       },
     });
-    return NextResponse.json(row, { status: 201 });
+    return NextResponse.json({ ...row, secret: plainSecret }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed" }, { status: 500 });
   }

@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { canAccessCompany, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import {
+  canAccessCompany,
+  canManagePayroll,
+  gateCompanyBilling,
+  requireDbUser,
+} from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt, maskSensitive } from "@/lib/crypto";
 
@@ -103,6 +108,13 @@ export async function PATCH(
     const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
     if (billing) return billing;
 
+    const isSelf = employee.userId === auth.dbUser.id;
+    const inCompany = canAccessCompany(auth.dbUser, employee.companyId);
+    const isPayrollStaff = canManagePayroll(auth.dbUser.role) && inCompany;
+    if (!isSelf && !isPayrollStaff) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     // Prepare update data
     const updateData: Record<string, unknown> = { ...body };
     delete updateData.companyId;
@@ -162,6 +174,13 @@ export async function DELETE(
     }
     const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
     if (billing) return billing;
+
+    const isSelf = employee.userId === auth.dbUser.id;
+    const inCompany = canAccessCompany(auth.dbUser, employee.companyId);
+    const isPayrollStaff = canManagePayroll(auth.dbUser.role) && inCompany;
+    if (!isSelf && !isPayrollStaff) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     await prisma.employee.update({
       where: { id },

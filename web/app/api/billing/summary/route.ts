@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { canAccessCompany, canManageBilling, requireDbUser } from "@/lib/api-auth";
 import {
   companyHasFullAccess,
   effectiveTrialEndsAt,
@@ -13,7 +13,7 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * GET /api/billing/summary?companyId=
- * Trial + subscription state (always reachable so locked workspaces can load billing).
+ * Trial + subscription state (company admin / super admin only).
  */
 export async function GET(req: NextRequest) {
   const auth = await requireDbUser();
@@ -24,7 +24,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "companyId is required" }, { status: 400 });
   }
   if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (!canManageBilling(auth.dbUser.role)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const company = await prisma.company.findUnique({

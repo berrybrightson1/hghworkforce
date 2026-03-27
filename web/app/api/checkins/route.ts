@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { requireDbUser, canAccessCompany, gateCompanyBilling } from "@/lib/api-auth";
+import { requireDbUser, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { getClientIpFromRequest } from "@/lib/checkin-ip";
 import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
@@ -34,28 +34,40 @@ export async function GET(req: NextRequest) {
 
     const where: Prisma.CheckInWhereInput = {};
 
-    if (companyId) {
-      const billing = await gateCompanyBilling(auth.dbUser, companyId);
-      if (billing) return billing;
-      where.companyId = companyId;
-    } else if (auth.dbUser.companyId) {
-      const billing = await gateCompanyBilling(auth.dbUser, auth.dbUser.companyId);
-      if (billing) return billing;
-      where.companyId = auth.dbUser.companyId;
-    }
-
-    // If employee role, scope to own records only
     if (auth.dbUser.role === "EMPLOYEE") {
       const emp = await prisma.employee.findUnique({
         where: { userId: auth.dbUser.id },
-        select: { id: true },
+        select: { id: true, companyId: true },
       });
       if (!emp) {
         return NextResponse.json({ error: "Employee profile not found" }, { status: 404 });
       }
+      const billing = await gateCompanyBilling(auth.dbUser, emp.companyId);
+      if (billing) return billing;
+      where.companyId = emp.companyId;
       where.employeeId = emp.id;
-    } else if (employeeId) {
-      where.employeeId = employeeId;
+    } else {
+      const effectiveCompanyId = companyId ?? auth.dbUser.companyId;
+      if (!effectiveCompanyId) {
+        return NextResponse.json(
+          { error: "companyId query parameter is required" },
+          { status: 400 },
+        );
+      }
+      const billing = await gateCompanyBilling(auth.dbUser, effectiveCompanyId);
+      if (billing) return billing;
+      where.companyId = effectiveCompanyId;
+
+      if (employeeId) {
+        const empInCo = await prisma.employee.findFirst({
+          where: { id: employeeId, companyId: effectiveCompanyId },
+          select: { id: true },
+        });
+        if (!empInCo) {
+          return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+        where.employeeId = employeeId;
+      }
     }
 
     if (date) {

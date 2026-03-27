@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { canAccessCompany, canManagePayroll, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { parseFaceDescriptor } from "@/lib/face-math";
 
 /**
@@ -44,17 +44,14 @@ export async function POST(
       return NextResponse.json({ error: "Employee is not active" }, { status: 403 });
     }
 
+    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    if (billing) return billing;
+
     const isSelf = employee.userId === auth.dbUser.id;
-    const isStaff = canAccessCompany(auth.dbUser, employee.companyId);
+    const isStaff = canManagePayroll(auth.dbUser.role) && canAccessCompany(auth.dbUser, employee.companyId);
 
     if (!isSelf && !isStaff) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    if (!isSelf) {
-      const payrollRoles = ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"];
-      if (!payrollRoles.includes(auth.dbUser.role)) {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-      }
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     await prisma.employee.update({

@@ -7,4 +7,5 @@ export type SettingsSectionId =
   | "roles"
   | "tier2-pension"
   | "webhooks"
+  | "team"
   | "account";

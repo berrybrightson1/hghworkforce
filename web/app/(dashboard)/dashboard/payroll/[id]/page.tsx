@@ -42,6 +42,10 @@ interface PayrunDetail {
   note: string | null;
   rejectionNote: string | null;
   approvalNote: string | null;
+  isPaid: boolean;
+  paidAt: string | null;
+  scheduledPayDate: string | null;
+  markedPaidBy: string | null;
   company: { name: string };
   lines: Line[];
   _count: { lines: number };
@@ -68,6 +72,7 @@ export default function PayrunDetailPage() {
   const [rejectNote, setRejectNote] = useState("");
   const [approveOpen, setApproveOpen] = useState(false);
   const [approveNote, setApproveNote] = useState("");
+  const [payDate, setPayDate] = useState("");
 
   const url = id ? `/api/payruns/${id}` : null;
   const { data: payrun, mutate, isLoading, error } = useApi<PayrunDetail>(url);
@@ -121,6 +126,29 @@ export default function PayrunDetailPage() {
       mutate();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function patchMarkPaid(
+    busyKey: string,
+    body: Record<string, unknown>,
+    { onOk, errMsg }: { onOk: () => void; errMsg: string },
+  ) {
+    setBusy(busyKey);
+    try {
+      const res = await fetch(`/api/payruns/${id}/mark-paid`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        onOk();
+        mutate();
+      } else {
+        toast.error(errMsg);
+      }
     } finally {
       setBusy(null);
     }
@@ -273,6 +301,127 @@ export default function PayrunDetailPage() {
           active loans). Submit sends to an approver. Approved runs are locked; use reports to export.
         </CardContent>
       </Card>
+
+      {/* Payment tracking — APPROVED payruns only */}
+      {canManage && payrun.status === "APPROVED" && (
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-4 rounded-xl border p-4",
+            payrun.isPaid
+              ? "border-hgh-success/20 bg-hgh-success/5"
+              : "border-hgh-gold/20 bg-hgh-gold/5",
+          )}
+        >
+          {payrun.isPaid ? (
+            <>
+              <span className="material-symbols-outlined text-hgh-success" style={{ fontSize: 22 }}>
+                check_circle
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-hgh-navy">
+                  Salaries paid on{" "}
+                  {payrun.paidAt
+                    ? new Date(payrun.paidAt).toLocaleDateString("en-GH", {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                      })
+                    : "N/A"}
+                </p>
+              </div>
+              {canApprove && (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-hgh-muted underline hover:text-hgh-navy disabled:opacity-50"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    patchMarkPaid(
+                      "undo-paid",
+                      { action: "undo-paid" },
+                      {
+                        onOk: () => toast.success("Payment status undone"),
+                        errMsg: "Failed to undo",
+                      },
+                    )
+                  }
+                >
+                  {busy === "undo-paid" ? "…" : "Undo"}
+                </button>
+              )}
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined text-hgh-gold" style={{ fontSize: 22 }}>
+                payments
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-hgh-navy">
+                  Salaries not yet marked as paid
+                </p>
+                {payrun.scheduledPayDate && (
+                  <p className="text-xs text-hgh-muted">
+                    Expected:{" "}
+                    {new Date(payrun.scheduledPayDate).toLocaleDateString("en-GH", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    })}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() =>
+                    patchMarkPaid(
+                      "mark-paid",
+                      { action: "mark-paid" },
+                      {
+                        onOk: () => toast.success("Payrun marked as paid"),
+                        errMsg: "Failed to mark as paid",
+                      },
+                    )
+                  }
+                >
+                  {busy === "mark-paid" ? "…" : "Mark as Paid"}
+                </Button>
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="date"
+                    value={payDate}
+                    onChange={(e) => setPayDate(e.target.value)}
+                    className="h-8 w-40 text-xs"
+                    disabled={busy !== null}
+                  />
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={busy !== null || !payDate}
+                    onClick={() =>
+                      patchMarkPaid(
+                        "set-pay-date",
+                        { action: "set-pay-date", scheduledPayDate: payDate },
+                        {
+                          onOk: () => {
+                            toast.info(
+                              `Payment date set for ${new Date(payDate).toLocaleDateString()}`,
+                            );
+                            setPayDate("");
+                          },
+                          errMsg: "Failed to set date",
+                        },
+                      )
+                    }
+                  >
+                    {busy === "set-pay-date" ? "…" : "Set Date"}
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <Card>
         <CardHeader>

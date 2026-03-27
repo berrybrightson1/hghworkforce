@@ -29,8 +29,17 @@ export async function requireDbUser(): Promise<AuthResult> {
   return { ok: true, dbUser };
 }
 
-export function canManagePayroll(role: UserRole): boolean {
+/**
+ * Central permission helper: SUPER_ADMIN, COMPANY_ADMIN, and (optional) HR
+ * can access all HR-level / management features.
+ */
+export function canManage(role: UserRole): boolean {
   return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN" || role === "HR";
+}
+
+/** Kept as alias for backward-compat — identical to canManage(). */
+export function canManagePayroll(role: UserRole): boolean {
+  return canManage(role);
 }
 
 export function canApprovePayroll(role: UserRole): boolean {
@@ -38,12 +47,22 @@ export function canApprovePayroll(role: UserRole): boolean {
 }
 
 export function canManageLeave(role: UserRole): boolean {
-  return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN" || role === "HR";
+  return canManage(role);
 }
 
 /** Check-in security, attendance config, IP allowlist (not payrun approval). */
 export function canManageCheckinSecurity(role: UserRole): boolean {
-  return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN" || role === "HR";
+  return canManage(role);
+}
+
+/** Billing and subscription management (dashboard + APIs). */
+export function canManageBilling(role: UserRole): boolean {
+  return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
+}
+
+/** HR restrictions: cannot approve payruns, manage billing, invite users, or change company settings. */
+export function canManageTeam(role: UserRole): boolean {
+  return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
 }
 
 /**
@@ -75,7 +94,7 @@ export function subscriptionRequiredResponse(): NextResponse {
  */
 export async function gateCompanyBilling(dbUser: User, companyId: string): Promise<NextResponse | null> {
   if (!canAccessCompany(dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   if (dbUser.role === UserRole.SUPER_ADMIN) {
     return null;

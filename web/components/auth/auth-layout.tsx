@@ -36,7 +36,7 @@ export function AuthLayout({
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-hgh-gold">
             <Landmark className="h-[22px] w-[22px] text-hgh-navy" strokeWidth={2} aria-hidden />
           </div>
-          <span className="text-lg font-semibold tracking-tight text-white">HGH Payroll</span>
+          <span className="text-lg font-semibold tracking-tight text-white">HGH WorkForce</span>
         </div>
 
         {/* Center content */}
@@ -63,7 +63,7 @@ export function AuthLayout({
         </div>
 
         {/* Footer */}
-        <div className="relative text-sm text-white/30">HGH Payroll · Multi-tenant · Ghana payroll compliance</div>
+        <div className="relative text-sm text-white/30">HGH WorkForce · Multi-tenant · Ghana workforce compliance</div>
       </div>
 
       {/* Right form panel */}
@@ -82,7 +82,7 @@ export function AuthLayout({
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-hgh-gold">
               <Landmark className="h-5 w-5 text-hgh-navy" strokeWidth={2} aria-hidden />
             </div>
-            <span className="text-lg font-semibold tracking-tight text-hgh-navy">HGH Payroll</span>
+            <span className="text-lg font-semibold tracking-tight text-hgh-navy">HGH WorkForce</span>
           </div>
 
           <div className="mb-8">

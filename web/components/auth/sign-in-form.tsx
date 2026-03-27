@@ -258,7 +258,7 @@ export function SignInForm() {
       {/* Divider */}
       <div className="my-6 flex items-center gap-4">
         <div className="h-px flex-1 bg-hgh-border" />
-        <span className="text-xs text-hgh-muted">New to HGH Payroll?</span>
+        <span className="text-xs text-hgh-muted">New to HGH WorkForce?</span>
         <div className="h-px flex-1 bg-hgh-border" />
       </div>
 

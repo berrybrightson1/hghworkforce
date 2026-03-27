@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { renderToStream } from "@react-pdf/renderer";
 import { createElement } from "react";
-import { canAccessCompany, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import {
+  canAccessCompany,
+  canManagePayroll,
+  gateCompanyBilling,
+  requireDbUser,
+} from "@/lib/api-auth";
 import { buildPayslipPdfData } from "@/lib/payslip-pdf-data";
 import { prisma } from "@/lib/prisma";
 import { PayslipDocument } from "@/components/payroll/PayslipDocument";
@@ -35,12 +40,12 @@ export async function GET(
       return NextResponse.json({ error: "Payslip not found" }, { status: 404 });
     }
 
-    // Check permissions: either admin/HR of the company, or the employee themselves
-    const isEmployee = auth.dbUser.id === line.employee.userId;
-    const isCompanyAdmin = canAccessCompany(auth.dbUser, line.payrun.companyId);
+    const isSelf = auth.dbUser.id === line.employee.userId;
+    const isPayrollStaff =
+      canManagePayroll(auth.dbUser.role) && canAccessCompany(auth.dbUser, line.payrun.companyId);
 
-    if (!isEmployee && !isCompanyAdmin) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!isSelf && !isPayrollStaff) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     const billing = await gateCompanyBilling(auth.dbUser, line.payrun.companyId);

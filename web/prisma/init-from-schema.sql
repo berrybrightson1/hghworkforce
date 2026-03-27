@@ -511,3 +511,68 @@ DO $$ BEGIN
   ALTER TABLE "KioskDayAbsence" ADD CONSTRAINT "KioskDayAbsence_employeeId_fkey"
     FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ── Exit management (offboarding + clearance) ─────────────────────────────────
+DO $$ BEGIN
+  CREATE TYPE "ExitType" AS ENUM ('RESIGNATION', 'TERMINATION', 'REDUNDANCY', 'RETIREMENT', 'CONTRACT_END', 'DEATH');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE "ExitStatus" AS ENUM ('INITIATED', 'IN_PROGRESS', 'CLEARED', 'COMPLETED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE "ExitClearanceDepartment" AS ENUM ('IT', 'FINANCE', 'ADMIN', 'MANAGER', 'SECURITY', 'OTHER');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE TYPE "ExitClearanceStatus" AS ENUM ('PENDING', 'CLEARED', 'WAIVED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "ExitRecord" (
+  "id" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "tenantId" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL,
+  "exitType" "ExitType" NOT NULL,
+  "noticeDate" TIMESTAMP(3) NOT NULL,
+  "lastWorkingDay" TIMESTAMP(3) NOT NULL,
+  "exitInterviewDate" TIMESTAMP(3),
+  "reason" TEXT,
+  "status" "ExitStatus" NOT NULL DEFAULT 'INITIATED',
+  "finalPayrunId" TEXT,
+  "createdBy" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
+  CONSTRAINT "ExitRecord_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "ExitRecord_companyId_status_idx" ON "ExitRecord"("companyId", "status");
+CREATE INDEX IF NOT EXISTS "ExitRecord_employeeId_idx" ON "ExitRecord"("employeeId");
+
+CREATE TABLE IF NOT EXISTS "ExitClearanceItem" (
+  "id" TEXT NOT NULL,
+  "exitRecordId" TEXT NOT NULL,
+  "department" "ExitClearanceDepartment" NOT NULL,
+  "item" TEXT NOT NULL,
+  "assignedTo" TEXT,
+  "status" "ExitClearanceStatus" NOT NULL DEFAULT 'PENDING',
+  "clearedAt" TIMESTAMP(3),
+  "clearedBy" TEXT,
+  "note" TEXT,
+  CONSTRAINT "ExitClearanceItem_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "ExitClearanceItem_exitRecordId_idx" ON "ExitClearanceItem"("exitRecordId");
+
+DO $$ BEGIN
+  ALTER TABLE "ExitRecord" ADD CONSTRAINT "ExitRecord_employeeId_fkey"
+    FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "ExitRecord" ADD CONSTRAINT "ExitRecord_createdBy_fkey"
+    FOREIGN KEY ("createdBy") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "ExitClearanceItem" ADD CONSTRAINT "ExitClearanceItem_exitRecordId_fkey"
+    FOREIGN KEY ("exitRecordId") REFERENCES "ExitRecord"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "ExitClearanceItem" ADD CONSTRAINT "ExitClearanceItem_clearedBy_fkey"
+    FOREIGN KEY ("clearedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

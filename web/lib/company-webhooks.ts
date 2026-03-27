@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { decodeWebhookSecretForHmac } from "@/lib/webhook-secret";
 
 function signBody(secret: string, body: string): string {
   return crypto.createHmac("sha256", secret).update(body).digest("hex");
@@ -27,7 +28,7 @@ export async function deliverCompanyWebhooks(
 
   await Promise.allSettled(
     hooks.map(async (h) => {
-      const sig = signBody(h.secret, body);
+      const sig = signBody(decodeWebhookSecretForHmac(h.secret), body);
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 10_000);
       try {

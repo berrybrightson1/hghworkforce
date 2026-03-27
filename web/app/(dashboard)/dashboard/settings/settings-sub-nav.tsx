@@ -72,6 +72,7 @@ export function SettingsSubNav() {
     }
     if (selected && canCompanyPayrollSettings) {
       out.push({ href: `${BASE}/webhooks`, label: "Webhooks", section: "webhooks" });
+      out.push({ href: `${BASE}/team`, label: "Team", section: "team" });
     }
     out.push({ href: `${BASE}/account`, label: "Account security", section: "account" });
     return out;

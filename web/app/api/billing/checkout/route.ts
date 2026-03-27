@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { canAccessCompany, requireDbUser } from "@/lib/api-auth";
+import { canAccessCompany, canManageBilling, requireDbUser } from "@/lib/api-auth";
 import { isPaymentProviderConfigured } from "@/lib/billing/enforcement";
 import { prisma } from "@/lib/prisma";
 
@@ -30,7 +30,10 @@ export async function POST(req: Request) {
 
   const { companyId } = parsed.data;
   if (!canAccessCompany(auth.dbUser, companyId)) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  if (!canManageBilling(auth.dbUser.role)) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const company = await prisma.company.findUnique({

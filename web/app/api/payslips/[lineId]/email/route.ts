@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import {
+  canAccessCompany,
+  canManagePayroll,
+  gateCompanyBilling,
+  requireDbUser,
+} from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(
@@ -20,6 +25,13 @@ export async function POST(
 
   if (!line) {
     return NextResponse.json({ error: "Payslip not found" }, { status: 404 });
+  }
+
+  const isSelf = auth.dbUser.id === line.employee.userId;
+  const isPayrollStaff =
+    canManagePayroll(auth.dbUser.role) && canAccessCompany(auth.dbUser, line.payrun.companyId);
+  if (!isSelf && !isPayrollStaff) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const billing = await gateCompanyBilling(auth.dbUser, line.payrun.companyId);

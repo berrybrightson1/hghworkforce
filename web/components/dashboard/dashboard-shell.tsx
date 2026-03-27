@@ -21,6 +21,12 @@ import {
   X,
   Activity,
   ListChecks,
+  ClipboardList,
+  Medal,
+  DoorOpen,
+  Radio,
+  BarChart3,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 import { SidebarAccountMenu } from "@/components/dashboard/sidebar-account-menu";
@@ -30,6 +36,15 @@ import type { UserRole } from "@prisma/client";
 import React, { useMemo } from "react";
 import { Breadcrumbs } from "@/components/dashboard/breadcrumbs";
 import { TrialBillingBanner } from "@/components/dashboard/trial-billing-banner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  SidebarNavHintContent,
+  sidebarNavTooltipSurfaceClassForPalette,
+  type SidebarNavHint,
+} from "@/components/ui/tooltip";
 
 type NavItem = {
   href: string;
@@ -58,9 +73,38 @@ const navigation: NavGroup[] = [
     ],
   },
   {
-    label: "Workforce & Ops",
+    label: "People",
     items: [
       { href: "/dashboard/employees", label: "Employees", icon: Users },
+      {
+        href: "/dashboard/onboarding",
+        label: "Onboarding",
+        icon: ClipboardList,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
+      {
+        href: "/dashboard/performance",
+        label: "Performance",
+        icon: Medal,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
+      {
+        href: "/dashboard/exits",
+        label: "Exits",
+        icon: DoorOpen,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
+    ],
+  },
+  {
+    label: "Attendance",
+    items: [
+      {
+        href: "/dashboard/attendance/live",
+        label: "Live View",
+        icon: Radio,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
       { href: "/dashboard/attendance", label: "Attendance", icon: Fingerprint },
       { href: "/dashboard/shifts", label: "Shifts", icon: Clock },
       { href: "/dashboard/leave", label: "Leave", icon: CalendarDays },
@@ -74,6 +118,23 @@ const navigation: NavGroup[] = [
     ],
   },
   {
+    label: "Reports",
+    items: [
+      {
+        href: "/dashboard/reports",
+        label: "Reports",
+        icon: TrendingUp,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
+      {
+        href: "/dashboard/reports/cost-vs-revenue",
+        label: "Cost vs Revenue",
+        icon: BarChart3,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
+    ],
+  },
+  {
     label: "Administration",
     items: [
       {
@@ -83,15 +144,15 @@ const navigation: NavGroup[] = [
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN"],
       },
       {
-        href: "/dashboard/reports",
-        label: "Reports",
-        icon: TrendingUp,
-        roles: ["SUPER_ADMIN", "COMPANY_ADMIN"],
-      },
-      {
         href: "/dashboard/users",
         label: "Users",
         icon: UserPlus,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN"],
+      },
+      {
+        href: "/dashboard/settings/team",
+        label: "Team",
+        icon: Settings,
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN"],
       },
       {
@@ -110,27 +171,132 @@ const navigation: NavGroup[] = [
   },
 ];
 
+/** Hover hints (desktop sidebar): short explanations before navigation, no images. */
+const SIDEBAR_NAV_HINTS: Partial<Record<string, SidebarNavHint>> = {
+  "/dashboard": {
+    palette: "brand",
+    body: "See a quick snapshot of your company: headcount, pending leave, loans, and other items that may need your attention today.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/setup-wizard": {
+    palette: "teal",
+    body: "Follow a guided checklist to finish the basics—company details, employees, tax settings, and check-in—so payroll and attendance work end to end.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/employees": {
+    palette: "indigo",
+    body: "Add and maintain your team here: names, salaries, bank and tax details, documents, and check-in profile. Payroll uses this information on every run.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/onboarding": {
+    palette: "violet",
+    body: "Track new hires with templates and tasks so HR and managers know what is done or still pending before someone starts.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/performance": {
+    palette: "rose",
+    body: "Run review periods, goals, and ratings in one place so feedback between managers and staff stays clear and consistent.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/exits": {
+    palette: "amber",
+    body: "Record departures, last working days, reasons, and clearance steps so offboarding and final pay stay organised.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/attendance/live": {
+    palette: "emerald",
+    body: "Watch who is clocked in right now—useful for reception or HR when you need a live picture of today’s attendance.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/attendance": {
+    palette: "sky",
+    body: "Review clock-in and clock-out history, hours, and corrections so you can answer questions and fix mistakes fairly.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/shifts": {
+    palette: "fuchsia",
+    body: "Set when people are expected to work so the system can measure late arrivals, early departures, and overtime.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/leave": {
+    palette: "cyan",
+    body: "Submit, approve, or track leave requests and balances according to your company’s leave types and rules.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/payroll": {
+    palette: "orange",
+    body: "Create pay runs for a period, calculate Ghana deductions and tax, submit for approval, and mark salaries as paid when money goes out.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/loans": {
+    palette: "slate",
+    body: "Record staff loans or advances and see balances so repayments can be taken smoothly through payroll.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/reports": {
+    palette: "blue",
+    body: "Open summaries and exports for payroll, tax, and workforce data—for finance, audits, or management reviews.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/reports/cost-vs-revenue": {
+    palette: "pink",
+    title: "Cost vs revenue",
+    body: "Enter monthly revenue and compare it to payroll cost so you can see people spend against income at a glance.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/companies": {
+    palette: "red",
+    body: "Create additional companies or switch administrative context when you manage more than one workspace.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/users": {
+    palette: "lime",
+    body: "Invite colleagues, choose their role (admin, HR, or employee), and control who can sign in to this company.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/settings/team": {
+    palette: "warm",
+    body: "Manage who belongs to this company and their roles—same idea as Users, opened from Settings for administrators.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/billing": {
+    palette: "cool",
+    body: "View trial or subscription status and handle plan billing for this workspace.",
+    learnHref: "/dashboard/help",
+  },
+  "/dashboard/platform-health": {
+    palette: "deep",
+    body: "Technical status and diagnostics for platform operators—most teams never need this screen.",
+  },
+};
+
 const SidebarItem = React.memo(
   ({
     item,
     pathname,
     onNavigate,
+    showNavHints,
   }: {
     item: NavItem;
     pathname: string;
     onNavigate?: () => void;
+    showNavHints?: boolean;
   }) => {
     const Icon = item.icon;
     const active =
       pathname === item.href ||
-      (item.href !== "/dashboard" && pathname.startsWith(item.href));
+      (item.href !== "/dashboard" &&
+        item.href !== "/dashboard/attendance" &&
+        item.href !== "/dashboard/reports" &&
+        pathname.startsWith(item.href));
 
-    return (
+    const hint = SIDEBAR_NAV_HINTS[item.href];
+    const link = (
       <Link
         href={item.href}
         onClick={() => onNavigate?.()}
         className={cn(
-          "flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors",
+          "flex min-h-11 items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors outline-none",
           active
             ? "bg-white/10 text-hgh-gold"
             : "text-white/80 hover:bg-white/5 hover:text-white",
@@ -140,6 +306,26 @@ const SidebarItem = React.memo(
         {item.label}
       </Link>
     );
+
+    if (!showNavHints || !hint) {
+      return link;
+    }
+
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent
+          side="right"
+          align="start"
+          className={cn(
+            "max-w-[min(20rem,calc(100vw-2rem))] p-0",
+            sidebarNavTooltipSurfaceClassForPalette(hint.palette),
+          )}
+        >
+          <SidebarNavHintContent navLabel={item.label} hint={hint} />
+        </TooltipContent>
+      </Tooltip>
+    );
   },
 );
 SidebarItem.displayName = "SidebarItem";
@@ -148,10 +334,12 @@ function SidebarNav({
   groups,
   pathname,
   onNavigate,
+  showNavHints,
 }: {
   groups: NavGroup[];
   pathname: string;
   onNavigate?: () => void;
+  showNavHints?: boolean;
 }) {
   return (
     <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-2 py-4">
@@ -167,6 +355,7 @@ function SidebarNav({
                 item={item}
                 pathname={pathname}
                 onNavigate={onNavigate}
+                showNavHints={showNavHints}
               />
             ))}
           </div>
@@ -200,6 +389,7 @@ function pageTitle(pathname: string, groups: NavGroup[]): string {
       "tier2-pension": "Tier 2 pension",
       webhooks: "Webhooks",
       account: "Account security",
+      team: "Team",
     };
     if (leaf && map[leaf]) return map[leaf];
     return "Settings";
@@ -337,6 +527,7 @@ export function DashboardShell({
   }, [mobileNavOpen]);
 
   return (
+    <TooltipProvider delayDuration={450} skipDelayDuration={180}>
     <div className="flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-hgh-offwhite">
       {/* Mobile navigation drawer */}
       <div
@@ -380,6 +571,7 @@ export function DashboardShell({
             groups={groups}
             pathname={pathname}
             onNavigate={() => setMobileNavOpen(false)}
+            showNavHints={false}
           />
           <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
         </aside>
@@ -388,7 +580,7 @@ export function DashboardShell({
       {/* Desktop sidebar */}
       <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-hgh-border bg-hgh-navy text-white md:flex">
         <SidebarBrandingBlock />
-        <SidebarNav groups={groups} pathname={pathname} />
+        <SidebarNav groups={groups} pathname={pathname} showNavHints />
         <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
       </aside>
 
@@ -434,5 +626,6 @@ export function DashboardShell({
         </main>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

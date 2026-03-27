@@ -12,9 +12,15 @@ import {
   type TrendData,
 } from "@/components/dashboard/PayrollTrendChart";
 import { EmployeeSetupReminder } from "@/components/dashboard/employee-setup-reminder";
+import { MorningBriefing } from "@/components/dashboard/morning-briefing";
+import { PayrollForecast } from "@/components/dashboard/payroll-forecast";
+import { CostRevenueCompact } from "@/components/dashboard/cost-revenue-compact";
+
+type MeData = { name: string; role: string };
 
 export default function DashboardPage() {
   const { companies, selected } = useCompany();
+  const { data: me } = useApi<MeData>("/api/me");
   const { data: employees } = useApi<{ id: string }[]>(
     selected ? `/api/employees?companyId=${selected.id}` : null,
   );
@@ -43,6 +49,7 @@ export default function DashboardPage() {
     } | null;
   }>(selected ? `/api/dashboard/insights?companyId=${selected.id}` : null);
 
+  const isManager = me && ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"].includes(me.role);
   const empCount = employees?.length ?? 0;
   const pendingLeave = leaveRequests?.filter((r) => r.status === "PENDING").length ?? 0;
   const activeLoans = loans?.filter((l) => l.status === "ACTIVE").length ?? 0;
@@ -57,6 +64,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Morning Briefing — canManage() roles only */}
+      {isManager && me && <MorningBriefing userName={me.name} />}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-xl font-semibold text-hgh-navy">Overview</h2>
@@ -90,6 +100,12 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
+      {/* Payroll Forecast — canManage() roles only */}
+      {isManager && <PayrollForecast />}
+
+      {/* Cost vs Revenue compact — canManage() roles only */}
+      {isManager && <CostRevenueCompact />}
 
       {selected && insights && (
         <Card>

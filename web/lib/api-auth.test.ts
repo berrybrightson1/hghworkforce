@@ -9,6 +9,7 @@ import {
   canAccessCompany,
   canManagePayroll,
   canApprovePayroll,
+  canManageBilling,
   canManageLeave,
   canManageCheckinSecurity,
 } from "./api-auth";
@@ -86,6 +87,17 @@ describe("role-based permission helpers", () => {
       ["EMPLOYEE", false],
     ] as const)("%s → %s", (role, expected) => {
       expect(canManageLeave(role)).toBe(expected);
+    });
+  });
+
+  describe("canManageBilling", () => {
+    it.each([
+      ["SUPER_ADMIN", true],
+      ["COMPANY_ADMIN", true],
+      ["HR", false],
+      ["EMPLOYEE", false],
+    ] as const)("%s → %s", (role, expected) => {
+      expect(canManageBilling(role)).toBe(expected);
     });
   });
 

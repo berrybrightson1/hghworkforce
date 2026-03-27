@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AuthLayout } from "@/components/auth/auth-layout";
 import { SignUpForm } from "@/components/auth/sign-up-form";
 import { TRIAL_DAYS } from "@/lib/billing/access";
+
+export const metadata: Metadata = {
+  title: "Create account — HGH WorkForce",
+  description: `Create a HGH WorkForce workspace. New companies get a ${TRIAL_DAYS}-day full-access trial.`,
+};
 
 export default function SignUpPage() {
   return (

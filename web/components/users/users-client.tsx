@@ -78,7 +78,7 @@ export function UsersClient({
   const [tab, setTab] = useState<"users" | "invitations">("users");
 
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<UserRole>("HR");
+  const [inviteRole, setInviteRole] = useState<UserRole>("EMPLOYEE");
   const [inviting, setInviting] = useState(false);
 
   const showCompanyColumn =
