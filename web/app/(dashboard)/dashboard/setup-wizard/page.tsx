@@ -11,11 +11,9 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
-  Fingerprint,
   ListChecks,
   Clock,
   UserPlus,
-  SkipForward,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -31,16 +29,15 @@ import { DatePickerField } from "@/components/ui/date-picker";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
-import { FaceEnrollmentCapture } from "@/components/face-enrollment-capture";
 import { cn } from "@/lib/utils";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 import type { UserRole } from "@prisma/client";
 
-type WizardStep = "company" | "employee" | "face" | "shifts" | "done";
+type WizardStep = "company" | "employee" | "shifts" | "done";
 
 const STEPS: { key: WizardStep; label: string; icon: typeof Building2 }[] = [
   { key: "company", label: "Workspace", icon: Building2 },
   { key: "employee", label: "Employee", icon: UserPlus },
-  { key: "face", label: "Face check-in", icon: Fingerprint },
   { key: "shifts", label: "Shift", icon: Clock },
 ];
 
@@ -80,7 +77,6 @@ export default function SetupWizardPage() {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [employeeCode, setEmployeeCode] = useState<string | null>(null);
   const [employeeName, setEmployeeName] = useState<string | null>(null);
-  const [faceDone, setFaceDone] = useState(false);
   const [shiftId, setShiftId] = useState<string | null>(null);
 
   const [newCompanyName, setNewCompanyName] = useState("");
@@ -155,7 +151,7 @@ export default function SetupWizardPage() {
       setEmployeeCode(String(data.employeeCode ?? ""));
       setEmployeeName(String(data.name ?? values.name));
       toast.success(`${values.name} added · code ${data.employeeCode ?? ""}`);
-      setStep("face");
+      setStep("shifts");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create employee");
     }
@@ -230,9 +226,11 @@ export default function SetupWizardPage() {
       <div className="rounded-xl border border-hgh-border bg-white p-8 text-center text-sm text-hgh-muted">
         This guided setup is for workspace administrators. Use the portal for day-to-day tasks.
         <div className="mt-4">
-          <Button variant="secondary" onClick={() => router.push("/dashboard")}>
-            Back to overview
-          </Button>
+          <HintTooltip content="Return to the dashboard home.">
+            <Button variant="secondary" onClick={() => router.push("/dashboard")}>
+              Back to overview
+            </Button>
+          </HintTooltip>
         </div>
       </div>
     );
@@ -247,12 +245,14 @@ export default function SetupWizardPage() {
             Setup wizard
           </h2>
           <p className="mt-1 text-sm text-hgh-muted">
-            Walk through workspace → first employee → face profile → shift in one flow.
+            Walk through workspace → first employee → shift in one flow.
           </p>
         </div>
-        <Link href="/dashboard" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
-          Exit wizard
-        </Link>
+        <HintTooltip content="Leave the wizard and go to the dashboard. Progress in this session may be lost if you haven’t finished steps.">
+          <Link href="/dashboard" className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}>
+            Exit wizard
+          </Link>
+        </HintTooltip>
       </div>
 
       {progressLine}
@@ -302,9 +302,11 @@ export default function SetupWizardPage() {
                         onChange={(e) => setNewCompanyName(e.target.value)}
                         className="max-w-xs"
                       />
-                      <Button type="button" variant="secondary" disabled={creatingCompany} onClick={() => void createCompany()}>
-                        {creatingCompany ? "Creating…" : "Create company"}
-                      </Button>
+                      <HintTooltip content="Adds a new company workspace. Only super admins can do this from the wizard.">
+                        <Button type="button" variant="secondary" disabled={creatingCompany} onClick={() => void createCompany()}>
+                          {creatingCompany ? "Creating…" : "Create company"}
+                        </Button>
+                      </HintTooltip>
                     </div>
                   </div>
                 )}
@@ -315,14 +317,16 @@ export default function SetupWizardPage() {
                   </p>
                 )}
 
-                <Button
-                  disabled={!companyId}
-                  onClick={() => setStep("employee")}
-                  className="mt-2"
-                >
-                  Continue to employee
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
+                <HintTooltip content="Once a company is selected, move on to add the first employee for this flow.">
+                  <Button
+                    disabled={!companyId}
+                    onClick={() => setStep("employee")}
+                    className="mt-2"
+                  >
+                    Continue to employee
+                    <ChevronRight className="ml-1 h-4 w-4" />
+                  </Button>
+                </HintTooltip>
                 {!companyId && (
                   <p className="text-xs text-hgh-danger">
                     {isSuper ? "Select or create a company first." : "No company on your account — complete onboarding."}
@@ -407,73 +411,16 @@ export default function SetupWizardPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pt-2">
-                <Button type="button" variant="ghost" onClick={() => setStep("company")}>
-                  Back
-                </Button>
-                <Button type="submit">Save and continue</Button>
+                <HintTooltip content="Return to workspace selection.">
+                  <Button type="button" variant="ghost" onClick={() => setStep("company")}>
+                    Back
+                  </Button>
+                </HintTooltip>
+                <HintTooltip content="Create this employee under the selected company and go to shift setup.">
+                  <Button type="submit">Save and continue</Button>
+                </HintTooltip>
               </div>
             </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {step === "face" && employeeId && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Fingerprint size={18} className="text-hgh-gold" />
-              3. Face profile for {employeeName ?? "employee"}
-            </CardTitle>
-            <p className="text-xs text-hgh-muted">
-              Required for the office kiosk. Allow camera access when prompted. Code:{" "}
-              <strong>{employeeCode ?? "—"}</strong>
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {faceDone ? (
-              <p className="text-sm text-hgh-success">Face profile saved. Continue to shift setup.</p>
-            ) : (
-              <FaceEnrollmentCapture
-                employeeId={employeeId}
-                onSuccess={() => {
-                  setFaceDone(true);
-                  toast.success("Face enrolled.");
-                }}
-              />
-            )}
-            <div className="flex flex-wrap items-center gap-2 border-t border-hgh-border pt-4">
-              <Button type="button" variant="ghost" onClick={() => setStep("employee")}>
-                Back
-              </Button>
-              {faceDone ? (
-                <Button type="button" onClick={() => setStep("shifts")}>
-                  Continue to shift
-                  <ChevronRight className="ml-1 h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="gap-2"
-                  onClick={() => {
-                    toast.warning("You can enroll later from the employee profile — kiosk check-in may stay blocked.");
-                    setStep("shifts");
-                  }}
-                >
-                  <SkipForward className="h-4 w-4" />
-                  Skip for now
-                </Button>
-              )}
-            </div>
-            <p className="text-xs text-hgh-muted">
-              <Link
-                href={`/dashboard/employees/${employeeId}?setup=face`}
-                className="font-medium text-hgh-gold underline-offset-2 hover:underline"
-              >
-                Open full employee profile
-              </Link>{" "}
-              if you need bank details or documents.
-            </p>
           </CardContent>
         </Card>
       )}
@@ -483,7 +430,7 @@ export default function SetupWizardPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Clock size={18} className="text-hgh-gold" />
-              4. Shift template & assignment
+              3. Shift template & assignment
             </CardTitle>
             <p className="text-xs text-hgh-muted">
               Creates one shift and assigns <strong>{employeeName ?? "this employee"}</strong> starting today (
@@ -517,10 +464,14 @@ export default function SetupWizardPage() {
                 <p className="text-xs text-hgh-danger">Use 24h times in HH:mm.</p>
               )}
               <div className="flex flex-wrap gap-2">
-                <Button type="button" variant="ghost" onClick={() => setStep("face")}>
-                  Back
-                </Button>
-                <Button type="submit">Create shift & assign</Button>
+                <HintTooltip content="Return to the employee form step.">
+                  <Button type="button" variant="ghost" onClick={() => setStep("employee")}>
+                    Back
+                  </Button>
+                </HintTooltip>
+                <HintTooltip content="Creates the shift template and assigns this employee starting today.">
+                  <Button type="submit">Create shift & assign</Button>
+                </HintTooltip>
               </div>
             </form>
           </CardContent>
@@ -541,23 +492,28 @@ export default function SetupWizardPage() {
               <li>
                 Employee: {employeeName} ({employeeCode})
               </li>
-              <li>Face profile: {faceDone ? "Registered" : "Skipped — finish from employee profile if needed"}</li>
               <li>Shift: created and assigned from today{shiftId ? ` (${shiftId.slice(0, 8)}…)` : ""}</li>
             </ul>
             <div className="flex flex-wrap gap-2 pt-2">
-              <Button onClick={() => router.push("/dashboard")}>Go to overview</Button>
-              <Link
-                href="/dashboard/shifts"
-                className={cn(buttonVariants({ variant: "secondary" }))}
-              >
-                Manage shifts
-              </Link>
-              <Link
-                href={`/dashboard/employees/${employeeId ?? ""}`}
-                className={cn(buttonVariants({ variant: "ghost" }))}
-              >
-                Employee profile
-              </Link>
+              <HintTooltip content="Back to the main dashboard and insights.">
+                <Button onClick={() => router.push("/dashboard")}>Go to overview</Button>
+              </HintTooltip>
+              <HintTooltip content="Edit shift templates and assignments for this company.">
+                <Link
+                  href="/dashboard/shifts"
+                  className={cn(buttonVariants({ variant: "secondary" }))}
+                >
+                  Manage shifts
+                </Link>
+              </HintTooltip>
+              <HintTooltip content="Open this employee’s full record (pay, documents, check-in).">
+                <Link
+                  href={`/dashboard/employees/${employeeId ?? ""}`}
+                  className={cn(buttonVariants({ variant: "ghost" }))}
+                >
+                  Employee profile
+                </Link>
+              </HintTooltip>
             </div>
           </CardContent>
         </Card>

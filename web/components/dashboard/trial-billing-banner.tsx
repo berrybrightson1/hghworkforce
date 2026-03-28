@@ -9,6 +9,7 @@ import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { cn } from "@/lib/utils";
 import { TRIAL_DAYS } from "@/lib/billing/access";
+import { DismissibleCallout } from "@/components/ui/dismissible-callout";
 
 type BillingSummary = {
   companyName: string;
@@ -109,11 +110,11 @@ export function TrialBillingBanner({ userRole }: { userRole: UserRole }) {
 
   if (summary.locked && pathname.startsWith("/dashboard/billing")) {
     return (
-      <div
-        className="mb-6 rounded-xl border border-amber-500/40 bg-amber-50 px-4 py-3 text-sm text-amber-950"
-        role="status"
+      <DismissibleCallout
+        storageKey={`hgh-dismiss-billing-trial-ended-${selected?.id ?? "none"}`}
+        className="mb-6 items-start rounded-xl border border-amber-500/40 bg-amber-50 px-4 py-3 text-sm text-amber-950"
       >
-        <div className="flex gap-2">
+        <div className="flex gap-2" role="status">
           <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-700" aria-hidden />
           <div>
             <p className="font-semibold text-amber-950">Trial ended — subscription required</p>
@@ -123,7 +124,7 @@ export function TrialBillingBanner({ userRole }: { userRole: UserRole }) {
             </p>
           </div>
         </div>
-      </div>
+      </DismissibleCallout>
     );
   }
 
@@ -135,9 +136,10 @@ export function TrialBillingBanner({ userRole }: { userRole: UserRole }) {
   const ms = summary.msRemaining;
 
   return (
-    <div
+    <DismissibleCallout
+      storageKey={`hgh-dismiss-trial-full-access-${selected?.id ?? "none"}`}
       className={cn(
-        "mb-6 rounded-xl border px-4 py-3 text-sm",
+        "mb-6 items-start rounded-xl border px-4 py-3 text-sm",
         ms < 24 * 60 * 60 * 1000
           ? "border-amber-500/35 bg-amber-50/90 text-amber-950"
           : "border-hgh-border bg-white text-hgh-slate shadow-sm",
@@ -165,6 +167,6 @@ export function TrialBillingBanner({ userRole }: { userRole: UserRole }) {
           </p>
         </div>
       </div>
-    </div>
+    </DismissibleCallout>
   );
 }

@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Calculator, Check, Download, RefreshCw, Send, XCircle } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Banknote, Calculator, Check, CheckCircle, Download, RefreshCw, Send, XCircle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { DismissibleCallout } from "@/components/ui/dismissible-callout";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 import { Input } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/toast/useToast";
@@ -62,6 +65,8 @@ const statusBadge = {
   REJECTED: "danger",
 } as const;
 
+const PAYRUN_ACTIONS_HINT_KEY = "hgh-dismiss-payrun-detail-actions-hint";
+
 export default function PayrunDetailPage() {
   const params = useParams();
   const id = params.id as string;
@@ -73,6 +78,17 @@ export default function PayrunDetailPage() {
   const [approveOpen, setApproveOpen] = useState(false);
   const [approveNote, setApproveNote] = useState("");
   const [payDate, setPayDate] = useState("");
+  const [showActionsHint, setShowActionsHint] = useState(true);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined" && localStorage.getItem(PAYRUN_ACTIONS_HINT_KEY) === "1") {
+        setShowActionsHint(false);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const url = id ? `/api/payruns/${id}` : null;
   const { data: payrun, mutate, isLoading, error } = useApi<PayrunDetail>(url);
@@ -159,9 +175,11 @@ export default function PayrunDetailPage() {
       <div className="rounded-xl border border-hgh-border bg-white p-8 text-center text-sm text-hgh-danger">
         Could not load this pay run. It may have been removed or you may not have access.
         <div className="mt-4">
-          <Button variant="secondary" onClick={() => router.push("/dashboard/payroll")}>
-            Back to payroll
-          </Button>
+          <HintTooltip content="Return to the payroll list.">
+            <Button variant="secondary" onClick={() => router.push("/dashboard/payroll")}>
+              Back to payroll
+            </Button>
+          </HintTooltip>
         </div>
       </div>
     );
@@ -180,10 +198,12 @@ export default function PayrunDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/payroll")}>
-            <ArrowLeft size={18} />
-            Back
-          </Button>
+          <HintTooltip content="Return to the payroll list for this workspace.">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/payroll")}>
+              <ArrowLeft size={18} />
+              Back
+            </Button>
+          </HintTooltip>
           <div>
             <h2 className="text-xl font-semibold text-hgh-navy">Pay run</h2>
             <p className="text-sm text-hgh-muted">
@@ -217,89 +237,124 @@ export default function PayrunDetailPage() {
           <CardTitle>Actions</CardTitle>
           <div className="flex flex-wrap gap-2">
             {canManage && payrun.status === "DRAFT" && (
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={busy !== null}
-                onClick={() => generateLines()}
-              >
-                <Calculator size={16} />
-                {busy === "gen" ? "Working…" : "Calculate / refresh lines"}
-              </Button>
+              <HintTooltip content="Build or refresh one line per active employee from their current salary and components.">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() => generateLines()}
+                >
+                  <Calculator size={16} />
+                  {busy === "gen" ? "Working…" : "Generate payroll lines"}
+                </Button>
+              </HintTooltip>
             )}
             {canManage && payrun.status === "DRAFT" && payrun._count.lines > 0 && (
-              <Button
-                size="sm"
-                disabled={busy !== null}
-                onClick={() => postAction("submit")}
-              >
-                <Send size={16} />
-                {busy === "submit" ? "…" : "Submit for approval"}
-              </Button>
+              <HintTooltip content="Send this draft to an approver. Lines must be generated first.">
+                <Button
+                  size="sm"
+                  disabled={busy !== null}
+                  onClick={() => postAction("submit")}
+                >
+                  <Send size={16} />
+                  {busy === "submit" ? "…" : "Submit for approval"}
+                </Button>
+              </HintTooltip>
             )}
             {canApprove && payrun.status === "PENDING" && (
               <>
-                <Button
-                  size="sm"
-                  className="bg-emerald-600 text-white hover:bg-emerald-700"
-                  disabled={busy !== null}
-                  onClick={() => setApproveOpen(true)}
-                >
-                  <Check size={16} />
-                  Approve
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  disabled={busy !== null}
-                  onClick={() => setRejectOpen(true)}
-                >
-                  <XCircle size={16} />
-                  Reject
-                </Button>
+                <HintTooltip content="Lock this run as approved. Exports and payslips stay available.">
+                  <Button
+                    size="sm"
+                    className="bg-emerald-600 text-white hover:bg-emerald-700"
+                    disabled={busy !== null}
+                    onClick={() => setApproveOpen(true)}
+                  >
+                    <Check size={16} />
+                    Approve
+                  </Button>
+                </HintTooltip>
+                <HintTooltip content="Send the run back with a reason. It can be edited and resubmitted.">
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    disabled={busy !== null}
+                    onClick={() => setRejectOpen(true)}
+                  >
+                    <XCircle size={16} />
+                    Reject
+                  </Button>
+                </HintTooltip>
               </>
             )}
             {canApprove && payrun.status === "REJECTED" && (
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={busy !== null}
-                onClick={() => postAction("reopen")}
-              >
-                <RefreshCw size={16} />
-                Reopen as draft
-              </Button>
+              <HintTooltip content="Move this run back to draft so lines can be fixed and submitted again.">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy !== null}
+                  onClick={() => postAction("reopen")}
+                >
+                  <RefreshCw size={16} />
+                  Reopen as draft
+                </Button>
+              </HintTooltip>
             )}
             {canManage && payrun.status === "APPROVED" && payrun.lines.length > 0 && (
               <>
-                <a
-                  href={`/api/payruns/${id}/bank-export`}
-                  className={cn(
-                    buttonVariants({ variant: "secondary", size: "sm" }),
-                    "inline-flex no-underline",
-                  )}
-                >
-                  <Download size={16} />
-                  Bank CSV
-                </a>
-                <a
-                  href={`/api/payruns/${id}/payslips-zip`}
-                  className={cn(
-                    buttonVariants({ variant: "secondary", size: "sm" }),
-                    "inline-flex no-underline",
-                  )}
-                >
-                  <Download size={16} />
-                  Payslips (ZIP)
-                </a>
+                <HintTooltip content="Download a CSV formatted for bulk salary bank uploads.">
+                  <a
+                    href={`/api/payruns/${id}/bank-export`}
+                    className={cn(
+                      buttonVariants({ variant: "secondary", size: "sm" }),
+                      "inline-flex no-underline",
+                    )}
+                  >
+                    <Download size={16} />
+                    Bank CSV
+                  </a>
+                </HintTooltip>
+                <HintTooltip content="Download all payslip PDFs for this run in one ZIP file.">
+                  <a
+                    href={`/api/payruns/${id}/payslips-zip`}
+                    className={cn(
+                      buttonVariants({ variant: "secondary", size: "sm" }),
+                      "inline-flex no-underline",
+                    )}
+                  >
+                    <Download size={16} />
+                    Payslips (ZIP)
+                  </a>
+                </HintTooltip>
               </>
             )}
           </div>
         </CardHeader>
-        <CardContent className="text-xs text-hgh-muted">
-          Draft: calculate lines for all <strong>active</strong> employees (basic + allowances, deductions,
-          active loans). Submit sends to an approver. Approved runs are locked; use reports to export.
-        </CardContent>
+        {showActionsHint ? (
+          <CardContent className="pr-2 text-xs text-hgh-muted">
+            <DismissibleCallout
+              storageKey={PAYRUN_ACTIONS_HINT_KEY}
+              className="items-start space-y-2"
+              onDismiss={() => setShowActionsHint(false)}
+            >
+              <>
+                <p>
+                  <strong className="text-hgh-slate">Salaries are not picked per pay run.</strong> Each line uses that
+                  employee&apos;s <strong className="text-hgh-slate">basic salary</strong> and recurring components from{" "}
+                  <HintTooltip content="Edit staff salaries and recurring pay items; payroll lines read from those records.">
+                    <Link href="/dashboard/employees" className="font-medium text-hgh-navy underline-offset-2 hover:underline">
+                      Employees
+                    </Link>
+                  </HintTooltip>
+                  . Click <strong className="text-hgh-slate">Generate payroll lines</strong> to build or refresh lines for
+                  every <strong className="text-hgh-slate">active</strong> staff member. After you change someone&apos;s pay,
+                  open this draft again and generate again before submitting.
+                </p>
+                <p>Submit sends to an approver. Approved runs are locked; use exports below for bank file and payslips.</p>
+              </>
+            </DismissibleCallout>
+          </CardContent>
+        ) : null}
       </Card>
 
       {/* Payment tracking — APPROVED payruns only */}
@@ -314,9 +369,7 @@ export default function PayrunDetailPage() {
         >
           {payrun.isPaid ? (
             <>
-              <span className="material-symbols-outlined text-hgh-success" style={{ fontSize: 22 }}>
-                check_circle
-              </span>
+              <CheckCircle size={22} className="text-hgh-success" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-hgh-navy">
                   Salaries paid on{" "}
@@ -330,30 +383,30 @@ export default function PayrunDetailPage() {
                 </p>
               </div>
               {canApprove && (
-                <button
-                  type="button"
-                  className="text-xs font-medium text-hgh-muted underline hover:text-hgh-navy disabled:opacity-50"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    patchMarkPaid(
-                      "undo-paid",
-                      { action: "undo-paid" },
-                      {
-                        onOk: () => toast.success("Payment status undone"),
-                        errMsg: "Failed to undo",
-                      },
-                    )
-                  }
-                >
-                  {busy === "undo-paid" ? "…" : "Undo"}
-                </button>
+                <HintTooltip content="Remove the paid flag if this run was marked paid by mistake.">
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-hgh-muted underline hover:text-hgh-navy disabled:opacity-50"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      patchMarkPaid(
+                        "undo-paid",
+                        { action: "undo-paid" },
+                        {
+                          onOk: () => toast.success("Payment status undone"),
+                          errMsg: "Failed to undo",
+                        },
+                      )
+                    }
+                  >
+                    {busy === "undo-paid" ? "…" : "Undo"}
+                  </button>
+                </HintTooltip>
               )}
             </>
           ) : (
             <>
-              <span className="material-symbols-outlined text-hgh-gold" style={{ fontSize: 22 }}>
-                payments
-              </span>
+              <Banknote size={22} className="text-hgh-gold" />
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-hgh-navy">
                   Salaries not yet marked as paid
@@ -370,22 +423,24 @@ export default function PayrunDetailPage() {
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  size="sm"
-                  disabled={busy !== null}
-                  onClick={() =>
-                    patchMarkPaid(
-                      "mark-paid",
-                      { action: "mark-paid" },
-                      {
-                        onOk: () => toast.success("Payrun marked as paid"),
-                        errMsg: "Failed to mark as paid",
-                      },
-                    )
-                  }
-                >
-                  {busy === "mark-paid" ? "…" : "Mark as Paid"}
-                </Button>
+                <HintTooltip content="Record that salaries for this approved run have been paid (internal tracking).">
+                  <Button
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() =>
+                      patchMarkPaid(
+                        "mark-paid",
+                        { action: "mark-paid" },
+                        {
+                          onOk: () => toast.success("Payrun marked as paid"),
+                          errMsg: "Failed to mark as paid",
+                        },
+                      )
+                    }
+                  >
+                    {busy === "mark-paid" ? "…" : "Mark as Paid"}
+                  </Button>
+                </HintTooltip>
                 <div className="flex items-center gap-1">
                   <Input
                     type="date"
@@ -394,28 +449,30 @@ export default function PayrunDetailPage() {
                     className="h-8 w-40 text-xs"
                     disabled={busy !== null}
                   />
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy !== null || !payDate}
-                    onClick={() =>
-                      patchMarkPaid(
-                        "set-pay-date",
-                        { action: "set-pay-date", scheduledPayDate: payDate },
-                        {
-                          onOk: () => {
-                            toast.info(
-                              `Payment date set for ${new Date(payDate).toLocaleDateString()}`,
-                            );
-                            setPayDate("");
+                  <HintTooltip content="Save the intended salary payment date (shown on this pay run card).">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={busy !== null || !payDate}
+                      onClick={() =>
+                        patchMarkPaid(
+                          "set-pay-date",
+                          { action: "set-pay-date", scheduledPayDate: payDate },
+                          {
+                            onOk: () => {
+                              toast.info(
+                                `Payment date set for ${new Date(payDate).toLocaleDateString()}`,
+                              );
+                              setPayDate("");
+                            },
+                            errMsg: "Failed to set date",
                           },
-                          errMsg: "Failed to set date",
-                        },
-                      )
-                    }
-                  >
-                    {busy === "set-pay-date" ? "…" : "Set Date"}
-                  </Button>
+                        )
+                      }
+                    >
+                      {busy === "set-pay-date" ? "…" : "Set Date"}
+                    </Button>
+                  </HintTooltip>
                 </div>
               </div>
             </>
@@ -486,20 +543,24 @@ export default function PayrunDetailPage() {
           <Input value={approveNote} onChange={(e) => setApproveNote(e.target.value)} />
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setApproveOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            className="bg-emerald-600 text-white hover:bg-emerald-700"
-            disabled={busy !== null}
-            onClick={async () => {
-              await postAction("approve", { approvalNote: approveNote });
-              setApproveOpen(false);
-              setApproveNote("");
-            }}
-          >
-            Confirm approve
-          </Button>
+          <HintTooltip content="Close without approving.">
+            <Button variant="ghost" onClick={() => setApproveOpen(false)}>
+              Cancel
+            </Button>
+          </HintTooltip>
+          <HintTooltip content="Finalize this pay run. It locks for editing; bank and payslip exports stay available.">
+            <Button
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+              disabled={busy !== null}
+              onClick={async () => {
+                await postAction("approve", { approvalNote: approveNote });
+                setApproveOpen(false);
+                setApproveNote("");
+              }}
+            >
+              Confirm approve
+            </Button>
+          </HintTooltip>
         </div>
       </Dialog>
 
@@ -509,16 +570,20 @@ export default function PayrunDetailPage() {
           <Input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} />
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setRejectOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            variant="danger"
-            disabled={busy !== null}
-            onClick={() => postAction("reject", { rejectionNote: rejectNote })}
-          >
-            Reject
-          </Button>
+          <HintTooltip content="Close without rejecting.">
+            <Button variant="ghost" onClick={() => setRejectOpen(false)}>
+              Cancel
+            </Button>
+          </HintTooltip>
+          <HintTooltip content="Send this run back as rejected. The preparer can fix lines and resubmit.">
+            <Button
+              variant="danger"
+              disabled={busy !== null}
+              onClick={() => postAction("reject", { rejectionNote: rejectNote })}
+            >
+              Reject
+            </Button>
+          </HintTooltip>
         </div>
       </Dialog>
     </div>

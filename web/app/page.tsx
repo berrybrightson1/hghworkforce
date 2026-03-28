@@ -38,11 +38,11 @@ const services = [
     icon: "checkin" as const,
     title: "Employee Check-in",
     description:
-      "Attendance that feeds payroll: portal or office kiosk (face verification), optional IP controls, shift-based late and overtime, correction requests when something was logged wrong, and exports your ops team already use.",
+      "Attendance that feeds payroll: portal or office kiosk with device binding, shift-based late and overtime, correction requests when something was logged wrong, and exports your ops team already use.",
     highlights: [
-      "Office kiosk: shared device with name, code, and face match",
+      "Office kiosk: shared device with name, code, and device binding",
       "Portal check-in and correction requests from self-service",
-      "Enterprise options: IP allowlists, audit sessions, face verification",
+      "Enterprise options: audit sessions and device binding",
       "Automatic overtime and tardiness vs assigned shifts",
       "Shift scheduling and roster management",
       "Daily log, summaries, and Excel/CSV/PDF exports",
@@ -132,7 +132,7 @@ const workflow = [
     icon: Monitor,
     title: "Check In",
     description:
-      "Employees use the portal or the office kiosk (face-verified). Shift-based late and overtime rules apply automatically.",
+      "Employees use the portal or the office kiosk (QR device-verified from their phone). Shift-based late and overtime rules apply automatically.",
   },
   {
     step: "02",

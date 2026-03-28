@@ -10,7 +10,7 @@ import {
   ClipboardList,
   Clock,
   CreditCard,
-  Fingerprint,
+  Smartphone,
   Receipt,
   Share2,
   ShieldCheck,
@@ -20,7 +20,7 @@ import {
 
 const FEATURE_ICONS = {
   payroll: CreditCard,
-  attendance: Fingerprint,
+  attendance: Smartphone,
   taxCompliance: ShieldCheck,
   multiCompany: Building2,
   payslip: Receipt,

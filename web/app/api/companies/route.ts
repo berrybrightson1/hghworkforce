@@ -84,7 +84,6 @@ export async function POST(req: NextRequest) {
         registrationNumber:
           typeof body.registrationNumber === "string" ? body.registrationNumber.trim() || null : null,
         address: typeof body.address === "string" ? body.address.trim() || null : null,
-        checkinLockToFirstIp: true,
         trialEndsAt,
       },
       select: companyApiSelect,

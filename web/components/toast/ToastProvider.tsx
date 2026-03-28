@@ -44,7 +44,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (t: Omit<ToastMessage, "id">) => {
       const id = `toast-${++idRef.current}`;
       setToasts((prev) => [...prev.slice(-4), { ...t, id }]);
-      window.setTimeout(() => remove(id), 4000);
+      window.setTimeout(() => remove(id), 7000);
     },
     [remove],
   );

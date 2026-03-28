@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
 import { cn } from "@/lib/utils";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 import type { SettingsSectionId } from "./types";
 import { useSettingsPreviewNav } from "./settings-preview-context";
 
@@ -41,40 +42,78 @@ export function SettingsSubNav() {
     me?.role === "HR";
 
   const items = useMemo(() => {
-    const out: { href: string; label: string; section: SettingsSectionId }[] = [
-      { href: `${BASE}/taxes`, label: "PAYE brackets", section: "taxes" },
+    const out: { href: string; label: string; section: SettingsSectionId; hint: string }[] = [
+      {
+        href: `${BASE}/taxes`,
+        label: "PAYE brackets",
+        section: "taxes",
+        hint: "Configure GRA PAYE brackets used in payroll tax calculations.",
+      },
     ];
     if (canEditCheckin && selected) {
       out.push({
         href: `${BASE}/office-kiosk`,
         label: "Office kiosk",
         section: "office-kiosk",
+        hint: "Kiosk link, branding, and how staff clock in on a shared device.",
       });
       if (checkinSettings) {
         out.push({
           href: `${BASE}/checkin-security`,
           label: "Check-in security",
           section: "checkin-security",
+          hint: "Security rules and device binding for check-in.",
         });
       }
     }
     out.push(
-      { href: `${BASE}/ssnit`, label: "SSNIT rates", section: "ssnit" },
-      { href: `${BASE}/audit`, label: "Audit log", section: "audit" },
-      { href: `${BASE}/roles`, label: "Roles & access", section: "roles" },
+      {
+        href: `${BASE}/ssnit`,
+        label: "SSNIT rates",
+        section: "ssnit",
+        hint: "Employee and employer social security percentages.",
+      },
+      {
+        href: `${BASE}/audit`,
+        label: "Audit log",
+        section: "audit",
+        hint: "Activity history for compliance and troubleshooting.",
+      },
+      {
+        href: `${BASE}/roles`,
+        label: "Roles & access",
+        section: "roles",
+        hint: "How dashboard roles and permissions work.",
+      },
     );
     if (selected && canCompanyPayrollSettings && payrollSettings) {
       out.push({
         href: `${BASE}/tier2-pension`,
         label: "Tier 2 pension",
         section: "tier2-pension",
+        hint: "Optional second-pillar pension for this company.",
       });
     }
     if (selected && canCompanyPayrollSettings) {
-      out.push({ href: `${BASE}/webhooks`, label: "Webhooks", section: "webhooks" });
-      out.push({ href: `${BASE}/team`, label: "Team", section: "team" });
+      out.push({
+        href: `${BASE}/webhooks`,
+        label: "Webhooks",
+        section: "webhooks",
+        hint: "Outbound HTTP callbacks for payroll and company events.",
+      });
+      out.push({
+        href: `${BASE}/team`,
+        label: "Team",
+        section: "team",
+        hint: "Invite users and assign roles for this workspace.",
+      });
     }
-    out.push({ href: `${BASE}/account`, label: "Account security", section: "account" });
+    out.push({
+      href: `${BASE}/account`,
+      label: "Account security",
+      section: "account",
+      hint: "Sign-in basics and password update for your user account.",
+    });
     return out;
   }, [
     canEditCheckin,
@@ -99,19 +138,20 @@ export function SettingsSubNav() {
         {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                navLinkClass,
-                "whitespace-nowrap lg:whitespace-normal",
-                active && "bg-zinc-100 font-medium text-zinc-900",
-              )}
-              onMouseEnter={() => setPreviewSection(item.section)}
-              onFocus={() => setPreviewSection(item.section)}
-            >
-              {item.label}
-            </Link>
+            <HintTooltip key={item.href} content={item.hint}>
+              <Link
+                href={item.href}
+                className={cn(
+                  navLinkClass,
+                  "whitespace-nowrap lg:whitespace-normal",
+                  active && "bg-zinc-100 font-medium text-zinc-900",
+                )}
+                onMouseEnter={() => setPreviewSection(item.section)}
+                onFocus={() => setPreviewSection(item.section)}
+              >
+                {item.label}
+              </Link>
+            </HintTooltip>
           );
         })}
       </nav>

@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Star } from "lucide-react";
 import { useApi } from "@/lib/swr";
 import { useToast } from "@/components/toast/useToast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 
 type Goal = {
   id: string;
@@ -48,16 +49,12 @@ function Stars({ rating }: { rating: number | null }) {
   return (
     <span className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((n) => (
-        <span
+        <Star
           key={n}
-          className="material-symbols-outlined"
-          style={{
-            fontSize: 16,
-            color: n <= Math.round(rating) ? "#C9A84C" : "#E2E8F0",
-          }}
-        >
-          {n <= Math.round(rating) ? "star" : "star_border"}
-        </span>
+          size={16}
+          fill={n <= Math.round(rating) ? "#C9A84C" : "none"}
+          color={n <= Math.round(rating) ? "#C9A84C" : "#E2E8F0"}
+        />
       ))}
       <span className="ml-1 text-xs text-hgh-muted">{rating.toFixed(1)}</span>
     </span>
@@ -101,10 +98,12 @@ export default function CycleDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/performance")}>
-            <ArrowLeft size={18} />
-            Back
-          </Button>
+          <HintTooltip content="Return to all performance cycles.">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/performance")}>
+              <ArrowLeft size={18} />
+              Back
+            </Button>
+          </HintTooltip>
           <div>
             <h2 className="text-xl font-semibold text-hgh-navy">{cycle.name}</h2>
             <p className="text-sm text-hgh-muted">
@@ -169,12 +168,14 @@ export default function CycleDetailPage() {
                       <Stars rating={review.finalRating} />
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Link
-                        href={`/dashboard/performance/reviews/${review.id}`}
-                        className="text-xs font-medium text-hgh-gold hover:underline"
-                      >
-                        Review
-                      </Link>
+                      <HintTooltip content="Open this employee’s review form and ratings.">
+                        <Link
+                          href={`/dashboard/performance/reviews/${review.id}`}
+                          className="text-xs font-medium text-hgh-gold hover:underline"
+                        >
+                          Review
+                        </Link>
+                      </HintTooltip>
                     </td>
                   </tr>
                 ))}

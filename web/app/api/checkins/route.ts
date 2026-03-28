@@ -2,9 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { requireDbUser, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
-import { getClientIpFromRequest } from "@/lib/checkin-ip";
-import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
-import { faceDescriptorsMatch, parseFaceDescriptor } from "@/lib/face-math";
 import { wallMinutesFromDateInZone } from "@/lib/shift-wall-time";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -113,9 +110,8 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/checkins
- * Body: { action: "clock-in" | "clock-out", note?, sessionId?, faceDescriptor? }
- * Employees clock in/out. Only one open check-in at a time.
- * - Enterprise: IP allowlist, CheckinSession + events, optional face descriptor match.
+ * Body: { action: "clock-in" | "clock-out", note?, sessionId? }
+ * Employees clock in/out from the portal. Only one open check-in at a time.
  * - Auto-links to active shift assignment.
  * - Computes tardiness on clock-in, overtime/early departure on clock-out.
  */
@@ -128,7 +124,6 @@ export async function POST(req: NextRequest) {
     const action = body.action as string;
     const note = body.note as string | undefined;
     const sessionId = typeof body.sessionId === "string" ? body.sessionId : undefined;
-    const faceDescriptorRaw = body.faceDescriptor;
 
     if (action !== "clock-in" && action !== "clock-out") {
       return NextResponse.json(
@@ -139,7 +134,7 @@ export async function POST(req: NextRequest) {
 
     const employee = await prisma.employee.findUnique({
       where: { userId: auth.dbUser.id },
-      select: { id: true, companyId: true, status: true, faceDescriptor: true },
+      select: { id: true, companyId: true, status: true },
     });
 
     if (!employee) {
@@ -155,51 +150,12 @@ export async function POST(req: NextRequest) {
     const company = await prisma.company.findUnique({
       where: { id: employee.companyId },
       select: {
-        checkinLockToFirstIp: true,
-        checkinBoundIp: true,
         checkinEnterpriseEnabled: true,
-        checkinEnforceIpAllowlist: true,
-        checkinRequireFaceVerification: true,
-        checkinFaceDistanceThreshold: true,
-        checkinMaxFaceAttempts: true,
-        allowedIps: { select: { address: true } },
         kioskTimezone: true,
       },
     });
 
     const companyTz = company?.kioskTimezone || "Africa/Accra";
-
-    const clientIp = getClientIpFromRequest(req);
-    if (company) {
-      const ipOk = await assertCompanyCheckinIpAllowed({
-        companyId: employee.companyId,
-        company,
-        clientIp,
-        actorId: auth.dbUser.id,
-      });
-      if (!ipOk.ok) {
-        await prisma.auditLog.create({
-          data: {
-            actorId: auth.dbUser.id,
-            action: "CHECKIN_IP_BLOCKED",
-            entityType: "Company",
-            entityId: employee.companyId,
-            afterState: { reason: ipOk.logReason, clientIp, source: "checkins_api" },
-            ipAddress: clientIp,
-          },
-        });
-        return NextResponse.json(
-          {
-            error:
-              ipOk.reason === "ip_mismatch"
-                ? "Check-in is only allowed from your company’s registered work PC."
-                : "Check-in not allowed from this network",
-            reason: ipOk.reason,
-          },
-          { status: 403 },
-        );
-      }
-    }
 
     let activeSession: { id: string } | null = null;
     if (company?.checkinEnterpriseEnabled) {
@@ -217,70 +173,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Invalid or closed check-in session" }, { status: 400 });
       }
       activeSession = s;
-    }
-
-    const threshold =
-      company?.checkinFaceDistanceThreshold != null
-        ? Number(company.checkinFaceDistanceThreshold)
-        : 0.55;
-    const maxFaceAttempts = company?.checkinMaxFaceAttempts ?? 3;
-
-    async function runFaceGate(): Promise<NextResponse | null> {
-      const emp = employee;
-      if (!emp) return null;
-      if (!company?.checkinRequireFaceVerification) return null;
-      const stored = parseFaceDescriptor(emp.faceDescriptor);
-      if (!stored) {
-        return NextResponse.json(
-          {
-            error: "Face profile not enrolled yet.",
-            hint:
-              "Open Portal → Check-in and use Register your face, or ask a Company Admin to register it on your employee profile.",
-          },
-          { status: 403 },
-        );
-      }
-      const sample = parseFaceDescriptor(faceDescriptorRaw);
-      if (!sample) {
-        return NextResponse.json(
-          { error: "Face verification required for this company" },
-          { status: 400 },
-        );
-      }
-      if (faceDescriptorsMatch(sample, stored, threshold)) {
-        if (activeSession) {
-          await prisma.checkinEvent.create({
-            data: { sessionId: activeSession.id, type: "FACE_MATCH_OK" },
-          });
-        }
-        return null;
-      }
-
-      if (activeSession) {
-        await prisma.checkinEvent.create({
-          data: {
-            sessionId: activeSession.id,
-            type: "FACE_MATCH_FAIL",
-            metadata: { threshold },
-          },
-        });
-        const updatedSession = await prisma.checkinSession.update({
-          where: { id: activeSession.id },
-          data: { faceFailCount: { increment: 1 } },
-          select: { faceFailCount: true },
-        });
-        if (updatedSession.faceFailCount >= maxFaceAttempts) {
-          await prisma.faceMismatchAlert.create({
-            data: {
-              employeeId: emp.id,
-              companyId: emp.companyId,
-              checkinSessionId: activeSession.id,
-              metadata: { faceFailCount: updatedSession.faceFailCount },
-            },
-          });
-        }
-      }
-      return NextResponse.json({ error: "Face did not match enrolled profile" }, { status: 403 });
     }
 
     // ── Find active shift assignment for today ──
@@ -301,7 +193,6 @@ export async function POST(req: NextRequest) {
     });
 
     if (action === "clock-in") {
-      // Check for existing open check-in
       const openCheckIn = await prisma.checkIn.findFirst({
         where: { employeeId: employee.id, status: "CLOCKED_IN" },
       });
@@ -318,14 +209,10 @@ export async function POST(req: NextRequest) {
         const shiftStartMins = hhmToMinutes(activeAssignment.shift.startTime);
         const clockInMins = wallMinutesFromDateInZone(now, companyTz);
         const diff = clockInMins - shiftStartMins;
-        // Only flag as late if more than 5 min grace period
         if (diff > 5) {
           lateMinutes = diff;
         }
       }
-
-      const faceRejectIn = await runFaceGate();
-      if (faceRejectIn) return faceRejectIn;
 
       const checkIn = await prisma.checkIn.create({
         data: {
@@ -386,14 +273,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const faceRejectOut = await runFaceGate();
-    if (faceRejectOut) return faceRejectOut;
-
     const clockOut = new Date();
     const diffMs = clockOut.getTime() - openCheckIn.clockIn.getTime();
     const hoursWorked = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
 
-    // ── Overtime & early departure ──
     let overtimeHours: number | null = null;
     let earlyDepartMinutes: number | null = null;
 
@@ -402,16 +285,13 @@ export async function POST(req: NextRequest) {
       const shiftEndMins = hhmToMinutes(shift.endTime);
       const clockOutMins = wallMinutesFromDateInZone(clockOut, companyTz);
 
-      // Early departure: left before shift end (more than 5 min grace)
       if (shiftEndMins - clockOutMins > 5) {
         earlyDepartMinutes = shiftEndMins - clockOutMins;
       }
 
-      // Overtime: worked past shift end
       const shiftStartMins = hhmToMinutes(shift.startTime);
       const scheduledHours = (shiftEndMins - shiftStartMins - (shift.breakMinutes ?? 0)) / 60;
       if (hoursWorked > scheduledHours + 0.08) {
-        // 0.08h ~ 5min grace
         overtimeHours = Math.round((hoursWorked - scheduledHours) * 100) / 100;
       }
     }
@@ -440,10 +320,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ...updated,
-      _meta: {
-        overtimeHours,
-        earlyDepartMinutes,
-      },
+      _meta: { overtimeHours, earlyDepartMinutes },
     });
   } catch {
     return NextResponse.json({ error: "Failed to process check-in" }, { status: 500 });

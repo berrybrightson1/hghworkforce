@@ -37,32 +37,11 @@ const settingsPanelHeaderClass =
 
 interface CheckinSettingsPayload {
   id: string;
-  checkinLockToFirstIp: boolean;
-  checkinBoundIp: string | null;
   checkinEnterpriseEnabled: boolean;
-  checkinEnforceIpAllowlist: boolean;
-  checkinRequireFaceVerification: boolean;
-  checkinFaceDistanceThreshold: number | null;
-  checkinMaxFaceAttempts: number;
   kioskOfficeOpensAt: string | null;
   kioskOfficeClosesAt: string | null;
   kioskCutoffTime: string | null;
   kioskTimezone: string;
-  allowedIps: {
-    id: string;
-    label: string | null;
-    address: string;
-    createdAt: string;
-  }[];
-}
-
-interface IpAccessRequestRow {
-  id: string;
-  requestedIp: string;
-  note: string | null;
-  status: string;
-  createdAt: string;
-  company: { id: string; name: string };
 }
 
 interface AuditEntry {
@@ -85,8 +64,6 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
     me?.role === "SUPER_ADMIN" ||
     me?.role === "COMPANY_ADMIN" ||
     me?.role === "HR";
-  const canApproveIpRequest =
-    me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN";
   const [payeScope, setPayeScope] = useState<"company" | "global">("company");
   const [editOpen, setEditOpen] = useState(false);
   const [brackets, setBrackets] = useState<TaxBracketInput[]>(DEFAULT_MONTHLY_PAYE_BRACKETS);
@@ -101,20 +78,7 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
   const { data: checkinSettings, mutate: mutateCheckinSettings } =
     useApi<CheckinSettingsPayload>(checkinSettingsUrl);
 
-  const ipRequestsUrl =
-    selected && canEditCheckin
-      ? `/api/ip-access-requests?companyId=${encodeURIComponent(selected.id)}`
-      : null;
-  const { data: ipRequests, mutate: mutateIpRequests } =
-    useApi<IpAccessRequestRow[]>(ipRequestsUrl);
-
-  const [newAllowedIp, setNewAllowedIp] = useState("");
-  const [newAllowedLabel, setNewAllowedLabel] = useState("");
   const [savingCheckinToggle, setSavingCheckinToggle] = useState(false);
-  const [addingIp, setAddingIp] = useState(false);
-  const [requestIp, setRequestIp] = useState("");
-  const [requestNote, setRequestNote] = useState("");
-  const [submittingIpRequest, setSubmittingIpRequest] = useState(false);
 
   const { data: auditLogs } = useApi<AuditEntry[]>("/api/audit-log");
   const logs = auditLogs ?? [];
@@ -240,90 +204,6 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
       toast.error(e instanceof Error ? e.message : "Could not save");
     } finally {
       setSavingCheckinToggle(false);
-    }
-  }
-
-  async function handleAddAllowedIp() {
-    if (!selected || !newAllowedIp.trim()) return;
-    setAddingIp(true);
-    try {
-      const res = await fetch(`/api/companies/${selected.id}/allowed-ips`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: newAllowedIp.trim(),
-          label: newAllowedLabel.trim() || undefined,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed");
-      toast.success("IP added");
-      setNewAllowedIp("");
-      setNewAllowedLabel("");
-      mutateCheckinSettings();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not add IP");
-    } finally {
-      setAddingIp(false);
-    }
-  }
-
-  async function handleDeleteAllowedIp(ipId: string) {
-    if (!selected) return;
-    try {
-      const res = await fetch(
-        `/api/companies/${selected.id}/allowed-ips/${encodeURIComponent(ipId)}`,
-        { method: "DELETE" },
-      );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed");
-      toast.success("IP removed");
-      mutateCheckinSettings();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Could not remove IP");
-    }
-  }
-
-  async function handleSubmitIpAccessRequest() {
-    if (!selected || !requestIp.trim()) return;
-    setSubmittingIpRequest(true);
-    try {
-      const res = await fetch("/api/ip-access-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyId: selected.id,
-          requestedIp: requestIp.trim(),
-          note: requestNote.trim() || undefined,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed");
-      toast.success("Request submitted");
-      setRequestIp("");
-      setRequestNote("");
-      mutateIpRequests();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Request failed");
-    } finally {
-      setSubmittingIpRequest(false);
-    }
-  }
-
-  async function handleResolveIpRequest(id: string, status: "APPROVED" | "REJECTED") {
-    try {
-      const res = await fetch(`/api/ip-access-requests/${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((data as { error?: string }).error || "Failed");
-      toast.success(status === "APPROVED" ? "Request approved" : "Request rejected");
-      mutateIpRequests();
-      mutateCheckinSettings();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Update failed");
     }
   }
 
@@ -504,7 +384,7 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
               </p>
               <h2 className="text-lg font-semibold text-zinc-900">Office kiosk</h2>
               <p className="mt-1 text-sm text-zinc-500">
-                Browser link for shared office PCs; staff use name, employee code, and face—no Supabase
+                Browser link for shared office PCs; staff use name, employee code, and phone QR verification—no Supabase
                 login on that device.
               </p>
             <Card className={cn("mt-4", settingsPanelClass)}>
@@ -513,14 +393,13 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                 <div>
                   <CardTitle className="text-zinc-900">Kiosk URL &amp; hours</CardTitle>
                   <p className="mt-0.5 text-xs text-hgh-muted">
-                    Same IP lock as portal check-in; set timezone and optional office window / cut-off.
+                    Set timezone and optional office window / cut-off for the kiosk.
                   </p>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-xs text-hgh-slate">
-                  Same IP lock as portal check-in: open this URL once on the kiosk PC while the
-                  first-PC lock is on so that machine&apos;s IP is registered.
+                  Open this URL on the shared office PC. Employees check in by entering their name and code, then verifying with their bound phone via QR scan.
                 </p>
                 <div className="flex items-start gap-2 rounded-lg border border-hgh-border bg-hgh-offwhite p-3">
                   <code className="min-w-0 flex-1 break-all font-mono text-xs text-hgh-slate">
@@ -652,70 +531,19 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
               </p>
               <h2 className="text-lg font-semibold text-zinc-900">Check-in security</h2>
               <p className="mt-1 text-sm text-zinc-500">
-                IP lock, enterprise sessions, allowlist, and optional face verification for the employee
-                portal.
+                Enterprise sessions for the employee portal. Kiosk check-in uses QR code + device-bound verification.
               </p>
             <Card className={cn("mt-4", settingsPanelClass)}>
               <CardHeader className={cn("flex flex-row items-center gap-3", settingsPanelHeaderClass)}>
                 <Network size={20} className="shrink-0 text-hgh-gold" />
                 <div>
-                  <CardTitle className="text-zinc-900">Policies &amp; network</CardTitle>
+                  <CardTitle className="text-zinc-900">Check-in policies</CardTitle>
                   <p className="mt-0.5 text-xs text-hgh-muted">
-                    Toggles and allowed IPs apply to portal check-in; kiosk uses the same company rules.
+                    Kiosk uses device-bound QR verification. Employee device bindings can be reset from each employee&apos;s profile page.
                   </p>
                 </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <label className="flex items-start gap-2 text-sm text-hgh-slate">
-                  <input
-                    type="checkbox"
-                    className="mt-0.5 rounded border-hgh-border"
-                    checked={checkinSettings.checkinLockToFirstIp}
-                    disabled={savingCheckinToggle}
-                    onChange={(e) =>
-                      void patchCheckinSettings({
-                        checkinLockToFirstIp: e.target.checked,
-                      })
-                    }
-                  />
-                  <span>
-                    Lock employee check-in to one work PC (recommended). The first time someone opens
-                    the employee check-in page on your chosen office machine, this system saves that
-                    machine&apos;s public IP. After that, check-in only works from that IP—employees
-                    cannot check in from home or another device. If your office IP changes (e.g. ISP
-                    DHCP), use &quot;Clear registered IP&quot; and open check-in again on the right
-                    PC.
-                  </span>
-                </label>
-                {checkinSettings.checkinLockToFirstIp &&
-                  (checkinSettings.checkinBoundIp ? (
-                    <div className="rounded-lg border border-hgh-border bg-hgh-offwhite p-3 text-xs text-hgh-slate">
-                      <p className="font-medium text-hgh-navy">Registered check-in IP</p>
-                      <p className="mt-1 font-mono">{checkinSettings.checkinBoundIp}</p>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="mt-2 underline"
-                        disabled={savingCheckinToggle}
-                        onClick={() =>
-                          void patchCheckinSettings({ clearCheckinBoundIp: true })
-                        }
-                      >
-                        Clear registered IP (next visit re-binds a new PC)
-                      </Button>
-                    </div>
-                  ) : (
-                    <p className="text-xs text-hgh-muted">
-                      No IP bound yet. On the office PC you want employees to use, log in as an
-                      employee and open Check-in once—the IP will be saved automatically.
-                    </p>
-                  ))}
-
-                <p className="text-xs text-hgh-muted">
-                  When &quot;Lock to one work PC&quot; is on, the manual IP list below is not used.
-                </p>
-
                 <label className="flex items-center gap-2 text-sm text-hgh-slate">
                   <input
                     type="checkbox"
@@ -728,223 +556,8 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                       })
                     }
                   />
-                  Enable enterprise check-in (sessions and extra checks)
+                  Enable enterprise check-in (audit sessions and detailed event logs)
                 </label>
-                <label className="flex items-center gap-2 text-sm text-hgh-slate">
-                  <input
-                    type="checkbox"
-                    className="rounded border-hgh-border"
-                    checked={checkinSettings.checkinEnforceIpAllowlist}
-                    disabled={
-                      savingCheckinToggle ||
-                      !checkinSettings.checkinEnterpriseEnabled ||
-                      checkinSettings.checkinLockToFirstIp
-                    }
-                    onChange={(e) =>
-                      void patchCheckinSettings({
-                        checkinEnforceIpAllowlist: e.target.checked,
-                      })
-                    }
-                  />
-                  Enforce IP allowlist (when at least one IP is configured; off while first-PC lock
-                  is enabled)
-                </label>
-                <label className="flex items-center gap-2 text-sm text-hgh-slate">
-                  <input
-                    type="checkbox"
-                    className="rounded border-hgh-border"
-                    checked={checkinSettings.checkinRequireFaceVerification}
-                    disabled={savingCheckinToggle || !checkinSettings.checkinEnterpriseEnabled}
-                    onChange={(e) =>
-                      void patchCheckinSettings({
-                        checkinRequireFaceVerification: e.target.checked,
-                      })
-                    }
-                  />
-                  Require face verification on clock in/out
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-hgh-muted">
-                      Max face attempts
-                    </label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={20}
-                      disabled={!checkinSettings.checkinEnterpriseEnabled}
-                      defaultValue={checkinSettings.checkinMaxFaceAttempts}
-                      key={checkinSettings.checkinMaxFaceAttempts}
-                      onBlur={(e) => {
-                        const n = parseInt(e.target.value, 10);
-                        if (Number.isInteger(n) && n !== checkinSettings.checkinMaxFaceAttempts) {
-                          void patchCheckinSettings({ checkinMaxFaceAttempts: n });
-                        }
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-hgh-muted">
-                      Face distance threshold
-                    </label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      disabled={!checkinSettings.checkinEnterpriseEnabled}
-                      placeholder="0.55 default"
-                      defaultValue={
-                        checkinSettings.checkinFaceDistanceThreshold ?? ""
-                      }
-                      key={checkinSettings.checkinFaceDistanceThreshold ?? "null"}
-                      onBlur={(e) => {
-                        const raw = e.target.value.trim();
-                        if (raw === "") {
-                          void patchCheckinSettings({ checkinFaceDistanceThreshold: null });
-                          return;
-                        }
-                        const n = parseFloat(raw);
-                        if (Number.isFinite(n)) {
-                          void patchCheckinSettings({ checkinFaceDistanceThreshold: n });
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div
-                  className={`border-t border-hgh-border pt-4 ${checkinSettings.checkinLockToFirstIp ? "pointer-events-none opacity-50" : ""}`}
-                >
-                  <p className="text-xs font-medium text-hgh-muted">Allowed IPs (enterprise allowlist)</p>
-                  {checkinSettings.checkinLockToFirstIp && (
-                    <p className="mt-1 text-xs text-hgh-muted">
-                      Disabled while first-PC lock is enabled.
-                    </p>
-                  )}
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Input
-                      placeholder="e.g. 203.0.113.10"
-                      value={newAllowedIp}
-                      onChange={(e) => setNewAllowedIp(e.target.value)}
-                      className="min-w-[140px] flex-1"
-                      disabled={checkinSettings.checkinLockToFirstIp}
-                    />
-                    <Input
-                      placeholder="Label (optional)"
-                      value={newAllowedLabel}
-                      onChange={(e) => setNewAllowedLabel(e.target.value)}
-                      className="min-w-[100px] flex-1"
-                      disabled={checkinSettings.checkinLockToFirstIp}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => void handleAddAllowedIp()}
-                      disabled={
-                        addingIp ||
-                        !newAllowedIp.trim() ||
-                        checkinSettings.checkinLockToFirstIp
-                      }
-                    >
-                      Add
-                    </Button>
-                  </div>
-                  {checkinSettings.allowedIps.length === 0 ? (
-                    <p className="mt-2 text-xs text-hgh-muted">No addresses yet.</p>
-                  ) : (
-                    <ul className="mt-2 space-y-1 text-sm">
-                      {checkinSettings.allowedIps.map((row) => (
-                        <li
-                          key={row.id}
-                          className="flex items-center justify-between gap-2 rounded border border-hgh-border px-2 py-1.5"
-                        >
-                          <span className="font-mono text-xs text-hgh-slate">
-                            {row.address}
-                            {row.label ? (
-                              <span className="text-hgh-muted"> — {row.label}</span>
-                            ) : null}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="text-hgh-danger"
-                            onClick={() => void handleDeleteAllowedIp(row.id)}
-                          >
-                            Remove
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-
-                <div className="border-t border-hgh-border pt-4">
-                  <p className="text-xs font-medium text-hgh-muted">New IP request</p>
-                  <p className="mt-1 text-xs text-hgh-muted">
-                    Submit an office IP for review. Company or Super Admin can approve (adds to allowlist).
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Input
-                      placeholder="Requested IP"
-                      value={requestIp}
-                      onChange={(e) => setRequestIp(e.target.value)}
-                      className="min-w-[140px] flex-1"
-                    />
-                    <Input
-                      placeholder="Note (optional)"
-                      value={requestNote}
-                      onChange={(e) => setRequestNote(e.target.value)}
-                      className="min-w-[120px] flex-1"
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => void handleSubmitIpAccessRequest()}
-                      disabled={submittingIpRequest || !requestIp.trim()}
-                    >
-                      Submit
-                    </Button>
-                  </div>
-                  {ipRequests && ipRequests.filter((r) => r.status === "PENDING").length > 0 && (
-                    <ul className="mt-3 space-y-2 text-sm">
-                      {ipRequests
-                        .filter((r) => r.status === "PENDING")
-                        .map((r) => (
-                          <li
-                            key={r.id}
-                            className="flex flex-wrap items-center justify-between gap-2 rounded border border-hgh-border px-2 py-2"
-                          >
-                            <span className="font-mono text-xs">
-                              {r.requestedIp}
-                              {r.note ? (
-                                <span className="block text-hgh-muted">{r.note}</span>
-                              ) : null}
-                            </span>
-                            {canApproveIpRequest && (
-                              <div className="flex gap-1">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={() => void handleResolveIpRequest(r.id, "APPROVED")}
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-hgh-danger"
-                                  onClick={() => void handleResolveIpRequest(r.id, "REJECTED")}
-                                >
-                                  Reject
-                                </Button>
-                              </div>
-                            )}
-                          </li>
-                        ))}
-                    </ul>
-                  )}
-                </div>
               </CardContent>
             </Card>
             </section>

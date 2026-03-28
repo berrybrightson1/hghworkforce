@@ -26,37 +26,17 @@ export async function GET(
       where: { id: companyId },
       select: {
         id: true,
-        checkinLockToFirstIp: true,
-        checkinBoundIp: true,
         checkinEnterpriseEnabled: true,
-        checkinEnforceIpAllowlist: true,
-        checkinRequireFaceVerification: true,
-        checkinFaceDistanceThreshold: true,
-        checkinMaxFaceAttempts: true,
         kioskOfficeOpensAt: true,
         kioskOfficeClosesAt: true,
         kioskCutoffTime: true,
         kioskTimezone: true,
-        allowedIps: {
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            label: true,
-            address: true,
-            createdAt: true,
-          },
-        },
       },
     });
     if (!company) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-    return NextResponse.json({
-      ...company,
-      checkinFaceDistanceThreshold: company.checkinFaceDistanceThreshold
-        ? Number(company.checkinFaceDistanceThreshold)
-        : null,
-    });
+    return NextResponse.json(company);
   } catch {
     return NextResponse.json({ error: "Failed to load settings" }, { status: 500 });
   }
@@ -73,9 +53,7 @@ function optionalHHmm(v: unknown): string | null | undefined {
 
 /**
  * PATCH /api/companies/[companyId]/checkin-settings
- * Body: checkinEnterpriseEnabled?, checkinEnforceIpAllowlist?, checkinRequireFaceVerification?,
- *       checkinFaceDistanceThreshold? (number), checkinMaxFaceAttempts? (number)
- *       checkinLockToFirstIp? (boolean), clearCheckinBoundIp? (boolean)
+ * Body: checkinEnterpriseEnabled?,
  *       kioskOfficeOpensAt?, kioskOfficeClosesAt?, kioskCutoffTime? (HH:mm or null),
  *       kioskTimezone? (IANA string)
  */
@@ -105,39 +83,6 @@ export async function PATCH(
 
   if (typeof body.checkinEnterpriseEnabled === "boolean") {
     data.checkinEnterpriseEnabled = body.checkinEnterpriseEnabled;
-  }
-  if (typeof body.checkinLockToFirstIp === "boolean") {
-    data.checkinLockToFirstIp = body.checkinLockToFirstIp;
-  }
-  if (body.clearCheckinBoundIp === true) {
-    data.checkinBoundIp = null;
-  }
-  if (typeof body.checkinEnforceIpAllowlist === "boolean") {
-    data.checkinEnforceIpAllowlist = body.checkinEnforceIpAllowlist;
-  }
-  if (typeof body.checkinRequireFaceVerification === "boolean") {
-    data.checkinRequireFaceVerification = body.checkinRequireFaceVerification;
-  }
-  if (body.checkinMaxFaceAttempts !== undefined) {
-    const n = Number(body.checkinMaxFaceAttempts);
-    if (!Number.isInteger(n) || n < 1 || n > 20) {
-      return NextResponse.json({ error: "checkinMaxFaceAttempts must be 1–20" }, { status: 400 });
-    }
-    data.checkinMaxFaceAttempts = n;
-  }
-  if (body.checkinFaceDistanceThreshold !== undefined) {
-    if (body.checkinFaceDistanceThreshold === null) {
-      data.checkinFaceDistanceThreshold = null;
-    } else {
-      const t = Number(body.checkinFaceDistanceThreshold);
-      if (!Number.isFinite(t) || t <= 0 || t > 2) {
-        return NextResponse.json(
-          { error: "checkinFaceDistanceThreshold must be between 0 and 2" },
-          { status: 400 },
-        );
-      }
-      data.checkinFaceDistanceThreshold = new Prisma.Decimal(t.toFixed(5));
-    }
   }
 
   if (body.kioskOfficeOpensAt !== undefined) {
@@ -182,13 +127,7 @@ export async function PATCH(
       data,
       select: {
         id: true,
-        checkinLockToFirstIp: true,
-        checkinBoundIp: true,
         checkinEnterpriseEnabled: true,
-        checkinEnforceIpAllowlist: true,
-        checkinRequireFaceVerification: true,
-        checkinFaceDistanceThreshold: true,
-        checkinMaxFaceAttempts: true,
         kioskOfficeOpensAt: true,
         kioskOfficeClosesAt: true,
         kioskCutoffTime: true,
@@ -206,38 +145,7 @@ export async function PATCH(
       },
     });
 
-    const refreshed = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: {
-        id: true,
-        checkinLockToFirstIp: true,
-        checkinBoundIp: true,
-        checkinEnterpriseEnabled: true,
-        checkinEnforceIpAllowlist: true,
-        checkinRequireFaceVerification: true,
-        checkinFaceDistanceThreshold: true,
-        checkinMaxFaceAttempts: true,
-        kioskOfficeOpensAt: true,
-        kioskOfficeClosesAt: true,
-        kioskCutoffTime: true,
-        kioskTimezone: true,
-        allowedIps: {
-          orderBy: { createdAt: "desc" },
-          select: { id: true, label: true, address: true, createdAt: true },
-        },
-      },
-    });
-
-    if (!refreshed) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({
-      ...refreshed,
-      checkinFaceDistanceThreshold: refreshed.checkinFaceDistanceThreshold
-        ? Number(refreshed.checkinFaceDistanceThreshold)
-        : null,
-    });
+    return NextResponse.json(updated);
   } catch {
     return NextResponse.json({ error: "Failed to update settings" }, { status: 500 });
   }

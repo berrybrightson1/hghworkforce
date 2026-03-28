@@ -25,7 +25,7 @@ export async function GET() {
       pendingLeave,
       pendingCorrections,
       bySubscription,
-    ] = await Promise.all([
+    ] = await prisma.$transaction([
       prisma.company.count(),
       prisma.user.count({ where: { isActive: true } }),
       prisma.employee.count({ where: { status: "ACTIVE", deletedAt: null } }),
@@ -34,6 +34,7 @@ export async function GET() {
       prisma.attendanceCorrectionRequest.count({ where: { status: "PENDING" } }),
       prisma.company.groupBy({
         by: ["subscriptionStatus"],
+        orderBy: { subscriptionStatus: "asc" },
         _count: { id: true },
       }),
     ]);
@@ -62,7 +63,7 @@ export async function GET() {
       },
       companiesBySubscription: bySubscription.map((p) => ({
         subscriptionStatus: p.subscriptionStatus,
-        count: p._count.id,
+        count: typeof p._count === "object" && p._count && "id" in p._count ? Number(p._count.id) : 0,
       })),
       recentCompanies,
     });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, CalendarClock, FileSpreadsheet, Fingerprint, Users, Wallet } from "lucide-react";
+import { Building2, CalendarClock, FileSpreadsheet, Smartphone, Users, Wallet } from "lucide-react";
 import { HeroProductNotices } from "@/components/landing/hero-product-notices";
 import { cn } from "@/lib/utils";
 import type { LandingAuth } from "@/lib/landing-auth";
@@ -84,7 +84,7 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
         <Wallet className="h-6 w-6" strokeWidth={1.75} aria-hidden />
       </OrbisIcon>
       <OrbisIcon phase={1} className="left-[10%] top-[52%] text-hgh-navy">
-        <Fingerprint className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+        <Smartphone className="h-6 w-6" strokeWidth={1.75} aria-hidden />
       </OrbisIcon>
       <OrbisIcon phase={2} className="left-[18%] top-[36%] text-hgh-success">
         <Building2 className="h-6 w-6" strokeWidth={1.75} aria-hidden />

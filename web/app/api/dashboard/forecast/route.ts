@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
 
-  const [employees, lastApprovedPayrun, pendingPayrun] = await Promise.all([
+  const [employees, lastApprovedPayrun, pendingPayrun] = await prisma.$transaction([
     prisma.employee.findMany({
       where: { companyId, status: "ACTIVE" },
       select: {

@@ -1,5 +1,4 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { normalizeKioskCompanyId } from "@/lib/kiosk-company-id";
 import { updateSession } from "@/lib/supabase/middleware";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
@@ -32,15 +31,6 @@ const ratelimitCheckin = redis
       redis,
       prefix: "rl:checkin",
       limiter: Ratelimit.slidingWindow(20, "5 m"),
-      analytics: true,
-    })
-  : null;
-
-const ratelimitFace = redis
-  ? new Ratelimit({
-      redis,
-      prefix: "rl:face",
-      limiter: Ratelimit.slidingWindow(10, "5 m"),
       analytics: true,
     })
   : null;
@@ -91,14 +81,10 @@ export async function middleware(request: NextRequest) {
         if (denied) return denied;
       } else if (
         (method === "POST" && path === "/api/checkins") ||
-        (method === "POST" && (path === "/api/kiosk/verify" || path === "/api/kiosk/clock"))
+        (method === "POST" && (path === "/api/kiosk/verify" || path === "/api/kiosk/clock")) ||
+        (method === "POST" && path === "/api/kiosk/device-verify")
       ) {
         const denied = await applyLimit(ratelimitCheckin, ip);
-        if (denied) return denied;
-      } else if (method === "POST" && /^\/api\/employees\/[^/]+\/face-descriptor\/?$/.test(path)) {
-        const m = path.match(/^\/api\/employees\/([^/]+)\/face-descriptor\/?$/);
-        const employeeId = m?.[1] ?? "unknown";
-        const denied = await applyLimit(ratelimitFace, `${ip}:${employeeId}`);
         if (denied) return denied;
       } else if (
         (method === "POST" || method === "PATCH" || method === "DELETE") &&
@@ -117,54 +103,6 @@ export async function middleware(request: NextRequest) {
 
   const response = await updateSession(request);
 
-  if (path === "/portal/checkin" && method === "GET") {
-    try {
-      const gateUrl = new URL("/api/checkins/ip-gate", request.nextUrl.origin);
-      const gateRes = await fetch(gateUrl.toString(), {
-        headers: {
-          cookie: request.headers.get("cookie") ?? "",
-        },
-      });
-      if (gateRes.status === 403) {
-        const denied = request.nextUrl.clone();
-        denied.pathname = "/portal/checkin/denied";
-        denied.search = "";
-        return NextResponse.redirect(denied);
-      }
-    } catch {
-      const denied = request.nextUrl.clone();
-      denied.pathname = "/portal/checkin/denied";
-      denied.search = "";
-      return NextResponse.redirect(denied);
-    }
-  }
-
-  if (path === "/kiosk/checkin" && method === "GET") {
-    const companyId = normalizeKioskCompanyId(
-      request.nextUrl.searchParams.get("c") ?? request.nextUrl.searchParams.get("companyId"),
-    );
-    if (companyId) {
-      try {
-        const gateUrl = new URL(
-          `/api/kiosk/ip-gate?companyId=${encodeURIComponent(companyId)}`,
-          request.nextUrl.origin,
-        );
-        const gateRes = await fetch(gateUrl.toString());
-        if (gateRes.status === 403) {
-          const denied = request.nextUrl.clone();
-          denied.pathname = "/kiosk/checkin/denied";
-          denied.search = `?c=${encodeURIComponent(companyId)}`;
-          return NextResponse.redirect(denied);
-        }
-      } catch {
-        const denied = request.nextUrl.clone();
-        denied.pathname = "/kiosk/checkin/denied";
-        denied.search = `?c=${encodeURIComponent(companyId)}`;
-        return NextResponse.redirect(denied);
-      }
-    }
-  }
-
   response.headers.set("X-DNS-Prefetch-Control", "on");
   response.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   response.headers.set("X-Frame-Options", "SAMEORIGIN");
@@ -172,7 +110,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://cdn.jsdelivr.net https://storage.googleapis.com;",
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co;",
   );
 
   return response;

@@ -2,11 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { companyHasFullAccess } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
-import { getClientIpFromRequest } from "@/lib/checkin-ip";
-import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
-import { getKioskAuditActorId } from "@/lib/kiosk-audit-actor";
-import { faceDescriptorsMatch, parseFaceDescriptor } from "@/lib/face-math";
-import { verifyKioskSessionToken } from "@/lib/kiosk-token";
 import {
   evaluateKioskClockInGate,
   localDateString,
@@ -22,13 +17,15 @@ function hhmToMinutes(t: string) {
 
 /**
  * POST /api/kiosk/clock
- * Body: { token, action: "clock-in" | "clock-out", faceDescriptor: number[], note? }
+ * Body: { challengeId, code, action: "clock-in" | "clock-out", note? }
+ *
+ * Verifies the 6-digit code from the device-bound challenge, then clocks in/out.
  */
 export async function POST(req: NextRequest) {
   let body: {
-    token?: string;
+    challengeId?: string;
+    code?: string;
     action?: string;
-    faceDescriptor?: unknown;
     note?: string;
   };
   try {
@@ -37,34 +34,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const token = typeof body.token === "string" ? body.token : "";
+  const challengeId = typeof body.challengeId === "string" ? body.challengeId : "";
+  const code = typeof body.code === "string" ? body.code : "";
   const action = body.action;
   const note = typeof body.note === "string" ? body.note : undefined;
-  const faceDescriptorRaw = body.faceDescriptor;
 
-  if (!token) {
-    return NextResponse.json({ error: "token is required" }, { status: 400 });
+  if (!challengeId || !code) {
+    return NextResponse.json({ error: "challengeId and code are required" }, { status: 400 });
   }
   if (action !== "clock-in" && action !== "clock-out") {
     return NextResponse.json({ error: "action must be clock-in or clock-out" }, { status: 400 });
   }
 
-  const payload = verifyKioskSessionToken(token);
-  if (!payload) {
-    return NextResponse.json({ error: "Session expired — enter your details again" }, { status: 401 });
-  }
-
   try {
+    // Verify the challenge
+    const challenge = await prisma.kioskChallenge.findUnique({
+      where: { id: challengeId },
+    });
+
+    if (!challenge) {
+      return NextResponse.json({ error: "Invalid or expired session — start again" }, { status: 401 });
+    }
+    if (challenge.consumed) {
+      return NextResponse.json({ error: "This code has already been used — start again" }, { status: 401 });
+    }
+    if (new Date() > challenge.expiresAt) {
+      return NextResponse.json({ error: "Code expired — go back and generate a new one" }, { status: 401 });
+    }
+    if (!challenge.deviceVerified) {
+      return NextResponse.json({ error: "Scan the QR code with your phone first" }, { status: 403 });
+    }
+    if (challenge.code !== code) {
+      return NextResponse.json({ error: "Incorrect code — check your phone and try again" }, { status: 403 });
+    }
+
+    // Mark challenge as consumed
+    await prisma.kioskChallenge.update({
+      where: { id: challengeId },
+      data: { consumed: true },
+    });
+
+    // Load company
     const company = await prisma.company.findUnique({
-      where: { id: payload.companyId },
+      where: { id: challenge.companyId },
       select: {
-        checkinLockToFirstIp: true,
-        checkinBoundIp: true,
-        checkinEnterpriseEnabled: true,
-        checkinEnforceIpAllowlist: true,
-        checkinFaceDistanceThreshold: true,
-        checkinMaxFaceAttempts: true,
-        allowedIps: { select: { address: true } },
         kioskOfficeOpensAt: true,
         kioskOfficeClosesAt: true,
         kioskCutoffTime: true,
@@ -83,80 +96,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "This workspace’s free trial has ended. Ask your administrator to subscribe before check-in is available again.",
+            "This workspace's free trial has ended. Ask your administrator to subscribe before check-in is available again.",
           code: "SUBSCRIPTION_REQUIRED",
         },
         { status: 402 },
       );
     }
 
-    const clientIp = getClientIpFromRequest(req);
-    const actorId = await getKioskAuditActorId(payload.companyId);
-    const ipOk = await assertCompanyCheckinIpAllowed({
-      companyId: payload.companyId,
-      company,
-      clientIp,
-      actorId,
-    });
-    if (!ipOk.ok) {
-      return NextResponse.json(
-        {
-          error:
-            ipOk.reason === "ip_mismatch"
-              ? "This kiosk must run on the registered office PC."
-              : "Check-in not allowed from this network.",
-        },
-        { status: 403 },
-      );
-    }
-
+    // Load employee
     const employee = await prisma.employee.findUnique({
-      where: { id: payload.employeeId },
-      select: {
-        id: true,
-        companyId: true,
-        status: true,
-        faceDescriptor: true,
-      },
+      where: { id: challenge.employeeId },
+      select: { id: true, companyId: true, status: true },
     });
 
-    if (!employee || employee.companyId !== payload.companyId) {
+    if (!employee || employee.companyId !== challenge.companyId) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
     if (employee.status !== "ACTIVE") {
       return NextResponse.json({ error: "Employee is not active" }, { status: 403 });
-    }
-
-    const threshold =
-      company.checkinFaceDistanceThreshold != null
-        ? Number(company.checkinFaceDistanceThreshold)
-        : 0.55;
-
-    const stored = parseFaceDescriptor(employee.faceDescriptor);
-    if (!stored) {
-      return NextResponse.json(
-        {
-          error: "Face profile not enrolled yet.",
-          hint:
-            "Use Portal → Check-in → Register your face, or ask a Company Admin to register it on your employee profile.",
-        },
-        { status: 403 },
-      );
-    }
-    const sample = parseFaceDescriptor(faceDescriptorRaw);
-    if (!sample) {
-      return NextResponse.json({ error: "Face capture required" }, { status: 400 });
-    }
-    if (!faceDescriptorsMatch(sample, stored, threshold)) {
-      await prisma.faceMismatchAlert.create({
-        data: {
-          employeeId: employee.id,
-          companyId: employee.companyId,
-          checkinSessionId: null,
-          metadata: { threshold, source: "kiosk" },
-        },
-      });
-      return NextResponse.json({ error: "Face did not match enrolled profile" }, { status: 403 });
     }
 
     const tz = company.kioskTimezone || "Africa/Accra";
@@ -249,7 +206,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // clock-out — always allowed when there is an open check-in (after hours, before open, etc.)
+    // clock-out
     if (!openCheckIn) {
       return NextResponse.json({ error: "No open check-in to close" }, { status: 404 });
     }
@@ -289,10 +246,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ...updated,
-      _meta: {
-        overtimeHours,
-        earlyDepartMinutes,
-      },
+      _meta: { overtimeHours, earlyDepartMinutes },
     });
   } catch (e) {
     console.error(e);

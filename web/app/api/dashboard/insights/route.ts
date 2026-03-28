@@ -21,38 +21,43 @@ export async function GET(req: NextRequest) {
     since.setDate(since.getDate() - 30);
     since.setHours(0, 0, 0, 0);
 
-    const [headcount, checkInDays, lastApprovedPayrun, pendingCorrections] = await Promise.all([
-      prisma.employee.count({
-        where: { companyId, status: "ACTIVE", deletedAt: null },
-      }),
-      prisma.checkIn.findMany({
-        where: { companyId, clockIn: { gte: since } },
-        select: { employeeId: true, clockIn: true },
-      }),
-      (async () => {
-        const p = await prisma.payrun.findFirst({
+    const { headcount, checkInDays, lastApprovedPayrun, pendingCorrections } =
+      await prisma.$transaction(async (tx) => {
+        const headcount = await tx.employee.count({
+          where: { companyId, status: "ACTIVE", deletedAt: null },
+        });
+        const checkInDays = await tx.checkIn.findMany({
+          where: { companyId, clockIn: { gte: since } },
+          select: { employeeId: true, clockIn: true },
+        });
+        const p = await tx.payrun.findFirst({
           where: { companyId, status: "APPROVED" },
           orderBy: { periodEnd: "desc" },
         });
-        if (!p) return null;
-        const [agg, lineCount] = await Promise.all([
-          prisma.payrunLine.aggregate({
+        let lastApprovedPayrun: {
+          id: string;
+          periodEnd: string;
+          totalNet: string;
+          lineCount: number;
+        } | null = null;
+        if (p) {
+          const agg = await tx.payrunLine.aggregate({
             where: { payrunId: p.id },
             _sum: { netPay: true },
-          }),
-          prisma.payrunLine.count({ where: { payrunId: p.id } }),
-        ]);
-        return {
-          id: p.id,
-          periodEnd: p.periodEnd.toISOString(),
-          totalNet: agg._sum.netPay?.toString() ?? "0",
-          lineCount,
-        };
-      })(),
-      prisma.attendanceCorrectionRequest.count({
-        where: { companyId, status: "PENDING" },
-      }),
-    ]);
+          });
+          const lineCount = await tx.payrunLine.count({ where: { payrunId: p.id } });
+          lastApprovedPayrun = {
+            id: p.id,
+            periodEnd: p.periodEnd.toISOString(),
+            totalNet: agg._sum.netPay?.toString() ?? "0",
+            lineCount,
+          };
+        }
+        const pendingCorrections = await tx.attendanceCorrectionRequest.count({
+          where: { companyId, status: "PENDING" },
+        });
+        return { headcount, checkInDays, lastApprovedPayrun, pendingCorrections };
+      });
 
     const uniqueEmpDays = new Set(
       checkInDays.map((c) => `${c.employeeId}:${c.clockIn.toISOString().slice(0, 10)}`),

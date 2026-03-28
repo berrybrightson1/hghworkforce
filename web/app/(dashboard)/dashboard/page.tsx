@@ -15,6 +15,7 @@ import { EmployeeSetupReminder } from "@/components/dashboard/employee-setup-rem
 import { MorningBriefing } from "@/components/dashboard/morning-briefing";
 import { PayrollForecast } from "@/components/dashboard/payroll-forecast";
 import { CostRevenueCompact } from "@/components/dashboard/cost-revenue-compact";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 
 type MeData = { name: string; role: string };
 
@@ -56,10 +57,34 @@ export default function DashboardPage() {
   const draftPayruns = payruns?.filter((p) => p.status === "DRAFT").length ?? 0;
 
   const stats = [
-    { label: "Employees", value: empCount, icon: Users, href: "/dashboard/employees" },
-    { label: "Companies", value: companies.length, icon: Building2, href: "/dashboard/companies" },
-    { label: "Draft Pay Runs", value: draftPayruns, icon: Banknote, href: "/dashboard/payroll" },
-    { label: "Pending Leave", value: pendingLeave, icon: CalendarDays, href: "/dashboard/leave" },
+    {
+      label: "Employees",
+      value: empCount,
+      icon: Users,
+      href: "/dashboard/employees",
+      hint: "Open the employee directory for this workspace: payroll codes, salaries, and profiles.",
+    },
+    {
+      label: "Companies",
+      value: companies.length,
+      icon: Building2,
+      href: "/dashboard/companies",
+      hint: "Switch or manage company workspaces you administer.",
+    },
+    {
+      label: "Draft Pay Runs",
+      value: draftPayruns,
+      icon: Banknote,
+      href: "/dashboard/payroll",
+      hint: "Open payroll to create or continue pay runs and generate lines.",
+    },
+    {
+      label: "Pending Leave",
+      value: pendingLeave,
+      icon: CalendarDays,
+      href: "/dashboard/leave",
+      hint: "Review leave requests and balances for this company.",
+    },
   ];
 
   return (
@@ -84,19 +109,21 @@ export default function DashboardPage() {
         {stats.map((s) => {
           const Icon = s.icon;
           return (
-            <Link key={s.label} href={s.href}>
-              <Card className="transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center gap-4 py-5">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-hgh-gold/10">
-                    <Icon size={20} className="text-hgh-gold" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-hgh-muted">{s.label}</p>
-                    <p className="text-lg font-semibold text-hgh-navy">{s.value}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <HintTooltip key={s.label} content={s.hint}>
+              <Link href={s.href}>
+                <Card className="transition-shadow hover:shadow-md">
+                  <CardContent className="flex items-center gap-4 py-5">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-hgh-gold/10">
+                      <Icon size={20} className="text-hgh-gold" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-hgh-muted">{s.label}</p>
+                      <p className="text-lg font-semibold text-hgh-navy">{s.value}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            </HintTooltip>
           );
         })}
       </div>
@@ -158,11 +185,13 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Payroll</CardTitle>
-            <Link href="/dashboard/payroll">
-              <Button variant="ghost" size="sm">
-                View <ArrowRight size={14} />
-              </Button>
-            </Link>
+            <HintTooltip content="Go to Payroll: draft runs, approvals, and exports for this company.">
+              <Link href="/dashboard/payroll">
+                <Button variant="ghost" size="sm">
+                  View <ArrowRight size={14} />
+                </Button>
+              </Link>
+            </HintTooltip>
           </CardHeader>
           <CardContent className="text-sm text-hgh-muted">
             {draftPayruns > 0
@@ -174,11 +203,13 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Leave Requests</CardTitle>
-            <Link href="/dashboard/leave">
-              <Button variant="ghost" size="sm">
-                View <ArrowRight size={14} />
-              </Button>
-            </Link>
+            <HintTooltip content="Open Leave to approve requests and see team balances.">
+              <Link href="/dashboard/leave">
+                <Button variant="ghost" size="sm">
+                  View <ArrowRight size={14} />
+                </Button>
+              </Link>
+            </HintTooltip>
           </CardHeader>
           <CardContent className="text-sm text-hgh-muted">
             {pendingLeave > 0
@@ -190,11 +221,13 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Active Loans</CardTitle>
-            <Link href="/dashboard/loans">
-              <Button variant="ghost" size="sm">
-                View <ArrowRight size={14} />
-              </Button>
-            </Link>
+            <HintTooltip content="Open Loans to manage staff advances and payroll deductions.">
+              <Link href="/dashboard/loans">
+                <Button variant="ghost" size="sm">
+                  View <ArrowRight size={14} />
+                </Button>
+              </Link>
+            </HintTooltip>
           </CardHeader>
           <CardContent className="text-sm text-hgh-muted">
             {activeLoans > 0

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 import { cn } from "@/lib/utils";
 
 const roadmapSteps: {
@@ -46,7 +47,7 @@ const roadmapSteps: {
     step: 3,
     title: "Company settings, payroll add-ons, and check-in",
     summary:
-      "Configure company details, Ghana tax brackets, optional Tier 2 pension on basic (if your policy uses it), HTTPS webhooks for approved pay runs, check-in mode (kiosk, portal, optional IP rules and face verification), and office timezone for shift-based late and overtime.",
+      "Configure company details, Ghana tax brackets, optional Tier 2 pension on basic (if your policy uses it), HTTPS webhooks for approved pay runs, check-in mode (kiosk, portal, device binding), and office timezone for shift-based late and overtime.",
     href: "/dashboard/settings",
     hrefLabel: "Settings",
   },
@@ -68,13 +69,13 @@ const roadmapSteps: {
   },
   {
     step: 6,
-    title: "Face profile for check-in (do this early)",
+    title: "Device binding for check-in (do this early)",
     summary:
-      "For each active employee, open their profile → scroll to Check-in & kiosk face profile → register their face. Staff need this before the office kiosk can verify them; it is easy to miss if you jump straight to shifts or payroll.",
+      "For each active employee, open their profile and scroll to Device binding to bind their check-in device. Staff need this before the office kiosk can verify them; it is easy to miss if you jump straight to shifts or payroll.",
     href: "/dashboard/employees",
     hrefLabel: "Employees",
     extra:
-      "After adding someone new, open their record right away—we send you there with a “next step” hint. Portal check-in may also use face match when your settings require it.",
+      "After adding someone new, open their record right away—we send you there with a “next step” hint. You can set up device binding from their profile page.",
     moreLinks: [{ href: "/dashboard/setup-wizard", label: "Setup wizard (guided)" }],
   },
   {
@@ -113,15 +114,17 @@ const roadmapSteps: {
   },
   {
     step: 11,
-    title: "Loans, insights, reports, and billing",
+    title: "Loans, performance, insights, reports, and billing",
     summary:
-      "Use the dashboard overview for headcount and payroll insights at a glance. Track staff loans if needed, export reports (PAYE, SSNIT, trends, attendance), and manage your workspace under Billing: each company has the same product with a time-limited full-access trial, then an active subscription to stay unlocked.",
+      "Use the dashboard overview for headcount, attendance briefing, and payroll insights. Run performance review cycles when your team uses that module. Track staff loans if needed, export reports (PAYE, SSNIT, trends, attendance), and open Billing to see trial or subscription status—checkout when Stripe is connected, or ask your operator to activate the workspace if you are moving off trial.",
     href: "/dashboard/reports",
     hrefLabel: "Reports",
     extra:
-      "Super admins switch companies from Companies; platform operators can open Platform health for cross-tenant operational checks.",
+      "Super admins switch companies from Companies; platform operators can open Platform health for cross-tenant operational checks. Information banners (for example billing notes) can be dismissed—your choice is remembered on this browser.",
     moreLinks: [
       { href: "/dashboard", label: "Dashboard" },
+      { href: "/dashboard/performance", label: "Performance" },
+      { href: "/dashboard/onboarding", label: "Onboarding templates" },
       { href: "/dashboard/loans", label: "Loans" },
       { href: "/dashboard/billing", label: "Billing" },
       { href: "/dashboard/companies", label: "Companies" },
@@ -138,6 +141,11 @@ const sections = [
     bg: "bg-blue-50",
     description: "New to HGH Workforce? Learn the basics of setting up your company and onboarding your first employees.",
     links: [
+      {
+        title: "Hover hints and dismissible tips",
+        content:
+          "Throughout the dashboard, many links, buttons, and table headers show a short cream tooltip when you hover—use them for quick context. Some informational banners (such as on Billing or an employee profile) include a dismiss control; hiding one only affects your current browser.",
+      },
       {
         title: "Setting up your company profile",
         content: "Go to the Companies page and click 'Add Company'. You'll need to provide your company name, registration number, and office address. You can also upload your company logo for branded payslips."
@@ -178,6 +186,16 @@ const sections = [
       {
         title: "Onboarding checklist per employee",
         content: "Use the Onboarding tab on an employee profile to create and track tasks (for example contract signed or bank details captured) so new-hire steps stay visible to HR."
+      },
+      {
+        title: "Suspend, exit workflow, and ending employment",
+        content:
+          "HR and admins can use the ··· menu on the employee list row or on the profile header: open the full record, temporarily suspend (payroll and check-in pause until reactivate), start an exit case under Exits for structured offboarding, or end employment after a confirmation dialog—terminated staff no longer appear on new pay runs, but history and payslips stay. If duplicate rows exist, “End by code” on the employee list ends the correct record by payroll code.",
+      },
+      {
+        title: "Exits (offboarding cases)",
+        content:
+          "Open Exits to create or continue an exit case: link the employee, capture last working day and reasons, and track clearance-style steps alongside payroll. This complements payroll and attendance; ending employment from the employee menu is the hard cut-over when you are ready.",
       },
     ],
   },
@@ -253,7 +271,8 @@ export default function HelpPage() {
         </div>
         <h1 className="text-3xl font-bold">How can we help you?</h1>
         <p className="mt-4 text-white/70">
-          New here? Start with the roadmap below—then dive into the topic guides for more detail.
+          New here? Start with the roadmap below—then dive into the topic guides for more detail. Hover many controls in
+          the app for quick cream tooltips on what each action does.
         </p>
       </div>
 
@@ -299,33 +318,38 @@ export default function HelpPage() {
                   ) : null}
                   {item.step === 8 ? (
                     <p className="text-sm">
-                      <Link
-                        href="/portal"
-                        className="font-medium text-hgh-gold underline decoration-hgh-gold/40 underline-offset-2 hover:text-hgh-gold/80"
-                      >
-                        Open employee portal (staff sign-in)
-                      </Link>
+                      <HintTooltip content="Staff sign-in for payslips, leave, loans, and check-in—not the admin dashboard.">
+                        <Link
+                          href="/portal"
+                          className="font-medium text-hgh-gold underline decoration-hgh-gold/40 underline-offset-2 hover:text-hgh-gold/80"
+                        >
+                          Open employee portal (staff sign-in)
+                        </Link>
+                      </HintTooltip>
                     </p>
                   ) : null}
                   {item.href ? (
-                    <Link
-                      href={item.href}
-                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-hgh-gold transition-colors hover:text-hgh-gold/80"
-                    >
-                      Go to {item.hrefLabel}
-                      <ArrowRight size={15} className="shrink-0" aria-hidden />
-                    </Link>
+                    <HintTooltip content={`Jump to ${item.hrefLabel} in your workspace.`} side="right">
+                      <Link
+                        href={item.href}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-hgh-gold transition-colors hover:text-hgh-gold/80"
+                      >
+                        Go to {item.hrefLabel}
+                        <ArrowRight size={15} className="shrink-0" aria-hidden />
+                      </Link>
+                    </HintTooltip>
                   ) : null}
                   {item.moreLinks?.length ? (
                     <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-xs">
                       {item.moreLinks.map((l) => (
-                        <Link
-                          key={l.href}
-                          href={l.href}
-                          className="font-medium text-hgh-navy/80 underline decoration-hgh-border underline-offset-2 hover:text-hgh-gold"
-                        >
-                          {l.label}
-                        </Link>
+                        <HintTooltip key={l.href} content={`Open: ${l.label}.`} side="top">
+                          <Link
+                            href={l.href}
+                            className="font-medium text-hgh-navy/80 underline decoration-hgh-border underline-offset-2 hover:text-hgh-gold"
+                          >
+                            {l.label}
+                          </Link>
+                        </HintTooltip>
                       ))}
                     </div>
                   ) : null}
@@ -372,7 +396,7 @@ export default function HelpPage() {
                       <div
                         className={cn(
                           "overflow-hidden transition-all duration-200 ease-in-out",
-                          expandedItem === link.title ? "max-h-[360px] pb-4 opacity-100" : "max-h-0 opacity-0"
+                          expandedItem === link.title ? "max-h-[min(32rem,70vh)] pb-4 opacity-100" : "max-h-0 opacity-0"
                         )}
                       >
                         <p className="text-xs text-hgh-muted leading-relaxed bg-hgh-offwhite/50 p-3 rounded-lg border border-hgh-border/50">
@@ -400,10 +424,12 @@ export default function HelpPage() {
               <p className="text-sm text-hgh-muted">Our support team is available Monday to Friday, 8am - 5pm.</p>
             </div>
           </div>
-          <Button className="bg-hgh-navy text-white hover:bg-hgh-navy/90">
-            Contact Support
-            <ArrowRight size={16} className="ml-2" />
-          </Button>
+          <HintTooltip content="Reach your administrator or HGH operator—wire this button to mail/support when ready.">
+            <Button className="bg-hgh-navy text-white hover:bg-hgh-navy/90">
+              Contact Support
+              <ArrowRight size={16} className="ml-2" aria-hidden />
+            </Button>
+          </HintTooltip>
         </CardContent>
       </Card>
     </div>

@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import {
   CalendarDays,
   FileText,
-  Fingerprint,
+  Smartphone,
   Home,
   Landmark,
   LogOut,
@@ -21,7 +21,7 @@ import { useCompany } from "@/components/company-context";
 
 const nav = [
   { href: "/portal", label: "Home", icon: Home, exact: true },
-  { href: "/portal/checkin", label: "Check-in", icon: Fingerprint },
+  { href: "/portal/checkin", label: "Check-in", icon: Smartphone },
   { href: "/portal/payslips", label: "Payslips", icon: FileText },
   { href: "/portal/leave", label: "Leave", icon: CalendarDays },
   { href: "/portal/loans", label: "Loans", icon: Landmark },

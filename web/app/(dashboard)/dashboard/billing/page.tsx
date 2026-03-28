@@ -6,9 +6,11 @@ import { CreditCard, Sparkles } from "lucide-react";
 import { useCompany } from "@/components/company-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DismissibleCallout } from "@/components/ui/dismissible-callout";
 import { useToast } from "@/components/toast/useToast";
 import { TRIAL_DAYS } from "@/lib/billing/access";
 import { useApi } from "@/lib/swr";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 
 type Summary = {
   companyName: string;
@@ -151,13 +153,18 @@ export default function BillingPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {summary?.superAdminExempt ? (
-            <div className="rounded-lg border border-hgh-gold/35 bg-hgh-gold/10 px-4 py-3 text-sm text-hgh-navy">
-              <p className="font-semibold">Super admin — full access</p>
-              <p className="mt-1 text-hgh-muted">
-                Trial and subscription limits do not apply to your account. You can work in any company regardless of
-                workspace billing state. The status below is the real state for that tenant&apos;s admins and staff.
-              </p>
-            </div>
+            <DismissibleCallout
+              storageKey="hgh-dismiss-billing-super-admin-callout"
+              className="items-start rounded-lg border border-hgh-gold/35 bg-hgh-gold/10 px-4 py-3 text-sm text-hgh-navy"
+            >
+              <div>
+                <p className="font-semibold">Super admin — full access</p>
+                <p className="mt-1 text-hgh-muted">
+                  Trial and subscription limits do not apply to your account. You can work in any company regardless of
+                  workspace billing state. The status below is the real state for that tenant&apos;s admins and staff.
+                </p>
+              </div>
+            </DismissibleCallout>
           ) : null}
           <div className="rounded-lg border border-hgh-border bg-hgh-offwhite/80 px-4 py-3">
             <p className="text-sm font-medium text-hgh-navy">
@@ -188,7 +195,10 @@ export default function BillingPage() {
             ) : null}
           </div>
 
-          <div className="rounded-lg border border-dashed border-hgh-border bg-white px-4 py-3 text-xs text-hgh-muted">
+          <DismissibleCallout
+            storageKey={`hgh-dismiss-billing-operator-note-${selected?.id ?? "none"}`}
+            className="items-start rounded-lg border border-dashed border-hgh-border bg-white px-4 py-3 text-xs text-hgh-muted"
+          >
             <p>
               <strong className="text-hgh-slate">Paying customers:</strong> when Stripe is connected, use the button
               below to open checkout. Until then, your operator can set{" "}
@@ -196,13 +206,21 @@ export default function BillingPage() {
               <code className="rounded bg-hgh-offwhite px-1">ACTIVE</code> for this company in the database to unlock
               immediately after trial.
             </p>
-          </div>
+          </DismissibleCallout>
 
           <div className="flex flex-wrap items-center gap-3">
-            <Button type="button" onClick={() => void handleSubscribe()} disabled={checkoutLoading}>
-              <Sparkles size={16} />
-              {checkoutLoading ? "Working…" : summary?.subscribed ? "Manage billing (coming soon)" : "Subscribe"}
-            </Button>
+            <HintTooltip
+              content={
+                summary?.subscribed
+                  ? "Billing management UI is coming soon; your operator can still adjust status in the database if needed."
+                  : "Start or resume checkout when Stripe is connected, or ask your operator to activate the workspace subscription."
+              }
+            >
+              <Button type="button" onClick={() => void handleSubscribe()} disabled={checkoutLoading}>
+                <Sparkles size={16} />
+                {checkoutLoading ? "Working…" : summary?.subscribed ? "Manage billing (coming soon)" : "Subscribe"}
+              </Button>
+            </HintTooltip>
             {!summary?.paymentProviderConfigured ? (
               <p className="text-xs text-hgh-muted">Online checkout activates when Stripe is configured.</p>
             ) : null}
@@ -210,9 +228,11 @@ export default function BillingPage() {
 
           <p className="text-xs text-hgh-muted">
             Questions? See{" "}
-            <Link href="/dashboard/help" className="font-medium text-hgh-gold underline underline-offset-2">
-              Help
-            </Link>{" "}
+            <HintTooltip content="Billing FAQs, trial behavior, and where to find features in the product.">
+              <Link href="/dashboard/help" className="font-medium text-hgh-gold underline underline-offset-2">
+                Help
+              </Link>
+            </HintTooltip>{" "}
             or contact your administrator.
           </p>
         </CardContent>

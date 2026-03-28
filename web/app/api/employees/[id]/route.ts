@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { EmploymentType, EmployeeStatus, Prisma } from "@prisma/client";
 import {
   canAccessCompany,
   canManagePayroll,
@@ -8,6 +8,32 @@ import {
 } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt, maskSensitive } from "@/lib/crypto";
+import { isRedactedLikeInput } from "@/lib/redacted-sensitive";
+
+const EMPLOYMENT_TYPES = new Set<string>(Object.values(EmploymentType));
+const EMPLOYEE_STATUSES = new Set<string>(Object.values(EmployeeStatus));
+
+function safeAuditSnapshot(emp: {
+  id: string;
+  name: string | null;
+  department: string;
+  jobTitle: string;
+  employmentType: EmploymentType;
+  startDate: Date;
+  status: EmployeeStatus;
+  basicSalary: Prisma.Decimal;
+}) {
+  return {
+    id: emp.id,
+    name: emp.name,
+    department: emp.department,
+    jobTitle: emp.jobTitle,
+    employmentType: emp.employmentType,
+    startDate: emp.startDate.toISOString(),
+    status: emp.status,
+    basicSalary: emp.basicSalary.toString(),
+  } as Prisma.InputJsonValue;
+}
 
 export async function GET(
   req: NextRequest,
@@ -43,10 +69,7 @@ export async function GET(
     if (billing) return billing;
 
     const data: Record<string, unknown> = { ...employee };
-    delete data.faceDescriptor;
-    delete data.faceRegisteredAt;
-
-    const canSeeFaceMeta = isSelf || isCompanyAdmin;
+    delete data.kioskDeviceTokenHash;
 
     // Decrypt if requested and authorized
     if (decryptRequested && isCompanyAdmin) {
@@ -72,13 +95,8 @@ export async function GET(
 
     return NextResponse.json({
       ...data,
-      hasFaceEnrolled: employee.faceDescriptor != null,
-      faceRegisteredAt:
-        canSeeFaceMeta && employee.faceRegisteredAt
-          ? employee.faceRegisteredAt.toISOString()
-          : canSeeFaceMeta
-            ? null
-            : undefined,
+      hasDeviceBound: !!employee.kioskDeviceTokenHash,
+      deviceBoundAt: employee.deviceBoundAt ?? null,
     });
   } catch {
     return NextResponse.json({ error: "Failed to load employee" }, { status: 500 });
@@ -115,32 +133,105 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    // Prepare update data
-    const updateData: Record<string, unknown> = { ...body };
-    delete updateData.companyId;
-    delete updateData.employeeCode;
-    delete updateData.userId;
-    delete updateData.id;
-    delete updateData.faceDescriptor;
-    delete updateData.faceRegisteredAt;
+    const data: Prisma.EmployeeUpdateInput = {};
 
-    // Handle sensitive fields
-    if ("ssnit" in body) updateData.ssnitEncrypted = encrypt(body.ssnit as string);
-    if ("tin" in body) updateData.tinEncrypted = encrypt(body.tin as string);
-    if ("bankName" in body) updateData.bankNameEncrypted = encrypt(body.bankName as string);
-    if ("bankAccount" in body) updateData.bankAccountEncrypted = encrypt(body.bankAccount as string);
-    if ("bankBranch" in body) updateData.bankBranchEncrypted = encrypt(body.bankBranch as string);
+    if (typeof body.name === "string") {
+      data.name = body.name.trim() || null;
+    }
 
-    // Remove raw fields from updateData
-    delete updateData.ssnit;
-    delete updateData.tin;
-    delete updateData.bankName;
-    delete updateData.bankAccount;
-    delete updateData.bankBranch;
+    if (typeof body.department === "string") {
+      const v = body.department.trim();
+      if (!v) {
+        return NextResponse.json({ error: "department cannot be empty" }, { status: 400 });
+      }
+      data.department = v;
+    }
+
+    if (typeof body.jobTitle === "string") {
+      const v = body.jobTitle.trim();
+      if (!v) {
+        return NextResponse.json({ error: "jobTitle cannot be empty" }, { status: 400 });
+      }
+      data.jobTitle = v;
+    }
+
+    if (body.employmentType !== undefined) {
+      const et = String(body.employmentType);
+      if (!EMPLOYMENT_TYPES.has(et)) {
+        return NextResponse.json({ error: "Invalid employmentType" }, { status: 400 });
+      }
+      data.employmentType = et as EmploymentType;
+    }
+
+    if (body.basicSalary !== undefined) {
+      const n = Number(body.basicSalary);
+      if (!Number.isFinite(n) || n <= 0) {
+        return NextResponse.json({ error: "basicSalary must be a positive number" }, { status: 400 });
+      }
+      data.basicSalary = new Prisma.Decimal(n.toFixed(2));
+    }
+
+    if (body.startDate !== undefined) {
+      const d = new Date(String(body.startDate));
+      if (Number.isNaN(d.getTime())) {
+        return NextResponse.json({ error: "Invalid startDate" }, { status: 400 });
+      }
+      data.startDate = d;
+    }
+
+    if (body.status !== undefined && isPayrollStaff) {
+      const st = String(body.status);
+      if (!EMPLOYEE_STATUSES.has(st)) {
+        return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+      }
+      data.status = st as EmployeeStatus;
+      if (st === "TERMINATED") {
+        data.deletedAt = new Date();
+      } else if (st === "ACTIVE") {
+        data.deletedAt = null;
+      }
+    } else if (body.status !== undefined && !isPayrollStaff) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    if (isPayrollStaff) {
+      if ("ssnit" in body && !isRedactedLikeInput(body.ssnit)) {
+        const raw = typeof body.ssnit === "string" ? body.ssnit.trim() : "";
+        data.ssnitEncrypted = encrypt(raw || null);
+      }
+      if ("tin" in body && !isRedactedLikeInput(body.tin)) {
+        const raw = typeof body.tin === "string" ? body.tin.trim() : "";
+        data.tinEncrypted = encrypt(raw || null);
+      }
+      if ("bankName" in body && !isRedactedLikeInput(body.bankName)) {
+        const raw = typeof body.bankName === "string" ? body.bankName.trim() : "";
+        data.bankNameEncrypted = encrypt(raw || null);
+      }
+      if ("bankAccount" in body && !isRedactedLikeInput(body.bankAccount)) {
+        const raw = typeof body.bankAccount === "string" ? body.bankAccount.trim() : "";
+        data.bankAccountEncrypted = encrypt(raw || null);
+      }
+      if ("bankBranch" in body && !isRedactedLikeInput(body.bankBranch)) {
+        const raw = typeof body.bankBranch === "string" ? body.bankBranch.trim() : "";
+        data.bankBranchEncrypted = encrypt(raw || null);
+      }
+    }
+
+    const optionalNokKeys = ["nokName", "nokPhone", "nokRelationship"] as const;
+    for (const key of optionalNokKeys) {
+      if (typeof body[key] === "string") {
+        const v = body[key].trim();
+        (data as Record<string, unknown>)[key] = v || null;
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
 
     const updated = await prisma.employee.update({
       where: { id },
-      data: updateData,
+      data,
     });
 
     await prisma.auditLog.create({
@@ -149,12 +240,13 @@ export async function PATCH(
         action: "EMPLOYEE_UPDATED",
         entityType: "Employee",
         entityId: id,
-        afterState: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
+        afterState: safeAuditSnapshot(updated),
       },
     });
 
     return NextResponse.json(updated);
-  } catch {
+  } catch (e) {
+    console.error("[employees PATCH]", e);
     return NextResponse.json({ error: "Failed to update employee" }, { status: 500 });
   }
 }

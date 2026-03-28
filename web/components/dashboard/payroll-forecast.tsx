@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Hourglass, CheckCircle, AlertTriangle } from "lucide-react";
 import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
 
@@ -49,10 +50,8 @@ export function PayrollForecast() {
         </p>
 
         <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-          <span className={countdownColor}>
-            <span className="material-symbols-outlined mr-1 align-middle" style={{ fontSize: 18 }}>
-              hourglass_empty
-            </span>
+          <span className={`flex items-center gap-1 ${countdownColor}`}>
+            <Hourglass size={18} />
             Next payrun in {data.daysUntilNextPayrun} day{data.daysUntilNextPayrun !== 1 ? "s" : ""}
           </span>
 
@@ -60,18 +59,14 @@ export function PayrollForecast() {
             <span className="flex items-center gap-1">
               {data.lastPayrun.isPaid ? (
                 <>
-                  <span className="material-symbols-outlined text-hgh-success" style={{ fontSize: 18 }}>
-                    check_circle
-                  </span>
+                  <CheckCircle size={18} className="text-hgh-success" />
                   <span className="text-hgh-success">
                     {new Date(data.lastPayrun.periodEnd).toLocaleDateString("en-GH", { month: "long" })} salaries paid
                   </span>
                 </>
               ) : (
                 <>
-                  <span className="material-symbols-outlined text-hgh-gold" style={{ fontSize: 18 }}>
-                    warning
-                  </span>
+                  <AlertTriangle size={18} className="text-hgh-gold" />
                   <Link
                     href={`/dashboard/payroll/${data.lastPayrun.id}`}
                     className="text-hgh-gold underline underline-offset-2 hover:text-hgh-gold-light"

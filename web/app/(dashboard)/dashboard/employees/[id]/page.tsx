@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useId, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   Calendar,
@@ -9,11 +9,15 @@ import {
   Eye,
   EyeOff,
   FileText,
-  Fingerprint,
+  Smartphone,
   Plus,
   Trash2,
   User,
   Wallet,
+  MoreHorizontal,
+  UserX,
+  UserCheck,
+  LogOut,
 } from "lucide-react";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -35,10 +39,31 @@ import { DatePickerField } from "@/components/ui/date-picker";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
-import { FaceEnrollmentCapture } from "@/components/face-enrollment-capture";
+
 import Link from "next/link";
 import { CopyableCode } from "@/components/ui/copy-button";
 import { GhanaBankField, GhanaBranchField } from "@/components/ui/ghana-bank-combobox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { isRedactedLikeInput } from "@/lib/redacted-sensitive";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
+import { DismissibleCallout } from "@/components/ui/dismissible-callout";
+
+type DetailConfirm =
+  | { type: "endEmployment" }
+  | { type: "deleteComponent"; id: string }
+  | { type: "deleteDocument"; id: string }
+  | { type: "deleteTask"; id: string; title: string };
+
+interface FieldOptions {
+  departments: string[];
+  jobTitles: string[];
+}
 
 interface SalaryComponent {
   id: string;
@@ -71,10 +96,10 @@ interface Employee {
   startDate: string;
   status: "ACTIVE" | "SUSPENDED" | "TERMINATED";
   basicSalary: string;
-  company: { name: string };
+  company: { id: string; name: string };
   salaryComponents: SalaryComponent[];
-  hasFaceEnrolled?: boolean;
-  faceRegisteredAt?: string | null;
+  hasDeviceBound?: boolean;
+  deviceBoundAt?: string | null;
   // Sensitive fields (masked by default)
   ssnit?: string;
   tin?: string;
@@ -106,6 +131,7 @@ const profileSchema = z.object({
   jobTitle: z.string().min(1, "Job title is required"),
   employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACTOR"]),
   basicSalary: z.coerce.number().positive("Must be positive"),
+  startDate: z.string().min(1, "Start date is required"),
   ssnit: z.string().optional(),
   tin: z.string().optional(),
   bankName: z.string().optional(),
@@ -118,8 +144,6 @@ function EmployeeDetailPageContent() {
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const setupFace = searchParams.get("setup") === "face";
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<
     "profile" | "components" | "docs" | "onboarding" | "leave" | "loans"
@@ -137,6 +161,15 @@ function EmployeeDetailPageContent() {
     `/api/employees/${id}${revealed ? "?decrypt=true" : ""}`
   );
   const { data: me } = useApi<{ id: string; role: string }>("/api/me");
+  const fieldOptionsUrl = employee?.company?.id
+    ? `/api/employees/field-options?companyId=${employee.company.id}`
+    : null;
+  const { data: fieldOptions } = useApi<FieldOptions>(fieldOptionsUrl);
+  const deptListId = useId();
+  const jobListId = useId();
+  const [headerMenuBusy, setHeaderMenuBusy] = useState(false);
+  const [detailConfirm, setDetailConfirm] = useState<DetailConfirm | null>(null);
+  const [detailConfirmBusy, setDetailConfirmBusy] = useState(false);
   const { data: documents, mutate: mutateDocs } = useApi<EmployeeDocument[]>(`/api/employees/${id}/documents`);
 
   const isPayrollAdmin =
@@ -192,17 +225,6 @@ function EmployeeDetailPageContent() {
     if (!isPayrollAdmin && activeTab === "onboarding") setActiveTab("profile");
   }, [isPayrollAdmin, activeTab]);
 
-  useEffect(() => {
-    if (!setupFace || !employee?.id || employee.hasFaceEnrolled) return;
-    const idFrame = requestAnimationFrame(() => {
-      document.getElementById("face-enrollment-section")?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    });
-    return () => cancelAnimationFrame(idFrame);
-  }, [setupFace, employee?.id, employee?.hasFaceEnrolled]);
-
   // Sync profile form when employee data loads
   useEffect(() => {
     if (employee) {
@@ -212,6 +234,9 @@ function EmployeeDetailPageContent() {
         jobTitle: employee.jobTitle,
         employmentType: employee.employmentType,
         basicSalary: Number(employee.basicSalary),
+        startDate: employee.startDate.includes("T")
+          ? employee.startDate.slice(0, 10)
+          : employee.startDate,
         ssnit: revealed ? employee.ssnit : "",
         tin: revealed ? employee.tin : "",
         bankName: revealed ? employee.bankName : "",
@@ -232,7 +257,13 @@ function EmployeeDetailPageContent() {
         delete payload.bankName;
         delete payload.bankAccount;
         delete payload.bankBranch;
+      } else {
+        for (const key of ["ssnit", "tin", "bankName", "bankAccount", "bankBranch"] as const) {
+          const v = payload[key];
+          if (isRedactedLikeInput(v)) delete payload[key];
+        }
       }
+      if (isSelf) delete payload.startDate;
       const res = await fetch(`/api/employees/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -292,27 +323,57 @@ function EmployeeDetailPageContent() {
     }
   });
 
-  async function deleteComp(compId: string) {
-    if (!confirm("Are you sure you want to remove this component?")) return;
-    try {
-      const res = await fetch(`/api/employees/${id}/components/${compId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-      toast.success("Component removed.");
-      mutate();
-    } catch {
-      toast.error("Failed to remove component.");
-    }
+  function deleteComp(compId: string) {
+    setDetailConfirm({ type: "deleteComponent", id: compId });
   }
 
-  async function deleteDoc(docId: string) {
-    if (!confirm("Are you sure you want to delete this document?")) return;
+  function deleteDoc(docId: string) {
+    setDetailConfirm({ type: "deleteDocument", id: docId });
+  }
+
+  async function handleDetailConfirm() {
+    if (!detailConfirm) return;
+    setDetailConfirmBusy(true);
     try {
-      const res = await fetch(`/api/employees/${id}/documents/${docId}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-      toast.success("Document deleted.");
-      mutateDocs();
+      if (detailConfirm.type === "endEmployment") {
+        const res = await fetch(`/api/employees/${id}`, { method: "DELETE" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Failed");
+        toast.success("Employment ended.");
+        setDetailConfirm(null);
+        mutate();
+        router.push("/dashboard/employees");
+        return;
+      }
+      if (detailConfirm.type === "deleteComponent") {
+        const res = await fetch(`/api/employees/${id}/components/${detailConfirm.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error();
+        toast.success("Component removed.");
+        setDetailConfirm(null);
+        mutate();
+        return;
+      }
+      if (detailConfirm.type === "deleteDocument") {
+        const res = await fetch(`/api/employees/${id}/documents/${detailConfirm.id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error();
+        toast.success("Document deleted.");
+        setDetailConfirm(null);
+        mutateDocs();
+        return;
+      }
+      if (detailConfirm.type === "deleteTask") {
+        const res = await fetch(`/api/employees/${id}/onboarding-tasks/${detailConfirm.id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) throw new Error();
+        toast.success("Task removed.");
+        setDetailConfirm(null);
+        mutateTasks();
+      }
     } catch {
-      toast.error("Failed to delete document.");
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setDetailConfirmBusy(false);
     }
   }
 
@@ -321,9 +382,11 @@ function EmployeeDetailPageContent() {
       <div className="rounded-xl border border-hgh-border bg-white p-8 text-center text-sm text-hgh-danger">
         Employee not found or access denied.
         <div className="mt-4">
-          <Button variant="secondary" onClick={() => router.push("/dashboard/employees")}>
-            Back to employees
-          </Button>
+          <HintTooltip content="Return to the employee directory.">
+            <Button variant="secondary" onClick={() => router.push("/dashboard/employees")}>
+              Back to employees
+            </Button>
+          </HintTooltip>
         </div>
       </div>
     );
@@ -337,36 +400,38 @@ function EmployeeDetailPageContent() {
   }
 
   const isSelfProfile = Boolean(employee.userId && me?.id === employee.userId);
-  const showFaceEnrollmentCard =
+  const showDeviceBindingCard =
     employee.status === "ACTIVE" && (isPayrollAdmin || isSelfProfile);
+
+  async function setEmployeeStatus(status: "ACTIVE" | "SUSPENDED") {
+    setHeaderMenuBusy(true);
+    try {
+      const res = await fetch(`/api/employees/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Update failed");
+      toast.success(status === "SUSPENDED" ? "Employee suspended." : "Employee reactivated.");
+      mutate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed.");
+    } finally {
+      setHeaderMenuBusy(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
-      {setupFace && employee && !employee.hasFaceEnrolled && (
-        <div
-          role="status"
-          className="flex flex-wrap items-start gap-3 rounded-xl border border-hgh-gold/40 bg-hgh-gold/10 px-4 py-3 text-sm text-hgh-navy"
-        >
-          <Fingerprint className="mt-0.5 h-5 w-5 shrink-0 text-hgh-gold" aria-hidden />
-          <div className="min-w-0 flex-1 space-y-1">
-            <p className="font-semibold">Next: register face check-in</p>
-            <p className="text-xs leading-relaxed text-hgh-slate">
-              Scroll to <strong>Check-in & kiosk face profile</strong> on this page, or open the{" "}
-              <Link href="/dashboard/help" className="font-medium text-hgh-gold underline-offset-2 hover:underline">
-                setup guide
-              </Link>{" "}
-              for the full order of steps.
-            </p>
-          </div>
-        </div>
-      )}
-
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/employees")}>
-            <ArrowLeft size={18} />
-            Back
-          </Button>
+          <HintTooltip content="Back to the employee list for this company.">
+            <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/employees")}>
+              <ArrowLeft size={18} />
+              Back
+            </Button>
+          </HintTooltip>
           <div>
             <h2 className="text-xl font-semibold text-hgh-navy">{employeeDisplayName(employee)}</h2>
             <p className="text-sm text-hgh-muted">
@@ -374,7 +439,79 @@ function EmployeeDetailPageContent() {
             </p>
           </div>
         </div>
-        <Badge variant={employee.status === "ACTIVE" ? "success" : "warning"}>{employee.status}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={
+              employee.status === "ACTIVE" ? "success" : employee.status === "TERMINATED" ? "danger" : "warning"
+            }
+          >
+            {employee.status}
+          </Badge>
+          {isPayrollAdmin ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 w-8 border border-hgh-border p-0"
+                  disabled={headerMenuBusy}
+                  aria-label="Employee actions menu"
+                  title="Suspend, record an exit, or end employment."
+                >
+                  <MoreHorizontal className="h-4 w-4" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[14rem]">
+                {employee.status === "ACTIVE" ? (
+                  <HintTooltip
+                    content="Pause payroll and kiosk access without ending the contract. Reactivate anytime from this menu."
+                    side="left"
+                  >
+                    <DropdownMenuItem onClick={() => void setEmployeeStatus("SUSPENDED")}>
+                      <UserX className="h-4 w-4 opacity-70" aria-hidden />
+                      Temporarily suspend
+                    </DropdownMenuItem>
+                  </HintTooltip>
+                ) : null}
+                {employee.status === "SUSPENDED" ? (
+                  <HintTooltip content="Return them to active payroll and allow check-in again." side="left">
+                    <DropdownMenuItem onClick={() => void setEmployeeStatus("ACTIVE")}>
+                      <UserCheck className="h-4 w-4 opacity-70" aria-hidden />
+                      Reactivate
+                    </DropdownMenuItem>
+                  </HintTooltip>
+                ) : null}
+                {employee.status !== "TERMINATED" ? (
+                  <>
+                    <HintTooltip
+                      content="Create an exit case for offboarding steps — last day, handover, and clearance. This does not end employment by itself."
+                      side="left"
+                    >
+                      <DropdownMenuItem
+                        onClick={() => router.push(`/dashboard/exits/new?employeeId=${employee.id}`)}
+                      >
+                        <LogOut className="h-4 w-4 opacity-70" aria-hidden />
+                        Record exit process…
+                      </DropdownMenuItem>
+                    </HintTooltip>
+                    <HintTooltip
+                      content="Ends active employment after you confirm. They disappear from new pay runs; payslips and history stay available."
+                      side="left"
+                    >
+                      <DropdownMenuItem
+                        className="text-amber-900 focus:bg-amber-50 focus:text-amber-950"
+                        onClick={() => setDetailConfirm({ type: "endEmployment" })}
+                      >
+                        <Trash2 className="h-4 w-4 opacity-70" aria-hidden />
+                        End employment…
+                      </DropdownMenuItem>
+                    </HintTooltip>
+                  </>
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </div>
       </div>
 
       <div className="flex flex-wrap border-b border-hgh-border">
@@ -411,13 +548,28 @@ function EmployeeDetailPageContent() {
                 Employment Details
               </CardTitle>
               <div className="flex gap-2">
-                <Button size="sm" variant="secondary" onClick={() => setRevealed(!revealed)}>
-                  {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
-                  {revealed ? "Hide" : "Reveal"}
-                </Button>
-                <Button size="sm" onClick={openEditProfile}>
-                  Edit Profile
-                </Button>
+                <HintTooltip
+                  content={
+                    isPayrollAdmin
+                      ? "Show or hide tax, SSNIT, TIN, and bank fields for editing. Only admins can change those values."
+                      : "Reveal encrypted tax and bank fields for your own record when your admin allows it."
+                  }
+                >
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => setRevealed(!revealed)}
+                    aria-label={revealed ? "Hide sensitive fields" : "Reveal sensitive fields"}
+                  >
+                    {revealed ? <EyeOff size={16} aria-hidden /> : <Eye size={16} aria-hidden />}
+                    {revealed ? "Hide" : "Reveal"}
+                  </Button>
+                </HintTooltip>
+                <HintTooltip content="Update name, department, salary, and related details. Tax and bank changes require admin access unless it is your own employee-linked account with limits.">
+                  <Button size="sm" onClick={openEditProfile} aria-label="Edit employee profile">
+                    Edit Profile
+                  </Button>
+                </HintTooltip>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -505,34 +657,52 @@ function EmployeeDetailPageContent() {
               </CardContent>
             </Card>
 
-            {showFaceEnrollmentCard && (
-              <Card id="face-enrollment-section" className="scroll-mt-6">
+            {showDeviceBindingCard && (
+              <Card className="scroll-mt-6">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Fingerprint size={18} />
-                    Check-in & kiosk face profile
+                    <Smartphone size={18} />
+                    Device binding
                   </CardTitle>
                   <p className="text-xs text-hgh-muted">
-                    Super Admin, Company Admin, or HR can register on behalf of any employee.
-                    Employees with dashboard access to their own record can register here too.
-                    Saving again replaces the previous profile.
+                    A bound device is used for kiosk check-in. Resetting lets the employee bind a new device.
                   </p>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {employee.hasFaceEnrolled ? (
+                  {employee.hasDeviceBound ? (
                     <p className="text-sm text-hgh-success">
-                      Face profile is registered
-                      {employee.faceRegisteredAt ? (
+                      Device bound
+                      {employee.deviceBoundAt ? (
                         <span className="text-hgh-muted">
                           {" "}
-                          · since {new Date(employee.faceRegisteredAt).toLocaleString()}
+                          · since {new Date(employee.deviceBoundAt).toLocaleString()}
                         </span>
                       ) : null}
                     </p>
                   ) : (
-                    <p className="text-sm text-hgh-muted">No face profile yet — required for the office kiosk.</p>
+                    <p className="text-sm text-hgh-muted">No device bound</p>
                   )}
-                  <FaceEnrollmentCapture employeeId={employee.id} onSuccess={() => void mutate()} />
+                  {isPayrollAdmin && employee.hasDeviceBound && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          const res = await fetch(`/api/employees/${employee.id}/reset-device`, { method: "POST" });
+                          if (!res.ok) {
+                            const data = await res.json().catch(() => ({}));
+                            throw new Error(typeof data.error === "string" ? data.error : "Reset failed");
+                          }
+                          toast.success("Device binding reset.");
+                          mutate();
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Failed to reset device.");
+                        }
+                      }}
+                    >
+                      Reset device
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -547,10 +717,12 @@ function EmployeeDetailPageContent() {
               <Plus size={18} />
               Recurring Components
             </CardTitle>
-            <Button size="sm" onClick={() => setCompDialogOpen(true)}>
-              <Plus size={16} />
-              Add Component
-            </Button>
+            <HintTooltip content="Add a recurring allowance or deduction applied on future payroll runs.">
+              <Button size="sm" onClick={() => setCompDialogOpen(true)}>
+                <Plus size={16} />
+                Add Component
+              </Button>
+            </HintTooltip>
           </CardHeader>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -589,9 +761,17 @@ function EmployeeDetailPageContent() {
                         {c.endDate ? new Date(c.endDate).toLocaleDateString() : "Ongoing"}
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <Button variant="ghost" size="sm" className="text-hgh-danger" onClick={() => deleteComp(c.id)}>
-                          <Trash2 size={16} />
-                        </Button>
+                        <HintTooltip content="Remove this allowance or deduction. It will no longer apply to new payroll calculations.">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-amber-800 hover:bg-amber-50 hover:text-amber-950"
+                            onClick={() => deleteComp(c.id)}
+                            aria-label={`Remove component ${c.name}`}
+                          >
+                            <Trash2 size={16} aria-hidden />
+                          </Button>
+                        </HintTooltip>
                       </td>
                     </tr>
                   ))
@@ -609,10 +789,12 @@ function EmployeeDetailPageContent() {
               <FileText size={18} />
               Employee Documents
             </CardTitle>
-            <Button size="sm" onClick={() => setDocDialogOpen(true)}>
-              <Plus size={16} />
-              Upload Document
-            </Button>
+            <HintTooltip content="Attach a contract, ID, or other file to this employee record.">
+              <Button size="sm" onClick={() => setDocDialogOpen(true)}>
+                <Plus size={16} />
+                Upload Document
+              </Button>
+            </HintTooltip>
           </CardHeader>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -637,17 +819,27 @@ function EmployeeDetailPageContent() {
                       <td className="px-5 py-3 text-hgh-muted">{new Date(doc.createdAt).toLocaleDateString()}</td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-2">
-                          <a
-                            href={doc.fileUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-hgh-navy")}
-                          >
-                            View
-                          </a>
-                          <Button variant="ghost" size="sm" className="text-hgh-danger" onClick={() => deleteDoc(doc.id)}>
-                            <Trash2 size={16} />
-                          </Button>
+                          <HintTooltip content="Open this file in a new browser tab (download or preview depends on your browser).">
+                            <a
+                              href={doc.fileUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-hgh-navy")}
+                            >
+                              View
+                            </a>
+                          </HintTooltip>
+                          <HintTooltip content="Permanently remove this file from the employee record (stored file may remain in storage per provider policy).">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-amber-800 hover:bg-amber-50 hover:text-amber-950"
+                              onClick={() => deleteDoc(doc.id)}
+                              aria-label={`Delete document ${doc.name}`}
+                            >
+                              <Trash2 size={16} aria-hidden />
+                            </Button>
+                          </HintTooltip>
                         </div>
                       </td>
                     </tr>
@@ -719,24 +911,18 @@ function EmployeeDetailPageContent() {
                       {t.title}
                     </span>
                   </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-hgh-danger"
-                    onClick={async () => {
-                      if (!confirm("Delete this task?")) return;
-                      const res = await fetch(`/api/employees/${id}/onboarding-tasks/${t.id}`, {
-                        method: "DELETE",
-                      });
-                      if (res.ok) {
-                        mutateTasks();
-                        toast.success("Removed.");
-                      }
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </Button>
+                  <HintTooltip content="Remove this checklist item from onboarding. This does not delete the employee.">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-amber-800 hover:bg-amber-50 hover:text-amber-950"
+                      onClick={() => setDetailConfirm({ type: "deleteTask", id: t.id, title: t.title })}
+                      aria-label={`Remove task ${t.title}`}
+                    >
+                      <Trash2 size={16} aria-hidden />
+                    </Button>
+                  </HintTooltip>
                 </div>
               ))
             )}
@@ -867,12 +1053,26 @@ function EmployeeDetailPageContent() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-hgh-slate">Department</label>
-              <Input {...regProfile("department")} />
+              <Input
+                list={deptListId}
+                autoComplete="off"
+                {...regProfile("department")}
+              />
+              <datalist id={deptListId}>
+                {(fieldOptions?.departments ?? []).map((d) => (
+                  <option key={d} value={d} />
+                ))}
+              </datalist>
               {profileErrors.department && <p className="mt-1 text-xs text-hgh-danger">{profileErrors.department.message}</p>}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-hgh-slate">Job Title</label>
-              <Input {...regProfile("jobTitle")} />
+              <Input list={jobListId} autoComplete="off" {...regProfile("jobTitle")} />
+              <datalist id={jobListId}>
+                {(fieldOptions?.jobTitles ?? []).map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
               {profileErrors.jobTitle && <p className="mt-1 text-xs text-hgh-danger">{profileErrors.jobTitle.message}</p>}
             </div>
           </div>
@@ -902,6 +1102,27 @@ function EmployeeDetailPageContent() {
               {profileErrors.basicSalary && <p className="mt-1 text-xs text-hgh-danger">{profileErrors.basicSalary.message}</p>}
             </div>
           </div>
+          {isPayrollAdmin ? (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate">Start date</label>
+              <Controller
+                name="startDate"
+                control={controlProfile}
+                render={({ field }) => (
+                  <DatePickerField
+                    value={field.value}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    placeholder="Start date"
+                    aria-invalid={profileErrors.startDate ? true : undefined}
+                  />
+                )}
+              />
+              {profileErrors.startDate && (
+                <p className="mt-1 text-xs text-hgh-danger">{profileErrors.startDate.message}</p>
+              )}
+            </div>
+          ) : null}
           {employee?.userId && me?.id === employee.userId ? (
             <p className="text-xs text-hgh-muted">
               Tax and bank details can only be updated by an HR or company administrator.
@@ -978,6 +1199,61 @@ function EmployeeDetailPageContent() {
           </div>
         </form>
       </Dialog>
+
+      <ConfirmDialog
+        open={detailConfirm !== null}
+        onClose={() => !detailConfirmBusy && setDetailConfirm(null)}
+        title={
+          detailConfirm?.type === "endEmployment"
+            ? "End employment"
+            : detailConfirm?.type === "deleteComponent"
+              ? "Remove salary component"
+              : detailConfirm?.type === "deleteDocument"
+                ? "Delete document"
+                : detailConfirm?.type === "deleteTask"
+                  ? "Remove onboarding task"
+                  : "Confirm"
+        }
+        description={
+          detailConfirm?.type === "endEmployment" && employee ? (
+            <>
+              End active employment for{" "}
+              <strong className="text-hgh-navy">{employeeDisplayName(employee)}</strong> (
+              <span className="tabular-nums font-medium">{employee.employeeCode}</span>)? They will be marked
+              terminated and won&apos;t appear on new payroll runs. Historical payslips stay available.
+            </>
+          ) : detailConfirm?.type === "deleteComponent" ? (
+            <>This recurring allowance or deduction will be removed. Calculations on past approved pay runs do not change.</>
+          ) : detailConfirm?.type === "deleteDocument" ? (
+            <>This document will be removed from the employee&apos;s file list.</>
+          ) : detailConfirm?.type === "deleteTask" ? (
+            <>
+              Remove the onboarding task{" "}
+              <strong className="text-hgh-navy">&ldquo;{detailConfirm.title}&rdquo;</strong>?
+            </>
+          ) : (
+            ""
+          )
+        }
+        confirmLabel={
+          detailConfirm?.type === "endEmployment"
+            ? "End employment"
+            : detailConfirm?.type === "deleteComponent"
+              ? "Remove component"
+              : detailConfirm?.type === "deleteDocument"
+                ? "Delete document"
+                : detailConfirm?.type === "deleteTask"
+                  ? "Remove task"
+                  : "Continue"
+        }
+        acknowledgeText={
+          detailConfirm?.type === "endEmployment"
+            ? "I confirm I want to end this person’s active employment for this company."
+            : "I understand and want to continue with this action."
+        }
+        onConfirm={handleDetailConfirm}
+        busy={detailConfirmBusy}
+      />
     </div>
   );
 }

@@ -101,17 +101,8 @@ model Company {
   leaveEntitlements LeaveEntitlement[]
   invitations       Invitation[]
 
-  /// Enterprise check-in (IP allowlist, audit sessions, optional face match)
-  checkinEnterpriseEnabled       Boolean  @default(false)
-  checkinEnforceIpAllowlist      Boolean  @default(false)
-  /// When true, the first successful visit to employee check-in from a browser saves that public IP; only that IP can load check-in or POST check-ins until cleared in settings.
-  checkinLockToFirstIp           Boolean  @default(true)
-  /// Normalized IPv4/IPv6 captured on first check-in page load (see checkinLockToFirstIp).
-  checkinBoundIp                 String?
-  checkinRequireFaceVerification Boolean  @default(false)
-  /// L2 distance threshold for face descriptor match (default applied in app if null)
-  checkinFaceDistanceThreshold   Decimal? @db.Decimal(8, 5)
-  checkinMaxFaceAttempts         Int      @default(3)
+  /// Enterprise check-in (audit sessions)
+  checkinEnterpriseEnabled Boolean @default(false)
 
   /// Office kiosk: local HH:mm in kioskTimezone (null = no open/close restriction)
   kioskOfficeOpensAt     String?
@@ -128,11 +119,9 @@ model Company {
   tier2EmployeePercent Decimal @default(5) @db.Decimal(5, 2)
   tier2EmployerPercent Decimal @default(5) @db.Decimal(5, 2)
 
-  allowedIps            AllowedIP[]
   kioskDayAbsences      KioskDayAbsence[]
-  ipAccessRequests      IPAccessRequest[]
   checkinSessions       CheckinSession[]
-  faceMismatchAlerts    FaceMismatchAlert[]
+  kioskChallenges       KioskChallenge[]
   webhooks              CompanyWebhook[]
   attendanceCorrections AttendanceCorrectionRequest[]
 
@@ -155,10 +144,6 @@ model User {
   employee                       Employee?
   auditLogs                      AuditLog[]
   invitations                    Invitation[]
-  ipAccessRequestsRequested      IPAccessRequest[]             @relation("IpAccessRequestedBy")
-  ipAccessRequestsReviewed       IPAccessRequest[]             @relation("IpAccessReviewedBy")
-  resolvedFaceMismatchAlerts     FaceMismatchAlert[]           @relation("FaceMismatchResolvedBy")
-  allowedIpsCreated              AllowedIP[]                   @relation("AllowedIpCreatedBy")
   attendanceCorrectionsRequested AttendanceCorrectionRequest[] @relation("CorrectionRequestedBy")
   attendanceCorrectionsReviewed  AttendanceCorrectionRequest[] @relation("CorrectionReviewedBy")
 
@@ -191,9 +176,14 @@ model Employee {
   updatedAt            DateTime       @updatedAt
   deletedAt            DateTime?
 
-  /// Face-api-style embedding (JSON number[]). Null until enrolled.
-  faceDescriptor   Json?
-  faceRegisteredAt DateTime?
+  /// SHA-256 hash of the device token bound to this employee for kiosk check-in
+  kioskDeviceTokenHash String?
+  /// When the device was first bound
+  deviceBoundAt        DateTime?
+  /// When the device binding was last reset by HR/admin
+  deviceResetAt        DateTime?
+  /// User ID of the admin who last reset the device binding
+  deviceResetBy        String?
 
   company                      Company                       @relation(fields: [companyId], references: [id])
   user                         User?                         @relation(fields: [userId], references: [id])
@@ -206,7 +196,7 @@ model Employee {
   shiftAssignments             ShiftAssignment[]
   documents                    EmployeeDocument[]
   checkinSessions              CheckinSession[]
-  faceMismatchAlerts           FaceMismatchAlert[]
+  kioskChallenges              KioskChallenge[]
   kioskDayAbsences             KioskDayAbsence[]
   onboardingTasks              EmployeeOnboardingTask[]
   attendanceCorrectionRequests AttendanceCorrectionRequest[]
@@ -403,20 +393,11 @@ enum CheckInStatus {
 
 enum CheckinSessionEventType {
   PORTAL_OPENED
-  FACE_SCAN_STARTED
-  FACE_MATCH_OK
-  FACE_MATCH_FAIL
   CLOCK_IN
   CLOCK_OUT
   SESSION_INTERRUPTED
   TAB_HIDDEN
   TAB_VISIBLE
-}
-
-enum IPAccessRequestStatus {
-  PENDING
-  APPROVED
-  REJECTED
 }
 
 enum ShiftStatus {
@@ -460,54 +441,19 @@ model CheckIn {
   @@index([checkinSessionId])
 }
 
-model AllowedIP {
-  id          String   @id @default(cuid())
-  companyId   String
-  label       String?
-  /// IPv4/IPv6 literal (exact match against normalized client IP)
-  address     String
-  createdById String?
-  createdAt   DateTime @default(now())
-
-  company   Company @relation(fields: [companyId], references: [id])
-  createdBy User?   @relation("AllowedIpCreatedBy", fields: [createdById], references: [id])
-
-  @@index([companyId])
-}
-
-model IPAccessRequest {
-  id                String                @id @default(cuid())
-  companyId         String
-  requestedByUserId String
-  requestedIp       String
-  note              String?
-  status            IPAccessRequestStatus @default(PENDING)
-  reviewedById      String?
-  reviewedAt        DateTime?
-  createdAt         DateTime              @default(now())
-
-  company     Company @relation(fields: [companyId], references: [id])
-  requestedBy User    @relation("IpAccessRequestedBy", fields: [requestedByUserId], references: [id])
-  reviewedBy  User?   @relation("IpAccessReviewedBy", fields: [reviewedById], references: [id])
-
-  @@index([companyId, status])
-}
-
 model CheckinSession {
-  id            String    @id @default(cuid())
-  employeeId    String
-  companyId     String
-  clientIp      String?
-  userAgent     String?
-  faceFailCount Int       @default(0)
-  endedAt       DateTime?
-  createdAt     DateTime  @default(now())
+  id         String    @id @default(cuid())
+  employeeId String
+  companyId  String
+  clientIp   String?
+  userAgent  String?
+  endedAt    DateTime?
+  createdAt  DateTime  @default(now())
 
-  employee           Employee            @relation(fields: [employeeId], references: [id])
-  company            Company             @relation(fields: [companyId], references: [id])
-  events             CheckinEvent[]
-  checkIns           CheckIn[]
-  faceMismatchAlerts FaceMismatchAlert[]
+  employee Employee       @relation(fields: [employeeId], references: [id])
+  company  Company        @relation(fields: [companyId], references: [id])
+  events   CheckinEvent[]
+  checkIns CheckIn[]
 
   @@index([employeeId, createdAt])
   @@index([companyId, createdAt])
@@ -523,25 +469,6 @@ model CheckinEvent {
   session CheckinSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId, createdAt])
-}
-
-model FaceMismatchAlert {
-  id               String    @id @default(cuid())
-  employeeId       String
-  companyId        String
-  checkinSessionId String?
-  metadata         Json?
-  resolvedAt       DateTime?
-  resolvedById     String?
-  createdAt        DateTime  @default(now())
-
-  employee   Employee        @relation(fields: [employeeId], references: [id])
-  company    Company         @relation(fields: [companyId], references: [id])
-  session    CheckinSession? @relation(fields: [checkinSessionId], references: [id])
-  resolvedBy User?           @relation("FaceMismatchResolvedBy", fields: [resolvedById], references: [id])
-
-  @@index([companyId, resolvedAt])
-  @@index([employeeId])
 }
 
 /// Local calendar day in company kioskTimezone; absence if no check-in by cutoff.
@@ -920,6 +847,29 @@ model ExitClearanceItem {
   exitRecord ExitRecord @relation(fields: [exitRecordId], references: [id], onDelete: Cascade)
 
   @@index([exitRecordId])
+}
+
+// ─── Kiosk QR Challenge-Response ─────────────────────────────────────────────
+
+model KioskChallenge {
+  id             String   @id @default(cuid())
+  companyId      String
+  employeeId     String
+  /// 6-digit verification code shown on the employee's phone
+  code           String
+  /// Whether the device verification step passed
+  deviceVerified Boolean  @default(false)
+  /// Whether this challenge has been consumed (code entered on kiosk)
+  consumed       Boolean  @default(false)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id])
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([expiresAt])
 }
 
 // ─── Revenue Tracker (Section 8) ─────────────────────────────────────────────

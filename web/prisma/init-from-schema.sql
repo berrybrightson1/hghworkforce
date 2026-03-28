@@ -346,51 +346,19 @@ ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "name" TEXT;
 -- ═══════════════════════════════════════════════════════════════════════════
 
 DO $$ BEGIN CREATE TYPE "CheckinSessionEventType" AS ENUM (
-  'PORTAL_OPENED', 'FACE_SCAN_STARTED', 'FACE_MATCH_OK', 'FACE_MATCH_FAIL',
+  'PORTAL_OPENED',
   'CLOCK_IN', 'CLOCK_OUT', 'SESSION_INTERRUPTED', 'TAB_HIDDEN', 'TAB_VISIBLE'
 ); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-DO $$ BEGIN CREATE TYPE "IPAccessRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
 ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinEnterpriseEnabled" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinEnforceIpAllowlist" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinLockToFirstIp" BOOLEAN NOT NULL DEFAULT true;
--- Existing DBs that already added this column with DEFAULT false: fix server default for new rows only.
-ALTER TABLE "Company" ALTER COLUMN "checkinLockToFirstIp" SET DEFAULT true;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinBoundIp" TEXT;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinRequireFaceVerification" BOOLEAN NOT NULL DEFAULT false;
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinFaceDistanceThreshold" DECIMAL(8,5);
-ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "checkinMaxFaceAttempts" INTEGER NOT NULL DEFAULT 3;
 
-ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "faceDescriptor" JSONB;
-ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "faceRegisteredAt" TIMESTAMP(3);
+-- Device-bound kiosk check-in (replaces face/IP)
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "kioskDeviceTokenHash" TEXT;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "deviceBoundAt" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "deviceResetAt" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "deviceResetBy" TEXT;
 
 ALTER TABLE "CheckIn" ADD COLUMN IF NOT EXISTS "checkinSessionId" TEXT;
-
-CREATE TABLE IF NOT EXISTS "AllowedIP" (
-  "id" TEXT NOT NULL,
-  "companyId" TEXT NOT NULL,
-  "label" TEXT,
-  "address" TEXT NOT NULL,
-  "createdById" TEXT,
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "AllowedIP_pkey" PRIMARY KEY ("id")
-);
-CREATE INDEX IF NOT EXISTS "AllowedIP_companyId_idx" ON "AllowedIP"("companyId");
-
-CREATE TABLE IF NOT EXISTS "IPAccessRequest" (
-  "id" TEXT NOT NULL,
-  "companyId" TEXT NOT NULL,
-  "requestedByUserId" TEXT NOT NULL,
-  "requestedIp" TEXT NOT NULL,
-  "note" TEXT,
-  "status" "IPAccessRequestStatus" NOT NULL DEFAULT 'PENDING',
-  "reviewedById" TEXT,
-  "reviewedAt" TIMESTAMP(3),
-  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "IPAccessRequest_pkey" PRIMARY KEY ("id")
-);
-CREATE INDEX IF NOT EXISTS "IPAccessRequest_companyId_status_idx" ON "IPAccessRequest"("companyId", "status");
 
 CREATE TABLE IF NOT EXISTS "CheckinSession" (
   "id" TEXT NOT NULL,
@@ -398,7 +366,6 @@ CREATE TABLE IF NOT EXISTS "CheckinSession" (
   "companyId" TEXT NOT NULL,
   "clientIp" TEXT,
   "userAgent" TEXT,
-  "faceFailCount" INTEGER NOT NULL DEFAULT 0,
   "endedAt" TIMESTAMP(3),
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "CheckinSession_pkey" PRIMARY KEY ("id")
@@ -416,40 +383,21 @@ CREATE TABLE IF NOT EXISTS "CheckinEvent" (
 );
 CREATE INDEX IF NOT EXISTS "CheckinEvent_sessionId_createdAt_idx" ON "CheckinEvent"("sessionId", "createdAt");
 
-CREATE TABLE IF NOT EXISTS "FaceMismatchAlert" (
+CREATE TABLE IF NOT EXISTS "KioskChallenge" (
   "id" TEXT NOT NULL,
-  "employeeId" TEXT NOT NULL,
   "companyId" TEXT NOT NULL,
-  "checkinSessionId" TEXT,
-  "metadata" JSONB,
-  "resolvedAt" TIMESTAMP(3),
-  "resolvedById" TEXT,
+  "employeeId" TEXT NOT NULL,
+  "code" TEXT NOT NULL,
+  "deviceVerified" BOOLEAN NOT NULL DEFAULT false,
+  "consumed" BOOLEAN NOT NULL DEFAULT false,
+  "expiresAt" TIMESTAMP(3) NOT NULL,
   "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT "FaceMismatchAlert_pkey" PRIMARY KEY ("id")
+  CONSTRAINT "KioskChallenge_pkey" PRIMARY KEY ("id")
 );
-CREATE INDEX IF NOT EXISTS "FaceMismatchAlert_companyId_resolvedAt_idx" ON "FaceMismatchAlert"("companyId", "resolvedAt");
-CREATE INDEX IF NOT EXISTS "FaceMismatchAlert_employeeId_idx" ON "FaceMismatchAlert"("employeeId");
+CREATE INDEX IF NOT EXISTS "KioskChallenge_companyId_idx" ON "KioskChallenge"("companyId");
+CREATE INDEX IF NOT EXISTS "KioskChallenge_employeeId_idx" ON "KioskChallenge"("employeeId");
+CREATE INDEX IF NOT EXISTS "KioskChallenge_expiresAt_idx" ON "KioskChallenge"("expiresAt");
 
-DO $$ BEGIN
-  ALTER TABLE "AllowedIP" ADD CONSTRAINT "AllowedIP_companyId_fkey"
-    FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  ALTER TABLE "AllowedIP" ADD CONSTRAINT "AllowedIP_createdById_fkey"
-    FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  ALTER TABLE "IPAccessRequest" ADD CONSTRAINT "IPAccessRequest_companyId_fkey"
-    FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  ALTER TABLE "IPAccessRequest" ADD CONSTRAINT "IPAccessRequest_requestedByUserId_fkey"
-    FOREIGN KEY ("requestedByUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  ALTER TABLE "IPAccessRequest" ADD CONSTRAINT "IPAccessRequest_reviewedById_fkey"
-    FOREIGN KEY ("reviewedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE "CheckinSession" ADD CONSTRAINT "CheckinSession_employeeId_fkey"
     FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -463,20 +411,12 @@ DO $$ BEGIN
     FOREIGN KEY ("sessionId") REFERENCES "CheckinSession"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  ALTER TABLE "FaceMismatchAlert" ADD CONSTRAINT "FaceMismatchAlert_employeeId_fkey"
-    FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  ALTER TABLE "FaceMismatchAlert" ADD CONSTRAINT "FaceMismatchAlert_companyId_fkey"
+  ALTER TABLE "KioskChallenge" ADD CONSTRAINT "KioskChallenge_companyId_fkey"
     FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  ALTER TABLE "FaceMismatchAlert" ADD CONSTRAINT "FaceMismatchAlert_checkinSessionId_fkey"
-    FOREIGN KEY ("checkinSessionId") REFERENCES "CheckinSession"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-DO $$ BEGIN
-  ALTER TABLE "FaceMismatchAlert" ADD CONSTRAINT "FaceMismatchAlert_resolvedById_fkey"
-    FOREIGN KEY ("resolvedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  ALTER TABLE "KioskChallenge" ADD CONSTRAINT "KioskChallenge_employeeId_fkey"
+    FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   ALTER TABLE "CheckIn" ADD CONSTRAINT "CheckIn_checkinSessionId_fkey"

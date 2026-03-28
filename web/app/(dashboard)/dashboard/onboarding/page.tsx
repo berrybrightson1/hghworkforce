@@ -6,6 +6,7 @@ import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 
 type OnboardingRow = {
   id: string;
@@ -39,25 +40,35 @@ export default function OnboardingListPage() {
           <h2 className="text-xl font-semibold text-hgh-navy">Employee Onboarding</h2>
           <p className="text-sm text-hgh-muted">Track new hire onboarding progress.</p>
         </div>
-        <Link href="/dashboard/onboarding/templates/new">
-          <Button>Create Template</Button>
-        </Link>
+        <HintTooltip content="Build a reusable checklist (tasks HR assigns to new hires).">
+          <Link href="/dashboard/onboarding/templates/new">
+            <Button>Create Template</Button>
+          </Link>
+        </HintTooltip>
       </div>
 
       <div className="flex flex-wrap gap-2">
         {["", "PENDING", "IN_PROGRESS", "COMPLETED", "OVERDUE"].map((s) => (
-          <button
+          <HintTooltip
             key={s}
-            type="button"
-            onClick={() => setFilter(s)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-              filter === s
-                ? "bg-hgh-navy text-white"
-                : "bg-hgh-border/30 text-hgh-muted hover:bg-hgh-border/50"
-            }`}
+            content={
+              s
+                ? `Show onboardings with status ${s.replace("_", " ").toLowerCase()}.`
+                : "Show every onboarding record for this company."
+            }
           >
-            {s || "All"}
-          </button>
+            <button
+              type="button"
+              onClick={() => setFilter(s)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                filter === s
+                  ? "bg-hgh-navy text-white"
+                  : "bg-hgh-border/30 text-hgh-muted hover:bg-hgh-border/50"
+              }`}
+            >
+              {s || "All"}
+            </button>
+          </HintTooltip>
         ))}
       </div>
 
@@ -122,12 +133,14 @@ export default function OnboardingListPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Link
-                          href={`/dashboard/onboarding/${row.employeeId}`}
-                          className="text-xs font-medium text-hgh-gold hover:underline"
-                        >
-                          View
-                        </Link>
+                        <HintTooltip content="Open this employee’s onboarding board and tasks.">
+                          <Link
+                            href={`/dashboard/onboarding/${row.employeeId}`}
+                            className="text-xs font-medium text-hgh-gold hover:underline"
+                          >
+                            View
+                          </Link>
+                        </HintTooltip>
                       </td>
                     </tr>
                   );
@@ -145,11 +158,13 @@ export default function OnboardingListPage() {
             <p className="text-sm font-medium text-hgh-navy">Onboarding Templates</p>
             <p className="text-xs text-hgh-muted">Manage reusable onboarding checklists.</p>
           </div>
-          <Link href="/dashboard/onboarding/templates/new">
-            <Button variant="secondary" size="sm">
-              Manage Templates
-            </Button>
-          </Link>
+          <HintTooltip content="Create or adjust onboarding task templates for this company.">
+            <Link href="/dashboard/onboarding/templates/new">
+              <Button variant="secondary" size="sm">
+                Manage Templates
+              </Button>
+            </Link>
+          </HintTooltip>
         </div>
       </div>
     </div>

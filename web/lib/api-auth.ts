@@ -50,7 +50,7 @@ export function canManageLeave(role: UserRole): boolean {
   return canManage(role);
 }
 
-/** Check-in security, attendance config, IP allowlist (not payrun approval). */
+/** Check-in security, attendance config (not payrun approval). */
 export function canManageCheckinSecurity(role: UserRole): boolean {
   return canManage(role);
 }

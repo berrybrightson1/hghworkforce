@@ -1,11 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Users, Plus, Search, Upload, Fingerprint } from "lucide-react";
+import {
+  Users,
+  Plus,
+  Search,
+  Upload,
+
+  MoreHorizontal,
+  UserX,
+  UserCheck,
+  LogOut,
+  Trash2,
+  UserMinus,
+} from "lucide-react";
 import Papa from "papaparse";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,11 +33,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Dialog } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { CopyableCode } from "@/components/ui/copy-button";
+import { GhanaBankField, GhanaBranchField } from "@/components/ui/ghana-bank-combobox";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Employee {
   id: string;
@@ -37,7 +58,7 @@ interface Employee {
   basicSalary: string;
   status: "ACTIVE" | "SUSPENDED" | "TERMINATED";
   company?: { name: string };
-  hasFaceEnrolled?: boolean;
+  hasDeviceBound?: boolean;
 }
 
 const schema = z.object({
@@ -47,8 +68,18 @@ const schema = z.object({
   basicSalary: z.coerce.number().positive("Must be greater than 0"),
   employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACTOR"]),
   startDate: z.string().min(1, "Start date is required"),
+  ssnit: z.string().optional(),
+  tin: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccount: z.string().optional(),
+  bankBranch: z.string().optional(),
 });
 type FormValues = z.infer<typeof schema>;
+
+interface FieldOptions {
+  departments: string[];
+  jobTitles: string[];
+}
 
 const statusBadge = {
   ACTIVE: "success",
@@ -60,15 +91,32 @@ export default function EmployeesPage() {
   const { selected } = useCompany();
   const router = useRouter();
   const { toast } = useToast();
+  const deptListId = useId();
+  const jobListId = useId();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [search, setSearch] = useState("");
+  const [rowBusy, setRowBusy] = useState<string | null>(null);
+  const [terminateByCodeOpen, setTerminateByCodeOpen] = useState(false);
+  const [terminateCodeInput, setTerminateCodeInput] = useState("");
+  const [terminateByCodeAck, setTerminateByCodeAck] = useState(false);
+  const [terminateByCodeBusy, setTerminateByCodeBusy] = useState(false);
+  const [rowTerminateTarget, setRowTerminateTarget] = useState<Employee | null>(null);
+  const [rowTerminateBusy, setRowTerminateBusy] = useState(false);
+  /** Blocks duplicate POST / import while a request is in flight (React re-renders won’t stop double submits). */
+  const createInFlightRef = useRef(false);
+  const importInFlightRef = useRef(false);
 
   const url = selected
     ? `/api/employees?companyId=${selected.id}${search ? `&q=${encodeURIComponent(search)}` : ""}`
     : null;
   const { data: employees, mutate } = useApi<Employee[]>(url);
+  const fieldOptionsUrl = selected ? `/api/employees/field-options?companyId=${selected.id}` : null;
+  const { data: fieldOptions } = useApi<FieldOptions>(fieldOptionsUrl);
+  const { data: me } = useApi<{ role: string }>("/api/me");
+  const canManageLifecycle =
+    me && ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"].includes(me.role);
 
   const {
     register,
@@ -78,14 +126,26 @@ export default function EmployeesPage() {
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { employmentType: "FULL_TIME", startDate: "" },
+    defaultValues: {
+      employmentType: "FULL_TIME",
+      startDate: "",
+      bankName: "",
+      bankBranch: "",
+      ssnit: "",
+      tin: "",
+      bankAccount: "",
+    },
   });
+
+  const addFormBankName = useWatch({ control, name: "bankName" });
 
   const onSubmit = handleSubmit(async (values) => {
     if (!selected) {
       toast.error("Select a company first.");
       return;
     }
+    if (createInFlightRef.current) return;
+    createInFlightRef.current = true;
     setSubmitting(true);
     try {
       const res = await fetch("/api/employees", {
@@ -95,6 +155,17 @@ export default function EmployeesPage() {
       });
       const created = await res.json().catch(() => null);
       if (!res.ok) {
+        if (res.status === 409 && created && typeof created === "object") {
+          const msg =
+            typeof created.error === "string" ? created.error : "Duplicate create blocked.";
+          toast.error(msg);
+          const dupId =
+            "duplicateOfId" in created && typeof created.duplicateOfId === "string"
+              ? created.duplicateOfId
+              : null;
+          if (dupId) router.push(`/dashboard/employees/${dupId}`);
+          return;
+        }
         throw new Error(typeof created?.error === "string" ? created.error : "Failed to create employee");
       }
       const label =
@@ -108,14 +179,82 @@ export default function EmployeesPage() {
       setDialogOpen(false);
       mutate();
       if (newId) {
-        router.push(`/dashboard/employees/${newId}?setup=face`);
+        router.push(`/dashboard/employees/${newId}`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to create employee.");
     } finally {
+      createInFlightRef.current = false;
       setSubmitting(false);
     }
   });
+
+  async function executeTerminateByCode() {
+    if (!selected) return;
+    const code = terminateCodeInput.trim();
+    if (!code) {
+      toast.error("Enter the employee payroll code.");
+      return;
+    }
+    if (!terminateByCodeAck) {
+      toast.error("Confirm that you understand this action.");
+      return;
+    }
+    setTerminateByCodeBusy(true);
+    try {
+      const params = new URLSearchParams({ companyId: selected.id, code });
+      const res = await fetch(`/api/employees/by-code?${params.toString()}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(typeof data.error === "string" ? data.error : "Failed");
+      }
+      toast.success(`${data.employeeCode ?? code} is no longer on active payroll.`);
+      setTerminateCodeInput("");
+      setTerminateByCodeAck(false);
+      setTerminateByCodeOpen(false);
+      mutate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not complete this action.");
+    } finally {
+      setTerminateByCodeBusy(false);
+    }
+  }
+
+  async function executeRowTerminate() {
+    if (!selected || !rowTerminateTarget) return;
+    setRowTerminateBusy(true);
+    try {
+      const res = await fetch(`/api/employees/${rowTerminateTarget.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Failed");
+      toast.success(`${employeeDisplayName(rowTerminateTarget)} is no longer on active payroll.`);
+      setRowTerminateTarget(null);
+      mutate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed.");
+    } finally {
+      setRowTerminateBusy(false);
+    }
+  }
+
+  async function setEmployeeStatus(empId: string, status: "ACTIVE" | "SUSPENDED") {
+    setRowBusy(empId);
+    try {
+      const res = await fetch(`/api/employees/${empId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Update failed");
+      toast.success(status === "SUSPENDED" ? "Employee suspended." : "Employee reactivated.");
+      mutate();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update status.");
+    } finally {
+      setRowBusy(null);
+    }
+  }
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -125,6 +264,11 @@ export default function EmployeesPage() {
       header: true,
       skipEmptyLines: true,
       complete: async (results: { data: unknown[] }) => {
+        if (importInFlightRef.current) {
+          toast.error("An import is already running.");
+          return;
+        }
+        importInFlightRef.current = true;
         setSubmitting(true);
         try {
           const rows = results.data as Record<string, unknown>[];
@@ -144,6 +288,7 @@ export default function EmployeesPage() {
         } catch (err) {
           toast.error(err instanceof Error ? err.message : "Import failed");
         } finally {
+          importInFlightRef.current = false;
           setSubmitting(false);
         }
       },
@@ -161,15 +306,37 @@ export default function EmployeesPage() {
             {selected ? `Showing employees for ${selected.name}` : "Select a company to view employees."}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={!selected}>
-            <Upload size={18} />
-            Import CSV
-          </Button>
-          <Button onClick={() => setDialogOpen(true)} disabled={!selected}>
-            <Plus size={18} />
-            Add Employee
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          <HintTooltip content="Upload a spreadsheet to create many employees at once. Each row gets a unique payroll code.">
+            <Button variant="secondary" onClick={() => setImportOpen(true)} disabled={!selected} aria-label="Import employees from CSV">
+              <Upload size={18} className="shrink-0 opacity-90" aria-hidden />
+              Import CSV
+            </Button>
+          </HintTooltip>
+          {canManageLifecycle && selected ? (
+            <HintTooltip content="End one person’s active employment by typing their payroll code. Useful if duplicate rows were created or someone left. Matching is case-insensitive.">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  setTerminateCodeInput("");
+                  setTerminateByCodeAck(false);
+                  setTerminateByCodeOpen(true);
+                }}
+                className="border-hgh-gold/35"
+                aria-label="End employment using payroll code"
+              >
+                <UserMinus size={18} className="shrink-0 opacity-90" aria-hidden />
+                End by code
+              </Button>
+            </HintTooltip>
+          ) : null}
+          <HintTooltip content="Create a new team member with salary and bank details. A payroll code is assigned automatically.">
+            <Button onClick={() => setDialogOpen(true)} disabled={!selected} aria-label="Add a new employee">
+              <Plus size={18} className="shrink-0 opacity-90" aria-hidden />
+              Add Employee
+            </Button>
+          </HintTooltip>
         </div>
       </div>
 
@@ -183,6 +350,8 @@ export default function EmployeesPage() {
               className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              title="Filter the list below. Matches name, payroll code, department, or job title."
+              aria-label="Search employees by name, code, department, or job title"
             />
           </div>
         </CardContent>
@@ -194,19 +363,53 @@ export default function EmployeesPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-hgh-border text-left">
-                <th className="px-5 py-3 font-medium text-hgh-muted">Name</th>
-                <th className="px-5 py-3 font-medium text-hgh-muted">Code</th>
-                <th className="px-5 py-3 font-medium text-hgh-muted">Department</th>
-                <th className="px-5 py-3 font-medium text-hgh-muted">Job Title</th>
-                <th className="px-5 py-3 font-medium text-hgh-muted">Basic Salary</th>
-                <th className="px-5 py-3 font-medium text-hgh-muted">Face</th>
-                <th className="px-5 py-3 font-medium text-hgh-muted">Status</th>
+                <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
+                  <HintTooltip content="Legal or preferred name on the HR record. May differ from a linked portal account name.">
+                    <span className="inline cursor-default">Name</span>
+                  </HintTooltip>
+                </th>
+                <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
+                  <HintTooltip content="Unique payroll code for this company. Use it when ending employment by code or in bank files.">
+                    <span className="inline cursor-default">Code</span>
+                  </HintTooltip>
+                </th>
+                <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
+                  <HintTooltip content="Department or cost centre label for reporting and suggestions on new hires.">
+                    <span className="inline cursor-default">Department</span>
+                  </HintTooltip>
+                </th>
+                <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
+                  <HintTooltip content="Role title stored on the employee record.">
+                    <span className="inline cursor-default">Job Title</span>
+                  </HintTooltip>
+                </th>
+                <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
+                  <HintTooltip content="Monthly basic salary in GHS before allowances. Used as the base for tax and SSNIT in payroll runs.">
+                    <span className="inline cursor-default">Basic Salary</span>
+                  </HintTooltip>
+                </th>
+                <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
+                  <HintTooltip content="Device binding for kiosk QR check-in. Employees bind their phone on first scan.">
+                    <span className="inline cursor-default">Device</span>
+                  </HintTooltip>
+                </th>
+                <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
+                  <HintTooltip content="Active staff appear on payroll. Suspended is temporary. Terminated removes them from new pay runs.">
+                    <span className="inline cursor-default">Status</span>
+                  </HintTooltip>
+                </th>
+                {canManageLifecycle ? (
+                  <th className="px-5 py-3 w-[52px] font-medium text-hgh-muted" aria-label="Actions" />
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {list.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-12 text-center text-hgh-muted">
+                  <td
+                    colSpan={canManageLifecycle ? 8 : 7}
+                    className="px-5 py-12 text-center text-hgh-muted"
+                  >
                     <Users size={32} className="mx-auto mb-3 text-hgh-border" />
                     <p>{selected ? "No employees found." : "Select a company from the sidebar."}</p>
                   </td>
@@ -215,10 +418,14 @@ export default function EmployeesPage() {
                 list.map((emp) => (
                   <tr
                     key={emp.id}
-                    className="border-b border-hgh-border last:border-0 hover:bg-hgh-offwhite/50 cursor-pointer"
+                    className="border-b border-hgh-border last:border-0 cursor-pointer hover:bg-hgh-offwhite/50"
                     onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
                   >
-                    <td className="px-5 py-3 font-medium text-hgh-navy">{employeeDisplayName(emp)}</td>
+                    <td className="px-5 py-3 font-medium text-hgh-navy">
+                      <HintTooltip content="Open this person’s full profile — salary, documents, check-in, and actions.">
+                        <span className="block">{employeeDisplayName(emp)}</span>
+                      </HintTooltip>
+                    </td>
                     <td
                       className="px-5 py-3 text-hgh-muted"
                       onClick={(e) => e.stopPropagation()}
@@ -231,24 +438,89 @@ export default function EmployeesPage() {
                       GHS {Number(emp.basicSalary).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-5 py-3">
-                      {emp.status === "ACTIVE" && emp.hasFaceEnrolled === false ? (
-                        <Link
-                          href={`/dashboard/employees/${emp.id}?setup=face`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 rounded-md bg-hgh-gold/15 px-2 py-0.5 text-xs font-medium text-hgh-navy ring-1 ring-hgh-gold/30 hover:bg-hgh-gold/25"
-                        >
-                          <Fingerprint className="h-3.5 w-3.5" aria-hidden />
-                          Set up
-                        </Link>
-                      ) : emp.hasFaceEnrolled ? (
-                        <span className="text-xs font-medium text-hgh-success">Registered</span>
+                      {emp.hasDeviceBound ? (
+                        <span className="text-xs font-medium text-hgh-success">Bound</span>
                       ) : (
-                        <span className="text-xs text-hgh-muted">—</span>
+                        <span className="text-xs text-hgh-muted">Not bound</span>
                       )}
                     </td>
                     <td className="px-5 py-3">
                       <Badge variant={statusBadge[emp.status]}>{emp.status}</Badge>
                     </td>
+                    {canManageLifecycle ? (
+                      <td className="px-2 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              disabled={rowBusy === emp.id}
+                              aria-label={`More actions for ${employeeDisplayName(emp)}`}
+                              title="Row menu: profile, suspend, exit workflow, or end employment."
+                            >
+                              <MoreHorizontal className="h-4 w-4" aria-hidden />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="min-w-[14rem]">
+                            <HintTooltip content="Open their full record — salary, components, documents, and check-in setup." side="left">
+                              <DropdownMenuItem onClick={() => router.push(`/dashboard/employees/${emp.id}`)}>
+                                View profile
+                              </DropdownMenuItem>
+                            </HintTooltip>
+                            {emp.status === "ACTIVE" ? (
+                              <HintTooltip
+                                content="Pause payroll and kiosk access without ending the contract. Reactivate anytime from this menu."
+                                side="left"
+                              >
+                                <DropdownMenuItem onClick={() => void setEmployeeStatus(emp.id, "SUSPENDED")}>
+                                  <UserX className="h-4 w-4 opacity-70" aria-hidden />
+                                  Temporarily suspend
+                                </DropdownMenuItem>
+                              </HintTooltip>
+                            ) : null}
+                            {emp.status === "SUSPENDED" ? (
+                              <HintTooltip
+                                content="Return them to active payroll and allow check-in again."
+                                side="left"
+                              >
+                                <DropdownMenuItem onClick={() => void setEmployeeStatus(emp.id, "ACTIVE")}>
+                                  <UserCheck className="h-4 w-4 opacity-70" aria-hidden />
+                                  Reactivate
+                                </DropdownMenuItem>
+                              </HintTooltip>
+                            ) : null}
+                            {emp.status !== "TERMINATED" ? (
+                              <>
+                                <HintTooltip
+                                  content="Create an exit case for offboarding steps — last day, handover, and clearance. This does not end employment by itself."
+                                  side="left"
+                                >
+                                  <DropdownMenuItem
+                                    onClick={() => router.push(`/dashboard/exits/new?employeeId=${emp.id}`)}
+                                  >
+                                    <LogOut className="h-4 w-4 opacity-70" aria-hidden />
+                                    Record exit process…
+                                  </DropdownMenuItem>
+                                </HintTooltip>
+                                <HintTooltip
+                                  content="Ends active employment after you confirm. They disappear from new pay runs; payslips and history stay available."
+                                  side="left"
+                                >
+                                  <DropdownMenuItem
+                                    className="text-amber-900 focus:text-amber-950 focus:bg-amber-50"
+                                    onClick={() => setRowTerminateTarget(emp)}
+                                  >
+                                    <Trash2 className="h-4 w-4 opacity-70" aria-hidden />
+                                    End employment…
+                                  </DropdownMenuItem>
+                                </HintTooltip>
+                              </>
+                            ) : null}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    ) : null}
                   </tr>
                 ))
               )}
@@ -263,7 +535,11 @@ export default function EmployeesPage() {
 
       {/* Add Employee Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title="Add Employee">
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4 max-h-[min(80vh,720px)] overflow-y-auto pr-1">
+          <p className="text-xs text-hgh-muted">
+            Department and job title suggest past values from this company; you can always type a new one. SSNIT and
+            TIN are never auto-filled from other staff.
+          </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-hgh-slate">
@@ -277,7 +553,17 @@ export default function EmployeesPage() {
               <label className="mb-1 block text-sm font-medium text-hgh-slate">
                 Department <span className="text-hgh-danger">*</span>
               </label>
-              <Input placeholder="e.g. Operations" {...register("department")} />
+              <Input
+                placeholder="e.g. Operations"
+                list={deptListId}
+                autoComplete="off"
+                {...register("department")}
+              />
+              <datalist id={deptListId}>
+                {(fieldOptions?.departments ?? []).map((d) => (
+                  <option key={d} value={d} />
+                ))}
+              </datalist>
               {errors.department && (
                 <p className="mt-1 text-xs text-hgh-danger">{errors.department.message}</p>
               )}
@@ -288,7 +574,17 @@ export default function EmployeesPage() {
               <label className="mb-1 block text-sm font-medium text-hgh-slate">
                 Job Title <span className="text-hgh-danger">*</span>
               </label>
-              <Input placeholder="e.g. Warehouse Manager" {...register("jobTitle")} />
+              <Input
+                placeholder="e.g. Warehouse Manager"
+                list={jobListId}
+                autoComplete="off"
+                {...register("jobTitle")}
+              />
+              <datalist id={jobListId}>
+                {(fieldOptions?.jobTitles ?? []).map((t) => (
+                  <option key={t} value={t} />
+                ))}
+              </datalist>
               {errors.jobTitle && (
                 <p className="mt-1 text-xs text-hgh-danger">{errors.jobTitle.message}</p>
               )}
@@ -348,6 +644,51 @@ export default function EmployeesPage() {
               )}
             </div>
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate">SSNIT (optional)</label>
+              <Input placeholder="Employee SSNIT number" {...register("ssnit")} autoComplete="off" />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate">TIN (optional)</label>
+              <Input placeholder="GRA TIN" {...register("tin")} autoComplete="off" />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-1">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate">Bank name (optional)</label>
+              <Controller
+                name="bankName"
+                control={control}
+                render={({ field }) => (
+                  <GhanaBankField
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    placeholder="Select or type bank"
+                  />
+                )}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate">Branch (optional)</label>
+              <Controller
+                name="bankBranch"
+                control={control}
+                render={({ field }) => (
+                  <GhanaBranchField
+                    bankName={(addFormBankName ?? "").trim()}
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    placeholder="Branch"
+                  />
+                )}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate">Account number (optional)</label>
+              <Input placeholder="Bank account" {...register("bankAccount")} autoComplete="off" />
+            </div>
+          </div>
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>
               Cancel
@@ -392,6 +733,90 @@ export default function EmployeesPage() {
           </div>
         </div>
       </Dialog>
+
+      <Dialog
+        open={terminateByCodeOpen}
+        onClose={() => {
+          if (!terminateByCodeBusy) setTerminateByCodeOpen(false);
+        }}
+        title="End employment by payroll code"
+      >
+        <div className="space-y-4">
+          <p className="text-sm leading-relaxed text-hgh-slate">
+            Enter the <strong className="text-hgh-navy">exact payroll code</strong> for the active record to move to
+            terminated. Matching is case-insensitive in this workspace only. They will not appear on new pay runs;
+            historical payslips remain available.
+          </p>
+          <div>
+            <label htmlFor="terminate-code-input" className="mb-1 block text-sm font-medium text-hgh-slate">
+              Payroll code
+            </label>
+            <Input
+              id="terminate-code-input"
+              placeholder="e.g. ACME-A1B2C3-0001"
+              value={terminateCodeInput}
+              onChange={(e) => setTerminateCodeInput(e.target.value)}
+              autoComplete="off"
+              disabled={terminateByCodeBusy}
+              title="Copy the code from the employee list or profile header."
+            />
+          </div>
+          <label className="flex cursor-pointer items-start gap-2 text-xs text-hgh-slate">
+            <input
+              type="checkbox"
+              className="mt-0.5 rounded border-hgh-border text-hgh-navy focus:ring-hgh-gold"
+              checked={terminateByCodeAck}
+              onChange={(e) => setTerminateByCodeAck(e.target.checked)}
+              disabled={terminateByCodeBusy}
+            />
+            <span>I understand this ends their active employment for this company.</span>
+          </label>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setTerminateByCodeOpen(false)}
+              disabled={terminateByCodeBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!terminateCodeInput.trim() || !terminateByCodeAck || terminateByCodeBusy}
+              className="border border-amber-800/25 bg-white text-amber-950 hover:bg-amber-50"
+              onClick={() => void executeTerminateByCode()}
+            >
+              {terminateByCodeBusy ? "Working…" : "End employment"}
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+
+      <ConfirmDialog
+        open={rowTerminateTarget !== null}
+        onClose={() => {
+          if (!rowTerminateBusy) setRowTerminateTarget(null);
+        }}
+        title="End employment"
+        description={
+          rowTerminateTarget ? (
+            <>
+              You are about to end active employment for{" "}
+              <strong className="text-hgh-navy">{employeeDisplayName(rowTerminateTarget)}</strong> (
+              <span className="tabular-nums font-medium">{rowTerminateTarget.employeeCode}</span>). They will be
+              marked terminated and excluded from new payroll runs. You can still use{" "}
+              <strong className="text-hgh-navy">Exits</strong> for clearance paperwork if needed.
+            </>
+          ) : (
+            ""
+          )
+        }
+        confirmLabel="End employment"
+        acknowledgeText="I confirm I want to end this person’s active employment for this company."
+        onConfirm={executeRowTerminate}
+        busy={rowTerminateBusy}
+      />
     </div>
   );
 }

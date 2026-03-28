@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
     const trialEndsAt = addDays(new Date(), TRIAL_DAYS);
     const company = await prisma.company.create({
-      data: { name, checkinLockToFirstIp: true, trialEndsAt },
+      data: { name, trialEndsAt },
     });
 
     // User who creates a company becomes its COMPANY_ADMIN

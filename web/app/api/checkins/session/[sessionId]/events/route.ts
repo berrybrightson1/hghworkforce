@@ -5,9 +5,6 @@ import { requireDbUser } from "@/lib/api-auth";
 
 const EVENT_TYPES: CheckinSessionEventType[] = [
   "PORTAL_OPENED",
-  "FACE_SCAN_STARTED",
-  "FACE_MATCH_OK",
-  "FACE_MATCH_FAIL",
   "CLOCK_IN",
   "CLOCK_OUT",
   "SESSION_INTERRUPTED",

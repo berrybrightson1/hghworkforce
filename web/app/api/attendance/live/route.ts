@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   const now = new Date();
   const isWeekend = now.getDay() === 0 || now.getDay() === 6;
 
-  const [employees, todayCheckins, approvedLeave] = await Promise.all([
+  const [employees, todayCheckins, approvedLeave] = await prisma.$transaction([
     prisma.employee.findMany({
       where: { companyId, status: "ACTIVE" },
       select: {

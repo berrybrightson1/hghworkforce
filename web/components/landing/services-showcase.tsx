@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { useCarouselAutoplay } from "@/hooks/use-carousel-autoplay";
-import { CheckCircle2, CreditCard, Fingerprint } from "lucide-react";
+import { CheckCircle2, CreditCard, Smartphone } from "lucide-react";
 
 const SERVICE_ICONS = {
   payroll: CreditCard,
-  checkin: Fingerprint,
+  checkin: Smartphone,
 } as const;
 
 export type ServiceIconId = keyof typeof SERVICE_ICONS;

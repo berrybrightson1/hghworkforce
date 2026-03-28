@@ -14,7 +14,6 @@ import { useApi } from "@/lib/swr";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { cn } from "@/lib/utils";
-import { FaceEnrollmentCapture } from "@/components/face-enrollment-capture";
 
 type ShiftInfo = {
   shift: { name: string; startTime: string; endTime: string };
@@ -24,12 +23,6 @@ type CheckinContext = {
   employeeId: string;
   companyId: string;
   checkinEnterpriseEnabled: boolean;
-  checkinEnforceIpAllowlist: boolean;
-  allowedIpCount: number;
-  checkinRequireFaceVerification: boolean;
-  checkinMaxFaceAttempts: number;
-  checkinFaceDistanceThreshold: number | null;
-  hasFaceEnrolled: boolean;
 };
 
 type CheckInRecord = {
@@ -74,15 +67,12 @@ function useLiveClock() {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-const isDev = process.env.NODE_ENV === "development";
-
 export default function PortalCheckInPage() {
   const { selected } = useCompany();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [checkinCtx, setCheckinCtx] = useState<CheckinContext | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [devFaceJson, setDevFaceJson] = useState("");
   const [corrCheckInId, setCorrCheckInId] = useState("");
   const [corrReason, setCorrReason] = useState("");
   const [corrBusy, setCorrBusy] = useState(false);
@@ -139,21 +129,9 @@ export default function PortalCheckInPage() {
     };
   }, []);
 
-  const reloadCheckinContext = useCallback(async () => {
-    try {
-      const res = await fetch("/api/checkin-context");
-      if (!res.ok) return;
-      const ctx = (await res.json()) as CheckinContext;
-      setCheckinCtx(ctx);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   const postSessionEvent = useCallback(
     async (
       type:
-        | "FACE_SCAN_STARTED"
         | "TAB_HIDDEN"
         | "TAB_VISIBLE"
         | "SESSION_INTERRUPTED",
@@ -186,49 +164,19 @@ export default function PortalCheckInPage() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [sessionId, postSessionEvent]);
 
-  const parseDevFaceDescriptor = useCallback((): number[] | undefined => {
-    if (!isDev || !devFaceJson.trim()) return undefined;
-    try {
-      const parsed = JSON.parse(devFaceJson) as unknown;
-      if (!Array.isArray(parsed) || parsed.length === 0) return undefined;
-      const nums = parsed.map((x) => Number(x));
-      if (nums.some((n) => !Number.isFinite(n))) return undefined;
-      return nums;
-    } catch {
-      return undefined;
-    }
-  }, [devFaceJson]);
-
   const handleAction = useCallback(
     async (action: "clock-in" | "clock-out") => {
       const enterprise = checkinCtx?.checkinEnterpriseEnabled;
-      const requireFace =
-        checkinCtx?.checkinRequireFaceVerification && checkinCtx?.hasFaceEnrolled;
 
       if (enterprise && !sessionId) {
         toast.error("Check-in session is not ready. Refresh the page and try again.");
         return;
       }
 
-      const faceDescriptor = parseDevFaceDescriptor();
-      if (requireFace && !faceDescriptor) {
-        toast.error(
-          isDev
-            ? "Paste a test face descriptor JSON array (development) or complete camera enrollment."
-            : "Face verification is required. This build needs a camera integration on your device.",
-        );
-        return;
-      }
-
-      if (requireFace && faceDescriptor) {
-        void postSessionEvent("FACE_SCAN_STARTED");
-      }
-
       setLoading(true);
       try {
         const body: Record<string, unknown> = { action };
         if (enterprise && sessionId) body.sessionId = sessionId;
-        if (faceDescriptor) body.faceDescriptor = faceDescriptor;
 
         const res = await fetch("/api/checkins", {
           method: "POST",
@@ -266,7 +214,7 @@ export default function PortalCheckInPage() {
         setLoading(false);
       }
     },
-    [toast, mutate, checkinCtx, sessionId, parseDevFaceDescriptor, postSessionEvent],
+    [toast, mutate, checkinCtx, sessionId],
   );
 
   const timeString = now.toLocaleTimeString("en-GB", {
@@ -303,40 +251,6 @@ export default function PortalCheckInPage() {
             Secure check-in session is active. Visibility changes may be logged for audit.
           </p>
         )}
-        {checkinCtx && !checkinCtx.hasFaceEnrolled && (
-          <div className="mx-auto mt-4 max-w-lg rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-4 text-left">
-            <p className="text-sm font-medium text-amber-950">Register your face (one time)</p>
-            <p className="mt-1 text-xs text-amber-900/90">
-              Required for the <strong>office kiosk</strong> and for face check-in. Use the camera
-              below. If your company has no HR role, a <strong>company admin</strong> can do this
-              from <strong>Dashboard → Employees → your profile → Check-in face profile</strong>.
-            </p>
-            <div className="mt-4 flex justify-center sm:justify-start">
-              <FaceEnrollmentCapture
-                employeeId={checkinCtx.employeeId}
-                onSuccess={() => void reloadCheckinContext()}
-              />
-            </div>
-          </div>
-        )}
-        {isDev &&
-          checkinCtx?.checkinRequireFaceVerification &&
-          checkinCtx?.hasFaceEnrolled && (
-            <div className="mx-auto mt-4 w-full max-w-md text-left">
-              <label className="block text-xs font-medium text-hgh-muted">
-                Development: paste face descriptor JSON array for API testing
-              </label>
-              <textarea
-                className="mt-1 w-full rounded-lg border border-hgh-border bg-white p-2 font-mono text-xs text-hgh-slate"
-                rows={3}
-                value={devFaceJson}
-                onChange={(e) => setDevFaceJson(e.target.value)}
-                placeholder="[ … ]"
-                spellCheck={false}
-              />
-            </div>
-          )}
-
         {/* Status badge */}
         <div className="mt-6">
           {openCheckIn ? (

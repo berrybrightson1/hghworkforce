@@ -31,7 +31,7 @@ export async function GET(req: Request) {
     pendingPayruns,
     pendingLeave,
     salaryData,
-  ] = await Promise.all([
+  ] = await prisma.$transaction([
     prisma.employee.count({
       where: { companyId, status: "ACTIVE" },
     }),

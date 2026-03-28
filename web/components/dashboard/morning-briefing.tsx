@@ -1,5 +1,6 @@
 "use client";
 
+import { Users, Clock, ClipboardList, Banknote } from "lucide-react";
 import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
 
@@ -40,24 +41,24 @@ export function MorningBriefing({ userName }: { userName: string }) {
   const firstName = userName.split(" ")[0];
   const cards = [
     {
-      icon: "group",
+      icon: Users,
       label: `${data.todayAttendance.present} Present today`,
       value: data.todayAttendance.present,
     },
     {
-      icon: "schedule",
+      icon: Clock,
       label: `${data.todayAttendance.late} Late`,
       sublabel: `${data.todayAttendance.absent} Absent`,
       value: data.todayAttendance.late + data.todayAttendance.absent,
     },
     {
-      icon: "pending_actions",
+      icon: ClipboardList,
       label: `${data.pendingApprovals} Awaiting approval`,
       value: data.pendingApprovals,
       pulse: data.pendingApprovals > 0,
     },
     {
-      icon: "payments",
+      icon: Banknote,
       label: `GHS ${formatGHS(data.monthSalaryLiability)} salary this month`,
       value: data.monthSalaryLiability,
     },
@@ -70,26 +71,24 @@ export function MorningBriefing({ userName }: { userName: string }) {
         <p className="text-sm text-hgh-muted">{formatDate()}</p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map((card) => (
-          <div
-            key={card.icon}
-            className="relative rounded-2xl border border-hgh-gold/10 bg-white/5 p-5"
-          >
-            {card.pulse && (
-              <span className="absolute right-3 top-3 h-2 w-2 animate-pulse rounded-full bg-hgh-gold" />
-            )}
-            <span
-              className="material-symbols-outlined mb-2 block text-hgh-gold"
-              style={{ fontSize: 24 }}
+        {cards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <div
+              key={card.label}
+              className="relative rounded-2xl border border-hgh-gold/10 bg-white/5 p-5"
             >
-              {card.icon}
-            </span>
-            <p className="text-sm font-medium text-white">{card.label}</p>
-            {card.sublabel && (
-              <p className="mt-0.5 text-xs text-hgh-muted">{card.sublabel}</p>
-            )}
-          </div>
-        ))}
+              {card.pulse && (
+                <span className="absolute right-3 top-3 h-2 w-2 animate-pulse rounded-full bg-hgh-gold" />
+              )}
+              <Icon size={24} className="mb-2 text-hgh-gold" />
+              <p className="text-sm font-medium text-white">{card.label}</p>
+              {card.sublabel && (
+                <p className="mt-0.5 text-xs text-hgh-muted">{card.sublabel}</p>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
@@ -32,8 +32,9 @@ type Emp = {
   department: string;
 };
 
-export default function NewExitPage() {
+function NewExitPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { selected } = useCompany();
   const { toast } = useToast();
 
@@ -45,6 +46,11 @@ export default function NewExitPage() {
   const [exitInterviewDate, setExitInterviewDate] = useState("");
   const [reason, setReason] = useState("");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const pre = searchParams.get("employeeId");
+    if (pre) setEmployeeId(pre);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!selected?.id) return;
@@ -182,5 +188,15 @@ export default function NewExitPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function NewExitPage() {
+  return (
+    <Suspense
+      fallback={<div className="p-8 text-sm text-hgh-muted">Loading…</div>}
+    >
+      <NewExitPageContent />
+    </Suspense>
   );
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { guardEmployeeCreation } from "@/lib/billing/guards";
 import { allocateEmployeeCode } from "@/lib/employee-code";
@@ -45,11 +46,11 @@ export async function GET(req: NextRequest) {
       take: 100,
     });
 
-    // List view: no face vectors; flag only for admin UX (kiosk checklist)
+    // List view: flag only for admin UX (kiosk checklist)
     const masked = employees.map(
-      ({ faceDescriptor, ssnitEncrypted, tinEncrypted, bankAccountEncrypted, ...rest }) => ({
+      ({ kioskDeviceTokenHash, ssnitEncrypted, tinEncrypted, bankAccountEncrypted, ...rest }) => ({
         ...rest,
-        hasFaceEnrolled: faceDescriptor != null,
+        hasDeviceBound: kioskDeviceTokenHash != null,
         ssnitEncrypted: ssnitEncrypted ? maskSensitive("SSNIT") : null,
         tinEncrypted: tinEncrypted ? maskSensitive("TIN") : null,
         bankAccountEncrypted: bankAccountEncrypted ? maskSensitive("BANK") : null,
@@ -89,32 +90,130 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "name is required" }, { status: 400 });
     }
 
-    const employee = await prisma.$transaction(async (tx) => {
+    const department =
+      typeof body.department === "string" ? body.department.trim() : "";
+    if (!department) {
+      return NextResponse.json({ error: "department is required" }, { status: 400 });
+    }
+
+    const jobTitle =
+      typeof body.jobTitle === "string" ? body.jobTitle.trim() : "";
+    if (!jobTitle) {
+      return NextResponse.json({ error: "jobTitle is required" }, { status: 400 });
+    }
+
+    const startRaw = body.startDate;
+    if (startRaw == null || String(startRaw).trim() === "") {
+      return NextResponse.json({ error: "startDate is required" }, { status: 400 });
+    }
+    const startDate = new Date(String(startRaw));
+    if (Number.isNaN(startDate.getTime())) {
+      return NextResponse.json({ error: "Invalid startDate" }, { status: 400 });
+    }
+
+    const basicN = Number(body.basicSalary);
+    if (!Number.isFinite(basicN) || basicN <= 0) {
+      return NextResponse.json({ error: "basicSalary must be a positive number" }, { status: 400 });
+    }
+
+    let employmentType = "FULL_TIME";
+    if (body.employmentType != null && String(body.employmentType).trim() !== "") {
+      employmentType = String(body.employmentType);
+    }
+    if (!["FULL_TIME", "PART_TIME", "CONTRACTOR"].includes(employmentType)) {
+      return NextResponse.json({ error: "Invalid employmentType" }, { status: 400 });
+    }
+
+    const basicDec = new Prisma.Decimal(basicN.toFixed(2));
+    const recentCutoff = new Date(Date.now() - 90_000);
+
+    try {
+      const employee = await prisma.$transaction(async (tx) => {
+      const duplicateRecent = await tx.employee.findFirst({
+        where: {
+          companyId,
+          deletedAt: null,
+          name,
+          department,
+          jobTitle,
+          employmentType: employmentType as "FULL_TIME" | "PART_TIME" | "CONTRACTOR",
+          basicSalary: basicDec,
+          startDate,
+          createdAt: { gte: recentCutoff },
+        },
+        select: { id: true, employeeCode: true },
+      });
+      if (duplicateRecent) {
+        const err = new Error("DUPLICATE_RECENT") as Error & {
+          duplicate?: { id: string; employeeCode: string };
+        };
+        err.duplicate = duplicateRecent;
+        throw err;
+      }
+
       const code = await allocateEmployeeCode(tx, companyId, company.name);
       return tx.employee.create({
         data: {
           employeeCode: code,
           name,
           companyId,
-          department: body.department,
-          jobTitle: body.jobTitle,
-          employmentType: body.employmentType || "FULL_TIME",
-          startDate: new Date(body.startDate),
-          basicSalary: body.basicSalary,
-          ssnitEncrypted: encrypt(body.ssnit),
-          tinEncrypted: encrypt(body.tin),
-          bankNameEncrypted: encrypt(body.bankName),
-          bankAccountEncrypted: encrypt(body.bankAccount),
-          bankBranchEncrypted: encrypt(body.bankBranch),
+          department,
+          jobTitle,
+          employmentType: employmentType as "FULL_TIME" | "PART_TIME" | "CONTRACTOR",
+          startDate,
+          basicSalary: basicDec,
+          ssnitEncrypted: encrypt(
+            typeof body.ssnit === "string" && body.ssnit.trim() ? body.ssnit.trim() : null,
+          ),
+          tinEncrypted: encrypt(
+            typeof body.tin === "string" && body.tin.trim() ? body.tin.trim() : null,
+          ),
+          bankNameEncrypted: encrypt(
+            typeof body.bankName === "string" && body.bankName.trim() ? body.bankName.trim() : null,
+          ),
+          bankAccountEncrypted: encrypt(
+            typeof body.bankAccount === "string" && body.bankAccount.trim()
+              ? body.bankAccount.trim()
+              : null,
+          ),
+          bankBranchEncrypted: encrypt(
+            typeof body.bankBranch === "string" && body.bankBranch.trim()
+              ? body.bankBranch.trim()
+              : null,
+          ),
         },
         include: {
           company: { select: { name: true } },
           user: { select: { name: true, email: true } },
         },
       });
-    });
-    return NextResponse.json(employee, { status: 201 });
-  } catch {
+      });
+      return NextResponse.json(employee, { status: 201 });
+    } catch (e: unknown) {
+      if (
+        e instanceof Error &&
+        e.message === "DUPLICATE_RECENT" &&
+        "duplicate" in e &&
+        e.duplicate &&
+        typeof e.duplicate === "object" &&
+        "id" in e.duplicate &&
+        "employeeCode" in e.duplicate
+      ) {
+        const d = e.duplicate as { id: string; employeeCode: string };
+        return NextResponse.json(
+          {
+            error:
+              "The same employee details were saved a few seconds ago. This usually means the form was submitted more than once. Use the list to remove extras, or “Terminate by code” with the payroll code.",
+            duplicateOfId: d.id,
+            employeeCode: d.employeeCode,
+          },
+          { status: 409 },
+        );
+      }
+      throw e;
+    }
+  } catch (e) {
+    console.error("[employees POST]", e);
     return NextResponse.json({ error: "Failed to create employee" }, { status: 500 });
   }
 }

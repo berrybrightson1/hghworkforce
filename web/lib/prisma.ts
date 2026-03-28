@@ -24,8 +24,14 @@ function resolveDatabaseUrl(): string | undefined {
   }
   const sep = raw.includes("?") ? "&" : "?";
   let out = `${raw}${sep}pgbouncer=true`;
+  // Serverless: keep 1 connection per instance. Local dev runs many parallel API routes & UI fetches;
+  // Promise.all on Prisma + connection_limit=1 exhausts the pool (P2024). See dashboard briefing route.
   if (!raw.includes("connection_limit")) {
-    out += "&connection_limit=1";
+    const limit = process.env.NODE_ENV === "production" ? 1 : 10;
+    out += `&connection_limit=${limit}`;
+  }
+  if (!raw.includes("pool_timeout")) {
+    out += `&pool_timeout=${process.env.NODE_ENV === "production" ? 10 : 30}`;
   }
   return out;
 }

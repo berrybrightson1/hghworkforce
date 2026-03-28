@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getClientIpFromRequest } from "@/lib/checkin-ip";
-import { assertCompanyCheckinIpAllowed } from "@/lib/checkin-enforcement";
-import { getKioskAuditActorId } from "@/lib/kiosk-audit-actor";
-import { signKioskSessionToken } from "@/lib/kiosk-token";
 import { normalizeKioskCompanyId } from "@/lib/kiosk-company-id";
+import { generateChallengeCode, CHALLENGE_TTL_MS } from "@/lib/kiosk-challenge";
 
 /** Trim, strip BOM, normalize unicode dashes to ASCII hyphen for pasted codes. */
 function normalizeKioskEmployeeCodeInput(raw: string): string {
@@ -30,6 +27,8 @@ function nameMatchesEmployee(displayName: string, employeeName: string | null, u
 /**
  * POST /api/kiosk/verify
  * Body: { companyId, employeeCode, displayName }
+ *
+ * Creates a KioskChallenge (QR code + 6-digit code) for device-bound verification.
  */
 export async function POST(req: NextRequest) {
   let body: { companyId?: string; employeeCode?: string; displayName?: string };
@@ -58,13 +57,7 @@ export async function POST(req: NextRequest) {
   try {
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: {
-        checkinLockToFirstIp: true,
-        checkinBoundIp: true,
-        checkinEnterpriseEnabled: true,
-        checkinEnforceIpAllowlist: true,
-        allowedIps: { select: { address: true } },
-      },
+      select: { id: true },
     });
 
     if (!company) {
@@ -76,39 +69,6 @@ export async function POST(req: NextRequest) {
           receivedCompanyId: companyId,
         },
         { status: 404 },
-      );
-    }
-
-    const clientIp = getClientIpFromRequest(req);
-    const actorId = await getKioskAuditActorId(companyId);
-    const ipOk = await assertCompanyCheckinIpAllowed({
-      companyId,
-      company,
-      clientIp,
-      actorId,
-    });
-
-    if (!ipOk.ok) {
-      if (actorId) {
-        await prisma.auditLog.create({
-          data: {
-            actorId,
-            action: "CHECKIN_IP_BLOCKED",
-            entityType: "Company",
-            entityId: companyId,
-            afterState: { reason: ipOk.logReason, clientIp, source: "kiosk_verify" },
-            ipAddress: clientIp,
-          },
-        });
-      }
-      return NextResponse.json(
-        {
-          error:
-            ipOk.reason === "ip_mismatch"
-              ? "This kiosk is locked to your office PC — open it only on the registered machine."
-              : "Check-in not allowed from this network.",
-        },
-        { status: 403 },
       );
     }
 
@@ -128,10 +88,7 @@ export async function POST(req: NextRequest) {
         {
           error: "Employee not found or inactive for this company",
           hint:
-            "Enter the full auto-assigned code (three parts with hyphens, e.g. PREFIX-ABC123-0001) exactly as shown on Dashboard → Employees or your payslip—not your email, portal password, or phone number.",
-          faceEnrollmentUnrelated: true,
-          kioskContextNote:
-            "This is not a face enrollment problem. The kiosk has not used the camera yet—it only checks your employee code and company link on this screen.",
+            "Enter the full auto-assigned code (three parts with hyphens, e.g. PREFIX-ABC123-0001) exactly as shown on Dashboard → Employees or your payslip.",
         },
         { status: 401 },
       );
@@ -143,23 +100,8 @@ export async function POST(req: NextRequest) {
           error: "Name does not match our records for this code",
           hint:
             "Type your full name exactly as it appears on your employee profile (same spelling and order as HR saved it).",
-          faceEnrollmentUnrelated: true,
-          kioskContextNote:
-            "This is not a face enrollment problem. The camera step comes only after your name matches the record for this employee code.",
         },
         { status: 401 },
-      );
-    }
-
-    const storedFace = employee.faceDescriptor != null;
-    if (!storedFace) {
-      return NextResponse.json(
-        {
-          error: "Face profile not enrolled yet.",
-          hint:
-            "If this person can log into the employee portal: open Portal → Check-in and use Register your face (camera). Otherwise a Company Admin or Super Admin can register it under Dashboard → Employees → open their profile → Check-in face profile.",
-        },
-        { status: 403 },
       );
     }
 
@@ -168,14 +110,22 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
 
-    const token = signKioskSessionToken(employee.id, companyId);
+    // Create a challenge for QR-based device verification
+    const code = generateChallengeCode();
+    const challenge = await prisma.kioskChallenge.create({
+      data: {
+        companyId,
+        employeeId: employee.id,
+        code,
+        expiresAt: new Date(Date.now() + CHALLENGE_TTL_MS),
+      },
+    });
 
     return NextResponse.json({
-      token,
+      challengeId: challenge.id,
       employeeId: employee.id,
       displayLabel: employee.name ?? employee.user?.name ?? employeeCode,
       clockedIn: openCheckIn != null,
-      hasFaceEnrolled: true,
     });
   } catch (e) {
     console.error(e);

@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireDbUser } from "@/lib/api-auth";
-import { getClientIpFromRequest } from "@/lib/checkin-ip";
+
+function getClientIp(req: NextRequest): string | null {
+  return req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip");
+}
 
 /**
  * POST /api/checkins/session
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ sessionId: null as string | null, enterpriseDisabled: true });
     }
 
-    const ip = getClientIpFromRequest(req);
+    const ip = getClientIp(req);
     const userAgent = req.headers.get("user-agent");
 
     const session = await prisma.checkinSession.create({

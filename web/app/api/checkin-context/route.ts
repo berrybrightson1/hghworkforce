@@ -4,7 +4,7 @@ import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 
 /**
  * GET /api/checkin-context
- * Employee portal: company check-in flags + whether face is enrolled (no descriptor leaked).
+ * Employee portal: company check-in flags + whether device is bound.
  */
 export async function GET() {
   const auth = await requireDbUser();
@@ -19,18 +19,11 @@ export async function GET() {
       where: { userId: auth.dbUser.id },
       select: {
         id: true,
-        faceDescriptor: true,
+        kioskDeviceTokenHash: true,
         company: {
           select: {
             id: true,
-            checkinLockToFirstIp: true,
-            checkinBoundIp: true,
             checkinEnterpriseEnabled: true,
-            checkinEnforceIpAllowlist: true,
-            checkinRequireFaceVerification: true,
-            checkinMaxFaceAttempts: true,
-            checkinFaceDistanceThreshold: true,
-            _count: { select: { allowedIps: true } },
           },
         },
       },
@@ -47,17 +40,8 @@ export async function GET() {
     return NextResponse.json({
       employeeId: employee.id,
       companyId: c.id,
-      checkinLockToFirstIp: c.checkinLockToFirstIp,
-      checkinHasBoundIp: c.checkinBoundIp != null,
       checkinEnterpriseEnabled: c.checkinEnterpriseEnabled,
-      checkinEnforceIpAllowlist: c.checkinEnforceIpAllowlist,
-      allowedIpCount: c._count.allowedIps,
-      checkinRequireFaceVerification: c.checkinRequireFaceVerification,
-      checkinMaxFaceAttempts: c.checkinMaxFaceAttempts,
-      checkinFaceDistanceThreshold: c.checkinFaceDistanceThreshold
-        ? Number(c.checkinFaceDistanceThreshold)
-        : null,
-      hasFaceEnrolled: employee.faceDescriptor != null,
+      hasDeviceBound: employee.kioskDeviceTokenHash != null,
     });
   } catch {
     return NextResponse.json({ error: "Failed to load context" }, { status: 500 });
