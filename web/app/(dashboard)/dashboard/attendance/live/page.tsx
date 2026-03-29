@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
+import { formatClockTime12h } from "@/lib/attendance-display";
 
 type EmployeeBoard = {
   id: string;
@@ -36,14 +37,6 @@ function initials(name: string): string {
     .join("")
     .toUpperCase()
     .slice(0, 2);
-}
-
-function formatTime(iso: string | null): string {
-  if (!iso) return "";
-  return new Date(iso).toLocaleTimeString("en-GH", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 export default function AttendanceLivePage() {
@@ -126,9 +119,11 @@ export default function AttendanceLivePage() {
                     <span className={`h-2 w-2 rounded-full ${cfg.dot}`} />
                     <span className="text-xs font-medium text-hgh-slate">{cfg.label}</span>
                   </div>
-                  {emp.clockInTime && (
-                    <span className="text-[11px] text-hgh-muted">{formatTime(emp.clockInTime)}</span>
-                  )}
+                  {emp.clockInTime ? (
+                    <span className="text-[11px] text-hgh-muted">
+                      {formatClockTime12h(emp.clockInTime)}
+                    </span>
+                  ) : null}
                 </div>
               </div>
             );

@@ -1,14 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { ChevronDown, Circle, CircleCheck, Layers } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 /**
  * Searchable list + Enter to commit custom text (for department / job title pickers).
+ * Trigger and list row styling align with `Select` / app dropdown spec.
  */
 export function SearchablePicklist({
   value,
@@ -53,24 +53,37 @@ export function SearchablePicklist({
       }}
     >
       <PopoverTrigger asChild>
-        <Button
+        <button
           type="button"
-          variant="ghost"
           disabled={disabled}
           id={id}
           aria-invalid={ariaInvalid}
           className={cn(
-            "h-10 w-full justify-between border border-hgh-border bg-white px-3 font-normal text-hgh-navy hover:bg-hgh-offwhite",
+            "group flex h-10 w-full items-center gap-2 rounded-md border-2 border-hgh-border bg-white px-3 py-2 text-left text-base text-hgh-slate shadow-sm transition-[border-color] duration-150 lg:text-sm",
+            "hover:border-hgh-slate/35 focus:outline-none focus-visible:border-hgh-navy",
+            open && "border-hgh-navy",
             !value && "text-hgh-muted",
+            "disabled:cursor-not-allowed disabled:opacity-50",
           )}
         >
-          <span className="truncate">{value || placeholder}</span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
-        </Button>
+          <Layers
+            className="h-4 w-4 shrink-0 text-hgh-muted transition-colors group-focus-visible:text-hgh-navy/80"
+            aria-hidden
+          />
+          <span className="min-w-0 flex-1 truncate">{value || placeholder}</span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 shrink-0 text-hgh-slate transition-transform duration-200",
+              open && "-rotate-180",
+            )}
+            aria-hidden
+          />
+        </button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="z-[300] w-[min(calc(100vw-2rem),22rem)] p-0"
+        sideOffset={6}
+        className="z-[300] w-[min(calc(100vw-2rem),22rem)] overflow-hidden rounded-lg border-2 border-hgh-border p-0 shadow-lg shadow-hgh-navy/10"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="border-b border-hgh-border p-2">
@@ -99,23 +112,32 @@ export function SearchablePicklist({
           {filtered.length === 0 ? (
             <li className="px-2 py-3 text-xs text-hgh-muted">No matches — press Enter to use what you typed.</li>
           ) : (
-            filtered.map((opt) => (
-              <li key={opt}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={opt === value}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-hgh-navy hover:bg-hgh-offwhite",
-                    opt === value && "bg-hgh-gold/10",
-                  )}
-                  onClick={() => commitChoice(opt)}
-                >
-                  {opt === value ? <Check className="h-4 w-4 shrink-0 text-hgh-gold" aria-hidden /> : <span className="w-4 shrink-0" />}
-                  <span className="min-w-0 truncate">{opt}</span>
-                </button>
-              </li>
-            ))
+            filtered.map((opt) => {
+              const selected = opt === value;
+              return (
+                <li key={opt}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-md py-2.5 pl-3 pr-3 text-left text-sm text-hgh-slate outline-none transition-colors hover:bg-hgh-offwhite focus:bg-hgh-offwhite",
+                      selected && "bg-hgh-offwhite font-medium text-hgh-navy",
+                    )}
+                    onClick={() => commitChoice(opt)}
+                  >
+                    <span className="flex h-4 w-4 shrink-0 items-center justify-center text-hgh-muted" aria-hidden>
+                      {selected ? (
+                        <CircleCheck className="h-4 w-4 text-hgh-navy" strokeWidth={2} />
+                      ) : (
+                        <Circle className="h-4 w-4" strokeWidth={1.5} />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">{opt}</span>
+                  </button>
+                </li>
+              );
+            })
           )}
         </ul>
       </PopoverContent>

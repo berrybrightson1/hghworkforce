@@ -14,6 +14,16 @@ import { useApi } from "@/lib/swr";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { cn } from "@/lib/utils";
+import { formatClockTime12h, formatLateMinutesHuman } from "@/lib/attendance-display";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const CORR_SESSION_NONE = "__hgh_corr_session_none__";
 
 type ShiftInfo = {
   shift: { name: string; startTime: string; endTime: string };
@@ -37,13 +47,6 @@ type CheckInRecord = {
   note: string | null;
   shiftAssignment: ShiftInfo;
 };
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function formatDuration(hours: string | null) {
   if (!hours) return "-";
@@ -257,11 +260,11 @@ export default function PortalCheckInPage() {
             <div className="space-y-2">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-hgh-success/10 px-4 py-1.5 text-sm font-medium text-hgh-success">
                 <CheckCircle2 className="h-4 w-4" aria-hidden />
-                Clocked in since {formatTime(openCheckIn.clockIn)}
+                Clocked in since {formatClockTime12h(openCheckIn.clockIn)}
               </span>
               {openCheckIn.lateMinutes && openCheckIn.lateMinutes > 0 && (
                 <p className="text-xs text-hgh-danger">
-                  Late by {openCheckIn.lateMinutes} minutes
+                  Late by {formatLateMinutesHuman(openCheckIn.lateMinutes)}
                 </p>
               )}
             </div>
@@ -364,11 +367,11 @@ export default function PortalCheckInPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-hgh-navy">
-                    {formatTime(c.clockIn)}
+                    {formatClockTime12h(c.clockIn)}
                     {c.clockOut && (
                       <span className="text-hgh-muted">
                         {" "}
-                        - {formatTime(c.clockOut)}
+                        - {formatClockTime12h(c.clockOut)}
                       </span>
                     )}
                   </p>
@@ -380,7 +383,7 @@ export default function PortalCheckInPage() {
                     </span>
                     {c.lateMinutes && c.lateMinutes > 0 && (
                       <span className="rounded bg-hgh-danger/10 px-1.5 py-0.5 text-hgh-danger">
-                        Late {c.lateMinutes}m
+                        Late {formatLateMinutesHuman(c.lateMinutes)}
                       </span>
                     )}
                     {c.overtimeHours && parseFloat(c.overtimeHours) > 0 && (
@@ -416,20 +419,25 @@ export default function PortalCheckInPage() {
             times can be added later from the dashboard.
           </p>
           <div className="mt-4 space-y-3">
-            <select
-              aria-label="Session to correct"
-              className="w-full rounded-lg border border-hgh-border bg-white px-3 py-2 text-sm"
-              value={corrCheckInId}
-              onChange={(e) => setCorrCheckInId(e.target.value)}
+            <Select
+              value={corrCheckInId || CORR_SESSION_NONE}
+              onValueChange={(v) => setCorrCheckInId(v === CORR_SESSION_NONE ? "" : v)}
             >
-              <option value="">Select today&apos;s session…</option>
-              {checkins.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {formatTime(c.clockIn)}
-                  {c.clockOut ? ` – ${formatTime(c.clockOut)}` : " (in progress)"}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger aria-label="Session to correct" className="w-full">
+                <SelectValue placeholder="Select today's session…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CORR_SESSION_NONE} className="text-hgh-muted">
+                  Select today&apos;s session…
+                </SelectItem>
+                {checkins.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {formatClockTime12h(c.clockIn)}
+                    {c.clockOut ? ` – ${formatClockTime12h(c.clockOut)}` : " (in progress)"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <textarea
               className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm"
               rows={3}

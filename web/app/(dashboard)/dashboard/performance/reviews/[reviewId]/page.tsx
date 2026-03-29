@@ -9,6 +9,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type Goal = {
   id: string;
@@ -245,23 +252,31 @@ export default function ReviewDetailPage() {
                     <div>
                       <span className="text-[10px] uppercase text-hgh-muted">Manager</span>
                       {review.status === "SELF_REVIEWED" || review.status === "PENDING" ? (
-                        <select
-                          value={goalScores[goal.id] ?? goal.managerScore ?? ""}
-                          onChange={(e) =>
+                        <Select
+                          value={(() => {
+                            const s = goalScores[goal.id];
+                            if (s !== undefined) return String(s);
+                            if (goal.managerScore != null) return String(goal.managerScore);
+                            return undefined;
+                          })()}
+                          onValueChange={(v) =>
                             setGoalScores((prev) => ({
                               ...prev,
-                              [goal.id]: parseInt(e.target.value),
+                              [goal.id]: parseInt(v, 10),
                             }))
                           }
-                          className="mt-0.5 block h-8 rounded border border-hgh-border bg-white px-2 text-sm"
                         >
-                          <option value="">--</option>
-                          {[1, 2, 3, 4, 5].map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger className="mt-0.5 h-8 w-[4.5rem] px-2" hideLeadingIcon>
+                            <SelectValue placeholder="--" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <SelectItem key={n} value={String(n)}>
+                                {n}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       ) : (
                         <p className="text-sm font-medium text-hgh-slate">
                           {goal.managerScore !== null ? `${goal.managerScore}/5` : "--"}

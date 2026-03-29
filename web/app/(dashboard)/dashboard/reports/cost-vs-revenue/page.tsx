@@ -16,6 +16,13 @@ import { useToast } from "@/components/toast/useToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type RevenueEntry = {
   id: string;
@@ -147,37 +154,44 @@ export default function CostVsRevenuePage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div>
               <label className="mb-1 block text-xs font-medium text-hgh-slate">Month</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => {
-                  setSelectedMonth(Number(e.target.value));
-                  const entry = revenue?.find(
-                    (r) => r.month === Number(e.target.value) && r.year === selectedYear,
-                  );
+              <Select
+                value={String(selectedMonth)}
+                onValueChange={(v) => {
+                  const m = Number(v);
+                  setSelectedMonth(m);
+                  const entry = revenue?.find((r) => r.month === m && r.year === selectedYear);
                   setRevenueInput(entry ? String(Number(entry.revenueAmount)) : "");
                 }}
-                className="h-10 rounded-lg border border-hgh-border bg-white px-3 text-sm text-hgh-navy"
               >
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>
-                    {new Date(2000, i).toLocaleDateString("en-GH", { month: "long" })}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-10 w-[min(100%,12rem)]">
+                  <SelectValue placeholder="Month" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>
+                      {new Date(2000, i).toLocaleDateString("en-GH", { month: "long" })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-hgh-slate">Year</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
-                className="h-10 rounded-lg border border-hgh-border bg-white px-3 text-sm text-hgh-navy"
+              <Select
+                value={String(selectedYear)}
+                onValueChange={(v) => setSelectedYear(Number(v))}
               >
-                {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger className="h-10 w-[7.5rem]">
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex-1">
               <label className="mb-1 block text-xs font-medium text-hgh-slate">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown, Circle, CircleCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { GHANA_BANK_NAMES, branchesForBank, filterOptions } from "@/lib/ghana-banks";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -56,34 +56,48 @@ export function GhanaBankField({
             <ChevronsUpDown className="h-4 w-4" />
           </button>
         </PopoverTrigger>
-        <PopoverContent className="min-w-[320px] p-0" align="end">
+        <PopoverContent
+          className="min-w-[320px] overflow-hidden rounded-lg border-2 border-hgh-border p-0 shadow-lg shadow-hgh-navy/10"
+          align="end"
+          sideOffset={6}
+        >
           <div className="border-b border-hgh-border p-2">
             <input
               aria-label="Filter banks"
-              className="h-9 w-full rounded-md border border-hgh-border px-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold"
+              className="h-9 w-full rounded-md border border-hgh-border px-2 text-sm focus:outline-none focus-visible:border-hgh-navy focus-visible:ring-0"
               placeholder="Filter banks…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
             />
           </div>
           <div className="max-h-[260px] overflow-y-auto scroll-hgh p-1">
-            {list.map((b) => (
-              <button
-                key={b}
-                type="button"
-                className={cn(
-                  "flex w-full rounded-md px-2 py-2 text-left text-sm hover:bg-hgh-offwhite",
-                  b === value && "bg-hgh-gold/10 font-medium text-hgh-navy",
-                )}
-                onClick={() => {
-                  onChange(b);
-                  setOpen(false);
-                  setFilter("");
-                }}
-              >
-                {b}
-              </button>
-            ))}
+            {list.map((b) => {
+              const selected = b === value;
+              return (
+                <button
+                  key={b}
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md py-2.5 pl-2 pr-3 text-left text-sm text-hgh-slate transition-colors hover:bg-hgh-offwhite focus:bg-hgh-offwhite focus:outline-none",
+                    selected && "bg-hgh-offwhite font-medium text-hgh-navy",
+                  )}
+                  onClick={() => {
+                    onChange(b);
+                    setOpen(false);
+                    setFilter("");
+                  }}
+                >
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center text-hgh-muted" aria-hidden>
+                    {selected ? (
+                      <CircleCheck className="h-4 w-4 text-hgh-navy" strokeWidth={2} />
+                    ) : (
+                      <Circle className="h-4 w-4" strokeWidth={1.5} />
+                    )}
+                  </span>
+                  <span className="min-w-0 flex-1">{b}</span>
+                </button>
+              );
+            })}
           </div>
         </PopoverContent>
       </Popover>
@@ -141,11 +155,15 @@ export function GhanaBranchField({
               <ChevronsUpDown className="h-4 w-4" />
             </button>
           </PopoverTrigger>
-          <PopoverContent className="min-w-[300px] p-0" align="end">
+          <PopoverContent
+            className="min-w-[300px] overflow-hidden rounded-lg border-2 border-hgh-border p-0 shadow-lg shadow-hgh-navy/10"
+            align="end"
+            sideOffset={6}
+          >
             <div className="border-b border-hgh-border p-2">
               <input
                 aria-label="Filter branches"
-                className="h-9 w-full rounded-md border border-hgh-border px-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold"
+                className="h-9 w-full rounded-md border border-hgh-border px-2 text-sm focus:outline-none focus-visible:border-hgh-navy focus-visible:ring-0"
                 placeholder="Filter branches…"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
@@ -155,23 +173,33 @@ export function GhanaBranchField({
               {list.length === 0 ? (
                 <p className="px-2 py-2 text-xs text-hgh-muted">No suggestions — type your branch.</p>
               ) : (
-                list.map((b) => (
-                  <button
-                    key={b}
-                    type="button"
-                    className={cn(
-                      "flex w-full rounded-md px-2 py-2 text-left text-sm hover:bg-hgh-offwhite",
-                      b === value && "bg-hgh-gold/10 font-medium text-hgh-navy",
-                    )}
-                    onClick={() => {
-                      onChange(b);
-                      setOpen(false);
-                      setFilter("");
-                    }}
-                  >
-                    {b}
-                  </button>
-                ))
+                list.map((b) => {
+                  const selected = b === value;
+                  return (
+                    <button
+                      key={b}
+                      type="button"
+                      className={cn(
+                        "flex w-full items-center gap-2 rounded-md py-2.5 pl-2 pr-3 text-left text-sm text-hgh-slate transition-colors hover:bg-hgh-offwhite focus:bg-hgh-offwhite focus:outline-none",
+                        selected && "bg-hgh-offwhite font-medium text-hgh-navy",
+                      )}
+                      onClick={() => {
+                        onChange(b);
+                        setOpen(false);
+                        setFilter("");
+                      }}
+                    >
+                      <span className="flex h-4 w-4 shrink-0 items-center justify-center text-hgh-muted" aria-hidden>
+                        {selected ? (
+                          <CircleCheck className="h-4 w-4 text-hgh-navy" strokeWidth={2} />
+                        ) : (
+                          <Circle className="h-4 w-4" strokeWidth={1.5} />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">{b}</span>
+                    </button>
+                  );
+                })
               )}
             </div>
           </PopoverContent>

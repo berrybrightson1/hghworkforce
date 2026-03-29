@@ -20,6 +20,7 @@ import { useCompany } from "@/components/company-context";
 import { DatePickerField } from "@/components/ui/date-picker";
 import { cn } from "@/lib/utils";
 import { employeeDisplayName } from "@/lib/employee-display";
+import { formatClockTime12h, formatLateMinutesHuman } from "@/lib/attendance-display";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,13 +88,6 @@ type CorrectionRow = {
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function formatDuration(hours: string | number | null) {
   if (!hours) return "-";
@@ -468,10 +462,10 @@ export default function AttendancePage() {
                             : "-"}
                         </td>
                         <td className="px-4 py-3 font-mono text-hgh-slate">
-                          {formatTime(c.clockIn)}
+                          {formatClockTime12h(c.clockIn)}
                         </td>
                         <td className="px-4 py-3 font-mono text-hgh-slate">
-                          {c.clockOut ? formatTime(c.clockOut) : "-"}
+                          {c.clockOut ? formatClockTime12h(c.clockOut) : "-"}
                         </td>
                         <td className="px-4 py-3 text-hgh-slate">
                           {formatDuration(c.hoursWorked)}
@@ -479,7 +473,7 @@ export default function AttendancePage() {
                         <td className="px-4 py-3">
                           {c.lateMinutes && c.lateMinutes > 0 ? (
                             <span className="rounded bg-hgh-danger/10 px-1.5 py-0.5 text-xs font-medium text-hgh-danger">
-                              {c.lateMinutes}m
+                              {formatLateMinutesHuman(c.lateMinutes)}
                             </span>
                           ) : (
                             <span className="text-xs text-hgh-muted">-</span>
@@ -700,7 +694,12 @@ export default function AttendancePage() {
                       </td>
                       <td className="max-w-[200px] px-3 py-2 text-xs text-hgh-slate">{r.reason}</td>
                       <td className="px-3 py-2 text-xs text-hgh-muted">
-                        {new Date(r.checkIn.clockIn).toLocaleString()}
+                        {new Date(r.checkIn.clockIn).toLocaleDateString("en-GB", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}{" "}
+                        · {formatClockTime12h(r.checkIn.clockIn)}
                       </td>
                       <td className="px-3 py-2 text-xs font-medium">{r.status}</td>
                       <td className="px-3 py-2">

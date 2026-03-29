@@ -126,6 +126,7 @@ export async function POST(req: NextRequest) {
       employeeId: employee.id,
       displayLabel: employee.name ?? employee.user?.name ?? employeeCode,
       clockedIn: openCheckIn != null,
+      expiresAt: challenge.expiresAt.toISOString(),
     });
   } catch (e) {
     console.error(e);

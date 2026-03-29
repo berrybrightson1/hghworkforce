@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
         code: challenge.code,
         displayName,
         message: "Device verified",
+        expiresAt: challenge.expiresAt.toISOString(),
       });
     }
 
@@ -145,6 +146,7 @@ export async function POST(req: NextRequest) {
       displayName,
       message: "Device registered and verified",
       firstTime: true,
+      expiresAt: challenge.expiresAt.toISOString(),
     });
 
     // Set HttpOnly cookie on the phone browser

@@ -1,7 +1,8 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { AuthenticatorCountdown } from "@/components/kiosk/authenticator-countdown";
 
 function VerifyInner() {
   const searchParams = useSearchParams();
@@ -9,9 +10,17 @@ function VerifyInner() {
 
   const [status, setStatus] = useState<"loading" | "success" | "first-time" | "error" | "expired">("loading");
   const [code, setCode] = useState<string | null>(null);
+  const [expiresAtIso, setExpiresAtIso] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
   const [errorHint, setErrorHint] = useState("");
+
+  const handleCodeExpired = useCallback(() => {
+    setStatus("expired");
+    setErrorMsg("This code has expired.");
+    setCode(null);
+    setExpiresAtIso(null);
+  }, []);
 
   useEffect(() => {
     if (!challengeId) {
@@ -34,6 +43,7 @@ function VerifyInner() {
           displayName?: string;
           message?: string;
           firstTime?: boolean;
+          expiresAt?: string;
           error?: string;
           hint?: string;
         };
@@ -41,10 +51,12 @@ function VerifyInner() {
         if (res.ok) {
           setCode(data.code ?? null);
           setDisplayName(data.displayName ?? "");
+          setExpiresAtIso(data.expiresAt ?? null);
           setStatus(data.firstTime ? "first-time" : "success");
         } else if (res.status === 410) {
           setStatus("expired");
           setErrorMsg(data.error ?? "Challenge expired");
+          setExpiresAtIso(null);
         } else {
           setStatus("error");
           setErrorMsg(data.error ?? "Verification failed");
@@ -93,16 +105,28 @@ function VerifyInner() {
               </div>
             )}
 
-            <div>
-              <p className="text-xs text-slate-400">Your check-in code:</p>
-              <p className="mt-3 font-mono text-5xl font-bold tracking-[0.25em] text-amber-400">
-                {code}
-              </p>
+            <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start sm:justify-center sm:gap-8">
+              {expiresAtIso ? (
+                <AuthenticatorCountdown
+                  expiresAtIso={expiresAtIso}
+                  onExpired={handleCodeExpired}
+                  size={72}
+                  strokeWidth={4}
+                  ringClassName="text-amber-400"
+                  trackClassName="text-white/10"
+                  labelClassName="text-slate-500"
+                />
+              ) : null}
+              <div className="min-w-0 text-center sm:text-left">
+                <p className="text-xs text-slate-400">Your check-in code</p>
+                <p className="mt-3 font-mono text-5xl font-bold tracking-[0.25em] text-amber-400">
+                  {code}
+                </p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Enter this on the kiosk before the ring empties — then request a new code at the kiosk.
+                </p>
+              </div>
             </div>
-
-            <p className="text-xs text-slate-500">
-              Enter this code on the kiosk screen to complete your check-in.
-            </p>
           </div>
         )}
 

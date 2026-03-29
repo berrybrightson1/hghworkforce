@@ -31,5 +31,6 @@ export async function GET(req: NextRequest) {
     deviceVerified: challenge.deviceVerified,
     consumed: challenge.consumed,
     expired,
+    expiresAt: challenge.expiresAt.toISOString(),
   });
 }

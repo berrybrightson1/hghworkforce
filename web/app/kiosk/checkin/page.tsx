@@ -5,7 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AuthenticatorCountdown } from "@/components/kiosk/authenticator-countdown";
 import { normalizeKioskCompanyId } from "@/lib/kiosk-company-id";
+import { formatLateMinutesHuman } from "@/lib/attendance-display";
 
 type Step = "identify" | "scan-qr" | "enter-code" | "done";
 
@@ -30,6 +32,8 @@ function KioskInner() {
   const [deviceVerified, setDeviceVerified] = useState(false);
   const [expired, setExpired] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
+  /** Server challenge expiry (ISO) — aligns phone + kiosk countdown. */
+  const [challengeExpiresAt, setChallengeExpiresAt] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Fetch company status on mount
@@ -80,7 +84,11 @@ function KioskInner() {
           deviceVerified: boolean;
           consumed: boolean;
           expired: boolean;
+          expiresAt?: string;
         };
+        if (typeof data.expiresAt === "string") {
+          setChallengeExpiresAt(data.expiresAt);
+        }
         if (data.expired) {
           setExpired(true);
           if (pollRef.current) clearInterval(pollRef.current);
@@ -134,6 +142,7 @@ function KioskInner() {
         challengeId?: string;
         clockedIn?: boolean;
         displayLabel?: string;
+        expiresAt?: string;
       };
       if (!res.ok) {
         const msg = [data.error, data.hint].filter(Boolean).join(" ").trim();
@@ -142,6 +151,7 @@ function KioskInner() {
       }
       setError(null);
       setChallengeId(data.challengeId!);
+      if (typeof data.expiresAt === "string") setChallengeExpiresAt(data.expiresAt);
       setClockedIn(Boolean(data.clockedIn));
       setLabel(String(data.displayLabel || ""));
       setDeviceVerified(false);
@@ -178,7 +188,7 @@ function KioskInner() {
 
       const meta = data._meta;
       let msg = action === "clock-in" ? "Clocked in successfully!" : "Clocked out successfully!";
-      if (meta?.lateMinutes) msg += ` (${meta.lateMinutes} min late)`;
+      if (meta?.lateMinutes) msg += ` (${formatLateMinutesHuman(meta.lateMinutes)} late)`;
       if (meta?.overtimeHours) msg += ` (${meta.overtimeHours}h overtime)`;
       if (meta?.shiftName) msg += ` — Shift: ${meta.shiftName}`;
 
@@ -203,6 +213,7 @@ function KioskInner() {
     setDeviceVerified(false);
     setExpired(false);
     setResultMessage(null);
+    setChallengeExpiresAt(null);
     setStep("identify");
     if (pollRef.current) clearInterval(pollRef.current);
   }
@@ -228,12 +239,14 @@ function KioskInner() {
         challengeId?: string;
         clockedIn?: boolean;
         displayLabel?: string;
+        expiresAt?: string;
       };
       if (!res.ok) {
         setError(data.error || "Failed to regenerate");
         return;
       }
       setChallengeId(data.challengeId!);
+      if (typeof data.expiresAt === "string") setChallengeExpiresAt(data.expiresAt);
       setClockedIn(Boolean(data.clockedIn));
       setStep("scan-qr");
     } catch {
@@ -346,6 +359,22 @@ function KioskInner() {
                   <br />
                   A page will appear with your verification code.
                 </p>
+                {challengeExpiresAt ? (
+                  <div className="flex flex-col items-center gap-2 border-t border-slate-700/80 pt-4">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                      {"Time to scan & enter code"}
+                    </p>
+                    <AuthenticatorCountdown
+                      expiresAtIso={challengeExpiresAt}
+                      onExpired={() => setExpired(true)}
+                      size={64}
+                      strokeWidth={3.5}
+                      ringClassName="text-amber-400"
+                      trackClassName="text-slate-600"
+                      labelClassName="text-slate-500"
+                    />
+                  </div>
+                ) : null}
                 <div className="flex items-center justify-center gap-2">
                   <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-400" />
                   <span className="text-xs text-slate-400">Waiting for phone scan…</span>
@@ -367,52 +396,90 @@ function KioskInner() {
 
         {/* Step 3: Enter code — type the 6-digit code from phone */}
         {step === "enter-code" && (
-          <form
-            onSubmit={(e) => void handleSubmitCode(e)}
-            className="space-y-5 rounded-xl bg-slate-800 p-6 text-center"
-          >
-            <div>
-              <p className="text-sm text-slate-300">
-                <span className="font-medium text-white">{label}</span>
-              </p>
-              <p className="mt-1 text-xs text-emerald-400">Device verified</p>
-            </div>
+          <div className="space-y-5 rounded-xl bg-slate-800 p-6 text-center">
+            {expired ? (
+              <div className="space-y-4">
+                <p className="text-sm text-amber-300">This code has expired.</p>
+                <p className="text-xs text-slate-500">Generate a fresh QR code and scan again with your phone.</p>
+                <Button
+                  onClick={() => void regenerateChallenge()}
+                  disabled={busy}
+                  className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
+                >
+                  {busy ? "Generating…" : "Generate new code"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-slate-400 hover:text-white"
+                  onClick={() => resetSession()}
+                >
+                  Start over
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={(e) => void handleSubmitCode(e)} className="space-y-5">
+                <div>
+                  <p className="text-sm text-slate-300">
+                    <span className="font-medium text-white">{label}</span>
+                  </p>
+                  <p className="mt-1 text-xs text-emerald-400">Device verified</p>
+                </div>
 
-            <div>
-              <label className="text-xs text-slate-400">
-                Enter the 6-digit code from your phone
-              </label>
-              <Input
-                className="mt-2 border-slate-600 bg-slate-900 text-center text-2xl font-mono tracking-[0.3em] text-white placeholder:text-slate-600"
-                value={codeInput}
-                onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="------"
-                maxLength={6}
-                inputMode="numeric"
-                autoFocus
-                required
-              />
-            </div>
+                {challengeExpiresAt ? (
+                  <div className="flex flex-col items-center gap-2 border-b border-slate-700/80 pb-4">
+                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                      Code expires in
+                    </p>
+                    <AuthenticatorCountdown
+                      expiresAtIso={challengeExpiresAt}
+                      onExpired={() => setExpired(true)}
+                      size={72}
+                      strokeWidth={4}
+                      ringClassName="text-amber-400"
+                      trackClassName="text-slate-600"
+                      labelClassName="text-slate-500"
+                    />
+                  </div>
+                ) : null}
 
-            {error ? <p className="text-sm text-red-300">{error}</p> : null}
+                <div>
+                  <label className="text-xs text-slate-400">
+                    Enter the 6-digit code from your phone
+                  </label>
+                  <Input
+                    className="mt-2 border-slate-600 bg-slate-900 text-center text-2xl font-mono tracking-[0.3em] text-white placeholder:text-slate-600"
+                    value={codeInput}
+                    onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="------"
+                    maxLength={6}
+                    inputMode="numeric"
+                    autoFocus
+                    required
+                  />
+                </div>
 
-            <Button
-              type="submit"
-              disabled={busy || codeInput.length < 6}
-              className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
-            >
-              {busy ? "Processing…" : clockedIn ? "Check out" : "Check in"}
-            </Button>
+                {error ? <p className="text-sm text-red-300">{error}</p> : null}
 
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full text-slate-400 hover:text-white"
-              onClick={() => resetSession()}
-            >
-              Start over
-            </Button>
-          </form>
+                <Button
+                  type="submit"
+                  disabled={busy || codeInput.length < 6}
+                  className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
+                >
+                  {busy ? "Processing…" : clockedIn ? "Check out" : "Check in"}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full text-slate-400 hover:text-white"
+                  onClick={() => resetSession()}
+                >
+                  Start over
+                </Button>
+              </form>
+            )}
+          </div>
         )}
 
         {/* Step 4: Done — success confirmation */}
