@@ -7,6 +7,8 @@ import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { Button } from "@/components/ui/button";
 import { DatePickerField } from "@/components/ui/date-picker";
+import { Input } from "@/components/ui/input";
+import { TimeSelect } from "@/components/ui/time-select";
 import {
   Select,
   SelectContent,
@@ -16,6 +18,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { employeeDisplayName } from "@/lib/employee-display";
+import { SHIFT_QUICK_PICKS, SHIFT_QUICK_PICK_CUSTOM } from "@/lib/shift-presets";
 
 type Employee = {
   id: string;
@@ -44,6 +47,9 @@ type Shift = {
   _count: { assignments: number };
 };
 
+const BREAK_OPTIONS = [0, 15, 30, 45, 60, 90, 120] as const;
+const defaultPick = SHIFT_QUICK_PICKS[0]!;
+
 export default function ShiftsPage() {
   const { selected } = useCompany();
   const { toast } = useToast();
@@ -52,10 +58,11 @@ export default function ShiftsPage() {
   const [creating, setCreating] = useState(false);
 
   // Form state - create shift
-  const [name, setName] = useState("");
-  const [startTime, setStartTime] = useState("08:00");
-  const [endTime, setEndTime] = useState("17:00");
-  const [breakMins, setBreakMins] = useState("60");
+  const [quickPickId, setQuickPickId] = useState(defaultPick.id);
+  const [name, setName] = useState(defaultPick.name);
+  const [startTime, setStartTime] = useState(defaultPick.startTime);
+  const [endTime, setEndTime] = useState(defaultPick.endTime);
+  const [breakMins, setBreakMins] = useState(String(defaultPick.breakMinutes));
 
   // Form state - assign employee
   const [assignEmployeeId, setAssignEmployeeId] = useState("");
@@ -72,6 +79,11 @@ export default function ShiftsPage() {
   async function handleCreateShift(e: React.FormEvent) {
     e.preventDefault();
     if (!selected) return;
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      toast.error("Enter a shift name or pick a template.");
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch("/api/shifts", {
@@ -79,21 +91,25 @@ export default function ShiftsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyId: selected.id,
-          name,
+          name: trimmedName,
           startTime,
           endTime,
-          breakMinutes: parseInt(breakMins, 10) || 60,
+          breakMinutes: (() => {
+            const n = parseInt(breakMins, 10);
+            return Number.isFinite(n) ? Math.min(180, Math.max(0, n)) : 60;
+          })(),
         }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to create shift");
       }
-      toast.success(`Shift "${name}" created`);
-      setName("");
-      setStartTime("08:00");
-      setEndTime("17:00");
-      setBreakMins("60");
+      toast.success(`Shift "${trimmedName}" created`);
+      setQuickPickId(defaultPick.id);
+      setName(defaultPick.name);
+      setStartTime(defaultPick.startTime);
+      setEndTime(defaultPick.endTime);
+      setBreakMins(String(defaultPick.breakMinutes));
       setShowCreate(false);
       mutate();
     } catch (err) {
@@ -159,50 +175,83 @@ export default function ShiftsPage() {
           className="rounded-xl border border-hgh-gold/20 bg-white p-6"
         >
           <h3 className="mb-4 text-sm font-semibold text-hgh-navy">Create Shift Template</h3>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-hgh-muted">Shift Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Morning"
-                required
-                className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm focus:border-hgh-gold focus:outline-none focus:ring-1 focus:ring-hgh-gold"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-hgh-muted">Start Time</label>
-              <input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                required
-                className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm focus:border-hgh-gold focus:outline-none focus:ring-1 focus:ring-hgh-gold"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-hgh-muted">End Time</label>
-              <input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                required
-                className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm focus:border-hgh-gold focus:outline-none focus:ring-1 focus:ring-hgh-gold"
-              />
-            </div>
+          <div className="mb-4 space-y-4">
             <div>
               <label className="mb-1 block text-xs font-medium text-hgh-muted">
-                Break (minutes)
+                Quick pick <span className="font-normal text-hgh-muted/80">(name &amp; times)</span>
               </label>
-              <input
-                type="number"
-                value={breakMins}
-                onChange={(e) => setBreakMins(e.target.value)}
-                min={0}
-                max={180}
-                className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm focus:border-hgh-gold focus:outline-none focus:ring-1 focus:ring-hgh-gold"
+              <Select
+                value={quickPickId}
+                onValueChange={(id) => {
+                  setQuickPickId(id);
+                  if (id === SHIFT_QUICK_PICK_CUSTOM) return;
+                  const p = SHIFT_QUICK_PICKS.find((x) => x.id === id);
+                  if (p) {
+                    setName(p.name);
+                    setStartTime(p.startTime);
+                    setEndTime(p.endTime);
+                    setBreakMins(String(p.breakMinutes));
+                  }
+                }}
+              >
+                <SelectTrigger className="w-full max-w-xl text-left">
+                  <SelectValue placeholder="Choose a template" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[min(70vh,380px)]">
+                  {SHIFT_QUICK_PICKS.map((p) => (
+                    <SelectItem key={p.id} value={p.id} title={p.description}>
+                      <span className="font-medium">{p.label}</span>
+                      <span className="block text-xs text-hgh-muted">{p.description}</span>
+                    </SelectItem>
+                  ))}
+                  <SelectItem value={SHIFT_QUICK_PICK_CUSTOM}>
+                    <span className="font-medium">Custom</span>
+                    <span className="block text-xs text-hgh-muted">Set name and times yourself</span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-[11px] text-hgh-muted">
+                Pick a template to auto-fill the row below, then adjust anything you need. Night shifts can end
+                after midnight (e.g. 22:00–06:00).
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-medium text-hgh-muted">Shift name</label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Shown on rosters and reports"
+                required
+                aria-invalid={!name.trim() ? true : undefined}
               />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-hgh-muted">Start time</label>
+              <TimeSelect value={startTime} onChange={setStartTime} placeholder="Start" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-hgh-muted">End time</label>
+              <TimeSelect value={endTime} onChange={setEndTime} placeholder="End" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-hgh-muted">Break</label>
+              <Select
+                value={breakMins}
+                onValueChange={setBreakMins}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Minutes" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BREAK_OPTIONS.map((m) => (
+                    <SelectItem key={m} value={String(m)}>
+                      {m === 0 ? "No break" : `${m} minutes`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="mt-4 flex gap-2">

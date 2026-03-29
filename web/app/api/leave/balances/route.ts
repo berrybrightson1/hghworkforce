@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { canAccessCompany, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 function monthsEmployedApprox(start: Date): number {
@@ -26,6 +26,21 @@ export async function GET(req: NextRequest) {
   if (billing) return billing;
 
   try {
+    if (employeeId) {
+      const emp = await prisma.employee.findFirst({
+        where: { id: employeeId, deletedAt: null },
+        select: { companyId: true, userId: true },
+      });
+      if (!emp || emp.companyId !== companyId) {
+        return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+      }
+      const allowed =
+        canAccessCompany(auth.dbUser, emp.companyId) || emp.userId === auth.dbUser.id;
+      if (!allowed) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
     const entitlements = await prisma.leaveEntitlement.findMany({
       where: { companyId, isActive: true },
     });
@@ -40,7 +55,7 @@ export async function GET(req: NextRequest) {
 
     const employees = employeeId
       ? await prisma.employee.findMany({
-          where: { id: employeeId },
+          where: { id: employeeId, companyId, deletedAt: null },
           include: { user: { select: { name: true } } },
         })
       : await prisma.employee.findMany({

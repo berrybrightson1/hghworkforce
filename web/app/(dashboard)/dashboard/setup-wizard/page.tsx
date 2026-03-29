@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DatePickerField } from "@/components/ui/date-picker";
+import { TimeSelect } from "@/components/ui/time-select";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
@@ -449,11 +450,23 @@ export default function SetupWizardPage() {
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-hgh-slate">Start (HH:mm)</label>
-                  <Input type="time" {...shiftForm.register("startTime")} />
+                  <Controller
+                    name="startTime"
+                    control={shiftForm.control}
+                    render={({ field }) => (
+                      <TimeSelect value={field.value} onChange={field.onChange} placeholder="Start" />
+                    )}
+                  />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-hgh-slate">End (HH:mm)</label>
-                  <Input type="time" {...shiftForm.register("endTime")} />
+                  <Controller
+                    name="endTime"
+                    control={shiftForm.control}
+                    render={({ field }) => (
+                      <TimeSelect value={field.value} onChange={field.onChange} placeholder="End" />
+                    )}
+                  />
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-hgh-slate">Break (min)</label>

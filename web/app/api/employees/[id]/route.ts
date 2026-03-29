@@ -7,7 +7,7 @@ import {
   requireDbUser,
 } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
-import { decrypt, encrypt, maskSensitive } from "@/lib/crypto";
+import { decrypt, encrypt, isEncryptionKeyError, maskSensitive } from "@/lib/crypto";
 import { isRedactedLikeInput } from "@/lib/redacted-sensitive";
 import { normalizeMomoProvider } from "@/lib/momo-providers";
 
@@ -192,6 +192,8 @@ export async function PATCH(
       data.status = st as EmployeeStatus;
       if (st === "TERMINATED") {
         data.deletedAt = new Date();
+        data.kioskDeviceTokenHash = null;
+        data.deviceBoundAt = null;
       } else if (st === "ACTIVE") {
         data.deletedAt = null;
       }
@@ -274,6 +276,16 @@ export async function PATCH(
 
     return NextResponse.json(updated);
   } catch (e) {
+    if (isEncryptionKeyError(e)) {
+      return NextResponse.json(
+        {
+          error:
+            "ENCRYPTION_KEY is missing or invalid in production. Add a 64-character hex key to your host environment and redeploy.",
+          code: "ENCRYPTION_CONFIG",
+        },
+        { status: 503 },
+      );
+    }
     console.error("[employees PATCH]", e);
     return NextResponse.json({ error: "Failed to update employee" }, { status: 500 });
   }
@@ -304,7 +316,12 @@ export async function DELETE(
 
     await prisma.employee.update({
       where: { id },
-      data: { deletedAt: new Date(), status: "TERMINATED" },
+      data: {
+        deletedAt: new Date(),
+        status: "TERMINATED",
+        kioskDeviceTokenHash: null,
+        deviceBoundAt: null,
+      },
     });
 
     await prisma.auditLog.create({

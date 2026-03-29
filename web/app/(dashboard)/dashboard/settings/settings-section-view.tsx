@@ -16,6 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimeSelect } from "@/components/ui/time-select";
 import { CopyIconButton } from "@/components/ui/copy-button";
 import { Dialog } from "@/components/ui/dialog";
 import { useCompany } from "@/components/company-context";
@@ -445,13 +446,13 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                         <label className="mb-1 block text-xs font-medium text-hgh-muted">
                           Office opens (optional)
                         </label>
-                        <Input
-                          type="time"
+                        <TimeSelect
+                          allowEmpty
+                          emptyLabel="Not set"
                           disabled={savingCheckinToggle}
-                          defaultValue={checkinSettings.kioskOfficeOpensAt ?? ""}
+                          value={checkinSettings.kioskOfficeOpensAt ?? ""}
                           key={`open-${checkinSettings.kioskOfficeOpensAt ?? "x"}`}
-                          onBlur={(e) => {
-                            const v = e.target.value;
+                          onChange={(v) => {
                             const next = v === "" ? null : v;
                             if (next !== checkinSettings.kioskOfficeOpensAt) {
                               void patchCheckinSettings({ kioskOfficeOpensAt: next });
@@ -463,13 +464,13 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                         <label className="mb-1 block text-xs font-medium text-hgh-muted">
                           Office closes (optional)
                         </label>
-                        <Input
-                          type="time"
+                        <TimeSelect
+                          allowEmpty
+                          emptyLabel="Not set"
                           disabled={savingCheckinToggle}
-                          defaultValue={checkinSettings.kioskOfficeClosesAt ?? ""}
+                          value={checkinSettings.kioskOfficeClosesAt ?? ""}
                           key={`close-${checkinSettings.kioskOfficeClosesAt ?? "x"}`}
-                          onBlur={(e) => {
-                            const v = e.target.value;
+                          onChange={(v) => {
                             const next = v === "" ? null : v;
                             if (next !== checkinSettings.kioskOfficeClosesAt) {
                               void patchCheckinSettings({ kioskOfficeClosesAt: next });
@@ -481,13 +482,13 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                         <label className="mb-1 block text-xs font-medium text-hgh-muted">
                           Cut-off (optional)
                         </label>
-                        <Input
-                          type="time"
+                        <TimeSelect
+                          allowEmpty
+                          emptyLabel="Not set"
                           disabled={savingCheckinToggle}
-                          defaultValue={checkinSettings.kioskCutoffTime ?? ""}
+                          value={checkinSettings.kioskCutoffTime ?? ""}
                           key={`cut-${checkinSettings.kioskCutoffTime ?? "x"}`}
-                          onBlur={(e) => {
-                            const v = e.target.value;
+                          onChange={(v) => {
                             const next = v === "" ? null : v;
                             if (next !== checkinSettings.kioskCutoffTime) {
                               void patchCheckinSettings({ kioskCutoffTime: next });

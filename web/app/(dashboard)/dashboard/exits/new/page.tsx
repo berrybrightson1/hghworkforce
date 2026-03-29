@@ -7,6 +7,7 @@ import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -151,14 +152,14 @@ function NewExitPageContent() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-hgh-slate">Notice date</label>
-              <Input type="date" value={noticeDate} onChange={(e) => setNoticeDate(e.target.value)} />
+              <DatePickerField value={noticeDate} onChange={setNoticeDate} placeholder="Notice date" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-hgh-slate">Last working day</label>
-              <Input
-                type="date"
+              <DatePickerField
                 value={lastWorkingDay}
-                onChange={(e) => setLastWorkingDay(e.target.value)}
+                onChange={setLastWorkingDay}
+                placeholder="Last day"
               />
             </div>
           </div>
@@ -166,10 +167,11 @@ function NewExitPageContent() {
             <label className="mb-1 block text-xs font-medium text-hgh-slate">
               Exit interview (optional)
             </label>
-            <Input
-              type="date"
+            <DatePickerField
               value={exitInterviewDate}
-              onChange={(e) => setExitInterviewDate(e.target.value)}
+              onChange={setExitInterviewDate}
+              placeholder="Interview date"
+              allowClear
             />
           </div>
           <div>

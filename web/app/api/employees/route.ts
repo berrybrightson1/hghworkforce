@@ -4,7 +4,7 @@ import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { guardEmployeeCreation } from "@/lib/billing/guards";
 import { allocateEmployeeCode } from "@/lib/employee-code";
 import { prisma } from "@/lib/prisma";
-import { encrypt, isEncryptionKeyError, isEncryptionKeyMisconfigured, maskSensitive } from "@/lib/crypto";
+import { encrypt, isEncryptionKeyError, maskSensitive } from "@/lib/crypto";
 import { normalizeMomoProvider } from "@/lib/momo-providers";
 
 export async function GET(req: NextRequest) {

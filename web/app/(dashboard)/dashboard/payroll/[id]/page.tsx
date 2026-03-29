@@ -10,6 +10,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { DismissibleCallout } from "@/components/ui/dismissible-callout";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
+import { DatePickerField } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/toast/useToast";
@@ -442,12 +443,13 @@ export default function PayrunDetailPage() {
                   </Button>
                 </HintTooltip>
                 <div className="flex items-center gap-1">
-                  <Input
-                    type="date"
+                  <DatePickerField
                     value={payDate}
-                    onChange={(e) => setPayDate(e.target.value)}
-                    className="h-8 w-40 text-xs"
+                    onChange={setPayDate}
+                    placeholder="Pay date"
                     disabled={busy !== null}
+                    className="min-w-0"
+                    triggerClassName="h-8 max-w-[11rem] text-xs"
                   />
                   <HintTooltip content="Save the intended salary payment date (shown on this pay run card).">
                     <Button

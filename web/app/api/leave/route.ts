@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import {
+  canAccessCompany,
+  gateCompanyBilling,
+  requireDbUser,
+} from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -10,8 +14,34 @@ export async function GET(req: NextRequest) {
     const { searchParams } = req.nextUrl;
     const status = searchParams.get("status");
     const companyId = searchParams.get("companyId");
+    const employeeId = searchParams.get("employeeId");
 
-    if (companyId) {
+    if (!companyId && !employeeId) {
+      return NextResponse.json(
+        { error: "companyId or employeeId is required" },
+        { status: 400 },
+      );
+    }
+
+    if (employeeId) {
+      const emp = await prisma.employee.findFirst({
+        where: { id: employeeId, deletedAt: null },
+        select: { companyId: true, userId: true },
+      });
+      if (!emp) {
+        return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+      }
+      if (companyId && companyId !== emp.companyId) {
+        return NextResponse.json({ error: "Company mismatch" }, { status: 400 });
+      }
+      const billing = await gateCompanyBilling(auth.dbUser, emp.companyId);
+      if (billing) return billing;
+      const allowed =
+        canAccessCompany(auth.dbUser, emp.companyId) || emp.userId === auth.dbUser.id;
+      if (!allowed) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } else if (companyId) {
       const lb = await gateCompanyBilling(auth.dbUser, companyId);
       if (lb) return lb;
     }
@@ -19,7 +49,9 @@ export async function GET(req: NextRequest) {
     const requests = await prisma.leaveRequest.findMany({
       where: {
         ...(status ? { status: status as "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED" } : {}),
-        ...(companyId ? { employee: { companyId } } : {}),
+        ...(employeeId
+          ? { employeeId }
+          : { employee: { companyId: companyId! } }),
       },
       include: {
         employee: {

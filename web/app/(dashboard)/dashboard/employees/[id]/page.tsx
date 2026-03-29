@@ -165,6 +165,50 @@ const profileSchema = z
   });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
+interface EmpLeaveRequestRow {
+  id: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+}
+
+interface EmpLeaveBalanceRow {
+  type: string;
+  entitled: number;
+  used: number;
+  remaining: number;
+}
+
+interface EmpLeaveBalancePayload {
+  employeeId: string;
+  balances: EmpLeaveBalanceRow[];
+}
+
+interface EmpLoanRow {
+  id: string;
+  type: string;
+  amount: string;
+  balance: string;
+  monthlyRepayment: string;
+  status: string;
+  disbursedAt: string;
+}
+
+const leaveStatusBadge = {
+  PENDING: "warning",
+  APPROVED: "success",
+  REJECTED: "danger",
+  CANCELLED: "default",
+} as const;
+
+const loanStatusBadge = {
+  ACTIVE: "success",
+  COMPLETED: "default",
+  CANCELLED: "danger",
+} as const;
+
 function EmployeeDetailPageContent() {
   const params = useParams();
   const id = params.id as string;
@@ -194,6 +238,24 @@ function EmployeeDetailPageContent() {
   const [detailConfirm, setDetailConfirm] = useState<DetailConfirm | null>(null);
   const [detailConfirmBusy, setDetailConfirmBusy] = useState(false);
   const { data: documents, mutate: mutateDocs } = useApi<EmployeeDocument[]>(`/api/employees/${id}/documents`);
+
+  const leaveForEmpUrl =
+    employee?.company?.id && activeTab === "leave"
+      ? `/api/leave?companyId=${employee.company.id}&employeeId=${id}`
+      : null;
+  const { data: empLeaveList } = useApi<EmpLeaveRequestRow[]>(leaveForEmpUrl);
+
+  const leaveBalForEmpUrl =
+    employee?.company?.id && activeTab === "leave"
+      ? `/api/leave/balances?companyId=${employee.company.id}&employeeId=${id}`
+      : null;
+  const { data: empLeaveBalances } = useApi<EmpLeaveBalancePayload | null>(leaveBalForEmpUrl);
+
+  const loansForEmpUrl =
+    employee?.company?.id && activeTab === "loans"
+      ? `/api/loans?companyId=${employee.company.id}&employeeId=${id}`
+      : null;
+  const { data: empLoans } = useApi<EmpLoanRow[]>(loansForEmpUrl);
 
   const isPayrollAdmin =
     me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN" || me?.role === "HR";
@@ -297,12 +359,30 @@ function EmployeeDetailPageContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error();
+      const patchJson = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (
+          res.status === 503 &&
+          patchJson &&
+          typeof patchJson === "object" &&
+          patchJson.code === "ENCRYPTION_CONFIG"
+        ) {
+          toast.error(
+            typeof patchJson.error === "string"
+              ? patchJson.error
+              : "Server needs ENCRYPTION_KEY (64 hex chars). Set it in Vercel and redeploy.",
+          );
+          return;
+        }
+        throw new Error(
+          typeof patchJson?.error === "string" ? patchJson.error : "Failed to update profile.",
+        );
+      }
       toast.success("Profile updated.");
       setEditDialogOpen(false);
       mutate();
-    } catch {
-      toast.error("Failed to update profile.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update profile.");
     } finally {
       setSubmittingProfile(false);
     }
@@ -707,6 +787,9 @@ function EmployeeDetailPageContent() {
                     <p className="font-medium text-hgh-navy">{employee.momoMsisdn || "—"}</p>
                   </div>
                 </div>
+                <p className="text-[11px] leading-relaxed text-hgh-muted">
+                  For payroll records only—this app does not send mobile money or bank transfers.
+                </p>
               </CardContent>
             </Card>
 
@@ -983,17 +1066,173 @@ function EmployeeDetailPageContent() {
         </Card>
       )}
 
-      {/* Placeholders for other tabs */}
-      {(activeTab === "leave" || activeTab === "loans") && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-20 text-hgh-muted">
-            <div className="mb-4 rounded-full bg-hgh-offwhite p-4">
-              {activeTab === "leave" && <Calendar size={32} />}
-              {activeTab === "loans" && <CreditCard size={32} />}
+      {activeTab === "leave" && employee && (
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm text-hgh-muted">
+              Leave requests and balances for this employee. Manage approvals and policies from{" "}
+              <Link href="/dashboard/leave" className="font-medium text-hgh-navy underline decoration-hgh-gold/40 hover:decoration-hgh-gold">
+                Leave
+              </Link>
+              .
+            </p>
+          </div>
+          {empLeaveBalances === undefined ? (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-hgh-muted">Loading balances…</CardContent>
+            </Card>
+          ) : empLeaveBalances === null || empLeaveBalances.balances.length === 0 ? (
+            <Card>
+              <CardContent className="py-8 text-center text-sm text-hgh-muted">
+                No leave entitlements configured for this company, or none apply yet. Set them under Leave →
+                Entitlements.
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Balances (approved usage)</CardTitle>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-hgh-border text-left">
+                      <th className="py-2 pr-4 font-medium text-hgh-muted">Type</th>
+                      <th className="py-2 pr-4 font-medium text-hgh-muted">Entitled</th>
+                      <th className="py-2 pr-4 font-medium text-hgh-muted">Used</th>
+                      <th className="py-2 font-medium text-hgh-muted">Remaining</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {empLeaveBalances.balances.map((b) => (
+                      <tr key={b.type} className="border-b border-hgh-border/80 last:border-0">
+                        <td className="py-2 pr-4 font-medium text-hgh-navy">{b.type}</td>
+                        <td className="py-2 pr-4 tabular-nums">{b.entitled}</td>
+                        <td className="py-2 pr-4 tabular-nums">{b.used}</td>
+                        <td className="py-2 tabular-nums font-medium text-hgh-navy">{b.remaining}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Requests ({empLeaveList?.length ?? 0})</CardTitle>
+            </CardHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-hgh-border text-left">
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Type</th>
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Dates</th>
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Days</th>
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {empLeaveList === undefined ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-hgh-muted">
+                        Loading requests…
+                      </td>
+                    </tr>
+                  ) : empLeaveList.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="px-5 py-10 text-center text-hgh-muted">
+                        No leave requests yet for this employee.
+                      </td>
+                    </tr>
+                  ) : (
+                    empLeaveList.map((r) => (
+                      <tr key={r.id} className="border-b border-hgh-border last:border-0">
+                        <td className="px-5 py-3 font-medium text-hgh-navy">{r.type}</td>
+                        <td className="px-5 py-3 text-hgh-muted">
+                          {new Date(r.startDate).toLocaleDateString()} –{" "}
+                          {new Date(r.endDate).toLocaleDateString()}
+                        </td>
+                        <td className="px-5 py-3 tabular-nums">{r.days}</td>
+                        <td className="px-5 py-3">
+                          <Badge variant={leaveStatusBadge[r.status] ?? "default"}>{r.status}</Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-            <p>The {activeTab} section is coming soon.</p>
-          </CardContent>
-        </Card>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === "loans" && employee && (
+        <div className="space-y-6">
+          <p className="text-sm text-hgh-muted">
+            Loans and advances for this employee. Create or review all company loans from{" "}
+            <Link href="/dashboard/loans" className="font-medium text-hgh-navy underline decoration-hgh-gold/40 hover:decoration-hgh-gold">
+              Loans
+            </Link>
+            .
+          </p>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Loans ({empLoans?.length ?? 0})</CardTitle>
+            </CardHeader>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-hgh-border text-left">
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Type</th>
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Amount</th>
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Balance</th>
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Monthly</th>
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Disbursed</th>
+                    <th className="px-5 py-3 font-medium text-hgh-muted">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {empLoans === undefined ? (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-10 text-center text-hgh-muted">
+                        Loading loans…
+                      </td>
+                    </tr>
+                  ) : empLoans.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-10 text-center text-hgh-muted">
+                        No loans on file for this employee.
+                      </td>
+                    </tr>
+                  ) : (
+                    empLoans.map((loan) => (
+                      <tr key={loan.id} className="border-b border-hgh-border last:border-0">
+                        <td className="px-5 py-3 font-medium text-hgh-navy">{loan.type}</td>
+                        <td className="px-5 py-3 tabular-nums">
+                          GHS {Number(loan.amount).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-3 tabular-nums">
+                          GHS {Number(loan.balance).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-3 tabular-nums">
+                          GHS {Number(loan.monthlyRepayment).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-5 py-3 text-hgh-muted">
+                          {new Date(loan.disbursedAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-5 py-3">
+                          <Badge variant={loanStatusBadge[loan.status as keyof typeof loanStatusBadge] ?? "default"}>
+                            {loan.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* Upload Document Dialog */}

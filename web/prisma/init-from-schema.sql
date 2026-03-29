@@ -520,3 +520,6 @@ DO $$ BEGIN
   ALTER TABLE "ExitClearanceItem" ADD CONSTRAINT "ExitClearanceItem_clearedBy_fkey"
     FOREIGN KEY ("clearedBy") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Kiosk device binding: fast lookup for “token already bound to another employee”
+CREATE INDEX IF NOT EXISTS "Employee_kioskDeviceTokenHash_idx" ON "Employee"("kioskDeviceTokenHash");

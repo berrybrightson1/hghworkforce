@@ -97,6 +97,32 @@ export async function POST(req: NextRequest) {
     }
 
     // Case 2: No device bound yet — bind this one
+    //
+    // Reusing existingToken without this check allowed the same browser cookie to be
+    // registered to multiple employees (same hash stored for each), so one phone could
+    // check in as anyone. A token hash may only belong to one employee (all tenants).
+    if (existingToken) {
+      const incomingHash = hashDeviceToken(existingToken);
+      const boundElsewhere = await prisma.employee.findFirst({
+        where: {
+          kioskDeviceTokenHash: incomingHash,
+          id: { not: employee.id },
+          deletedAt: null,
+        },
+        select: { employeeCode: true, company: { select: { name: true } } },
+      });
+      if (boundElsewhere) {
+        return NextResponse.json(
+          {
+            error: "This phone is already registered for kiosk check-in",
+            hint:
+              "Each device can only be bound to one employee. Ask HR to use Reset device binding on the other employee’s profile (or terminate them), or use a different phone. This rule applies across every company.",
+          },
+          { status: 403 },
+        );
+      }
+    }
+
     const newToken = existingToken ?? generateDeviceToken();
     const tokenHash = hashDeviceToken(newToken);
 

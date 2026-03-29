@@ -71,6 +71,8 @@ export default async function PlatformHealthPage() {
     employeeCount: c._count.employees,
   }));
 
+  const snapshotAt = new Date();
+
   const statCards = [
     { label: "Companies", value: companies, icon: Building2 },
     { label: "Active users", value: activeUsers, icon: Users },
@@ -91,6 +93,9 @@ export default async function PlatformHealthPage() {
           <p className="text-sm text-hgh-muted">
             Cross-tenant snapshot for operators (super admin only). Search all workspaces below to grant or revoke paid
             access.
+          </p>
+          <p className="mt-2 text-xs tabular-nums text-hgh-muted">
+            Figures snapshot: {snapshotAt.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}
           </p>
         </div>
       </div>

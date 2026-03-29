@@ -75,7 +75,7 @@ const roadmapSteps: {
     href: "/dashboard/employees",
     hrefLabel: "Employees",
     extra:
-      "After adding someone new, open their record right away—we send you there with a “next step” hint. You can set up device binding from their profile page.",
+      "After adding someone new, open their record right away—we send you there with a “next step” hint. You can set up device binding from their profile page. If several employees shared one kiosk binding by mistake (older builds), use Reset device on their profiles, or run the optional SQL script kiosk-duplicate-device-hash-cleanup.sql in web/prisma (clears only duplicate hashes).",
     moreLinks: [{ href: "/dashboard/setup-wizard", label: "Setup wizard (guided)" }],
   },
   {

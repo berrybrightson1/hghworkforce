@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { TrendingUp, Download, FileSpreadsheet, FileText, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { BarChart3, TrendingUp, Download, FileSpreadsheet, FileText, type LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useCompany } from "@/components/company-context";
@@ -186,6 +187,34 @@ export default function ReportsPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="flex flex-row items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-hgh-navy/8">
+            <BarChart3 size={20} className="text-hgh-navy" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <CardTitle className="text-sm">More reporting</CardTitle>
+            <ul className="list-inside list-disc space-y-1 text-xs text-hgh-muted">
+              <li>
+                <Link href="/dashboard/reports/cost-vs-revenue" className="text-hgh-navy underline-offset-4 hover:underline">
+                  Cost vs revenue
+                </Link>{" "}
+                — enter monthly revenue and compare to payroll cost from approved runs (chart + table).
+              </li>
+              <li>
+                <strong className="font-medium text-hgh-slate">P9A (annual tax card)</strong> — per-employee PDF for a
+                calendar year, built from <strong>approved</strong> pay runs. Open an employee, then use your
+                browser or API:{" "}
+                <code className="rounded bg-hgh-offwhite px-1 py-0.5 font-mono text-[10px]">
+                  {"/api/reports/p9a?companyId=…&employeeId=…&year=…"}
+                </code>
+                .
+              </li>
+            </ul>
+          </div>
+        </CardHeader>
+      </Card>
     </div>
   );
 }

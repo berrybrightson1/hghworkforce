@@ -7,6 +7,7 @@ import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePickerField } from "@/components/ui/date-picker";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function NewCyclePage() {
@@ -78,19 +79,11 @@ export default function NewCyclePage() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-xs font-medium text-hgh-slate">Period Start</label>
-              <Input
-                type="date"
-                value={periodStart}
-                onChange={(e) => setPeriodStart(e.target.value)}
-              />
+              <DatePickerField value={periodStart} onChange={setPeriodStart} placeholder="Start" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-hgh-slate">Period End</label>
-              <Input
-                type="date"
-                value={periodEnd}
-                onChange={(e) => setPeriodEnd(e.target.value)}
-              />
+              <DatePickerField value={periodEnd} onChange={setPeriodEnd} placeholder="End" />
             </div>
           </div>
         </CardContent>

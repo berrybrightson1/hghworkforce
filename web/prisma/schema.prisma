@@ -209,6 +209,7 @@ model Employee {
 
   @@index([companyId, status])
   @@index([employeeCode])
+  @@index([kioskDeviceTokenHash])
 }
 
 model EmployeeDocument {
