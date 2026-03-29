@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -46,6 +46,8 @@ import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
+import { SearchablePicklist } from "@/components/ui/searchable-picklist";
+import { MOMO_PROVIDER_CODES, MOMO_PROVIDER_LABELS } from "@/lib/momo-providers";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface Employee {
@@ -61,19 +63,40 @@ interface Employee {
   hasDeviceBound?: boolean;
 }
 
-const schema = z.object({
-  name: z.string().min(1, "Employee name is required"),
-  department: z.string().min(1, "Department is required"),
-  jobTitle: z.string().min(1, "Job title is required"),
-  basicSalary: z.coerce.number().positive("Must be greater than 0"),
-  employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACTOR"]),
-  startDate: z.string().min(1, "Start date is required"),
-  ssnit: z.string().optional(),
-  tin: z.string().optional(),
-  bankName: z.string().optional(),
-  bankAccount: z.string().optional(),
-  bankBranch: z.string().optional(),
-});
+const schema = z
+  .object({
+    name: z.string().min(1, "Employee name is required"),
+    department: z.string().min(1, "Department is required"),
+    jobTitle: z.string().min(1, "Job title is required"),
+    basicSalary: z.coerce.number().positive("Must be greater than 0"),
+    employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACTOR"]),
+    startDate: z.string().min(1, "Start date is required"),
+    ssnit: z.string().optional(),
+    tin: z.string().optional(),
+    bankName: z.string().optional(),
+    bankAccount: z.string().optional(),
+    bankBranch: z.string().optional(),
+    momoProvider: z.string().optional(),
+    momoMsisdn: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const p = (data.momoProvider ?? "").trim();
+    const m = (data.momoMsisdn ?? "").replace(/\s+/g, "").trim();
+    if (p && !m) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the mobile money wallet number.",
+        path: ["momoMsisdn"],
+      });
+    }
+    if (m && !p) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select MTN, Telecel, or AirtelTigo.",
+        path: ["momoProvider"],
+      });
+    }
+  });
 type FormValues = z.infer<typeof schema>;
 
 interface FieldOptions {
@@ -91,8 +114,6 @@ export default function EmployeesPage() {
   const { selected } = useCompany();
   const router = useRouter();
   const { toast } = useToast();
-  const deptListId = useId();
-  const jobListId = useId();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -134,6 +155,8 @@ export default function EmployeesPage() {
       ssnit: "",
       tin: "",
       bankAccount: "",
+      momoProvider: "",
+      momoMsisdn: "",
     },
   });
 
@@ -155,6 +178,14 @@ export default function EmployeesPage() {
       });
       const created = await res.json().catch(() => null);
       if (!res.ok) {
+        if (res.status === 503 && created && typeof created === "object" && created.code === "ENCRYPTION_CONFIG") {
+          toast.error(
+            typeof created.error === "string"
+              ? created.error
+              : "Server needs ENCRYPTION_KEY (64 hex chars). Set it in your host env and redeploy.",
+          );
+          return;
+        }
         if (res.status === 409 && created && typeof created === "object") {
           const msg =
             typeof created.error === "string" ? created.error : "Duplicate create blocked.";
@@ -534,11 +565,17 @@ export default function EmployeesPage() {
       </div>
 
       {/* Add Employee Dialog */}
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title="Add Employee">
-        <form onSubmit={onSubmit} className="space-y-4 max-h-[min(80vh,720px)] overflow-y-auto pr-1">
+      <Dialog
+        open={dialogOpen}
+        onClose={() => setDialogOpen(false)}
+        title="Add Employee"
+        className="max-w-2xl"
+      >
+        <form onSubmit={onSubmit} className="space-y-4 pr-1">
           <p className="text-xs text-hgh-muted">
-            Department and job title suggest past values from this company; you can always type a new one. SSNIT and
-            TIN are never auto-filled from other staff.
+            Department and job title use searchable lists (common Ghana presets plus this company&apos;s history). SSNIT
+            and TIN are never auto-filled from other staff. Bank and{" "}
+            <span className="whitespace-nowrap">mobile money</span> fields are further down—scroll the modal if needed.
           </p>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -553,17 +590,19 @@ export default function EmployeesPage() {
               <label className="mb-1 block text-sm font-medium text-hgh-slate">
                 Department <span className="text-hgh-danger">*</span>
               </label>
-              <Input
-                placeholder="e.g. Operations"
-                list={deptListId}
-                autoComplete="off"
-                {...register("department")}
+              <Controller
+                name="department"
+                control={control}
+                render={({ field }) => (
+                  <SearchablePicklist
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={fieldOptions?.departments ?? []}
+                    placeholder="Search or pick department…"
+                    aria-invalid={errors.department ? true : undefined}
+                  />
+                )}
               />
-              <datalist id={deptListId}>
-                {(fieldOptions?.departments ?? []).map((d) => (
-                  <option key={d} value={d} />
-                ))}
-              </datalist>
               {errors.department && (
                 <p className="mt-1 text-xs text-hgh-danger">{errors.department.message}</p>
               )}
@@ -574,17 +613,19 @@ export default function EmployeesPage() {
               <label className="mb-1 block text-sm font-medium text-hgh-slate">
                 Job Title <span className="text-hgh-danger">*</span>
               </label>
-              <Input
-                placeholder="e.g. Warehouse Manager"
-                list={jobListId}
-                autoComplete="off"
-                {...register("jobTitle")}
+              <Controller
+                name="jobTitle"
+                control={control}
+                render={({ field }) => (
+                  <SearchablePicklist
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={fieldOptions?.jobTitles ?? []}
+                    placeholder="Search or pick job title…"
+                    aria-invalid={errors.jobTitle ? true : undefined}
+                  />
+                )}
               />
-              <datalist id={jobListId}>
-                {(fieldOptions?.jobTitles ?? []).map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
               {errors.jobTitle && (
                 <p className="mt-1 text-xs text-hgh-danger">{errors.jobTitle.message}</p>
               )}
@@ -687,6 +728,55 @@ export default function EmployeesPage() {
             <div>
               <label className="mb-1 block text-sm font-medium text-hgh-slate">Account number (optional)</label>
               <Input placeholder="Bank account" {...register("bankAccount")} autoComplete="off" />
+            </div>
+          </div>
+          <div className="rounded-lg border border-hgh-border/80 bg-hgh-offwhite/40 px-3 py-3 space-y-3">
+            <p className="text-xs font-medium text-hgh-slate">Mobile money salary (optional)</p>
+            <p className="text-[11px] text-hgh-muted">
+              Register MTN, Telecel Cash, or AirtelTigo wallet for staff who are paid digitally instead of (or in addition
+              to) bank transfer.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-hgh-slate">Network</label>
+                <Controller
+                  name="momoProvider"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value?.trim() ? field.value : "__none__"}
+                      onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="None" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {MOMO_PROVIDER_CODES.map((code) => (
+                          <SelectItem key={code} value={code}>
+                            {MOMO_PROVIDER_LABELS[code]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+                {errors.momoProvider && (
+                  <p className="mt-1 text-xs text-hgh-danger">{errors.momoProvider.message}</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-hgh-slate">Wallet number</label>
+                <Input
+                  placeholder="e.g. 0244123456"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  {...register("momoMsisdn")}
+                />
+                {errors.momoMsisdn && (
+                  <p className="mt-1 text-xs text-hgh-danger">{errors.momoMsisdn.message}</p>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">

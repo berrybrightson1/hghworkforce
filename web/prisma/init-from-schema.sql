@@ -358,6 +358,10 @@ ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "deviceBoundAt" TIMESTAMP(3);
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "deviceResetAt" TIMESTAMP(3);
 ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "deviceResetBy" TEXT;
 
+-- Mobile money (optional; encrypted MSISDN)
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "momoProvider" TEXT;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "momoMsisdnEncrypted" TEXT;
+
 ALTER TABLE "CheckIn" ADD COLUMN IF NOT EXISTS "checkinSessionId" TEXT;
 
 CREATE TABLE IF NOT EXISTS "CheckinSession" (

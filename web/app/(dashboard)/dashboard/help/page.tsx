@@ -94,7 +94,7 @@ const roadmapSteps: {
     href: "/dashboard/attendance",
     hrefLabel: "Attendance",
     extra:
-      "Employee self-service lives under /portal (payslips, leave, loans, check-in, corrections). Share the portal link with staff.",
+      "Employee self-service is only for accounts with the EMPLOYEE role at /portal (payslips, leave, loans, check-in, corrections). Admins who sign in with a dashboard role are sent to /dashboard instead—invite staff with the employee role so they can use the portal.",
   },
   {
     step: 9,
@@ -145,6 +145,11 @@ const sections = [
         title: "Hover hints and dismissible tips",
         content:
           "Throughout the dashboard, many links, buttons, and table headers show a short cream tooltip when you hover—use them for quick context. Some informational banners (such as on Billing or an employee profile) include a dismiss control; hiding one only affects your current browser.",
+      },
+      {
+        title: "Production: ENCRYPTION_KEY and employee creation",
+        content:
+          "Hosted deployments must set ENCRYPTION_KEY (64 hex characters, from openssl rand -hex 32) in the server environment. If creating an employee fails with a configuration error, add that variable on your host (e.g. Vercel project settings), redeploy, then try again. Local development uses a dev-only fallback when the key is unset.",
       },
       {
         title: "Setting up your company profile",

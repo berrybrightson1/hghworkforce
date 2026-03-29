@@ -169,6 +169,9 @@ model Employee {
   bankNameEncrypted    String?
   bankAccountEncrypted String?
   bankBranchEncrypted  String?
+  /// MTN_MOMO | TELECEL_CASH | AT_MONEY — Ghana mobile money salary rail (optional).
+  momoProvider         String?
+  momoMsisdnEncrypted  String?
   nokName              String?
   nokPhone             String?
   nokRelationship      String?

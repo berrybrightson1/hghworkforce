@@ -9,6 +9,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { decrypt, encrypt, maskSensitive } from "@/lib/crypto";
 import { isRedactedLikeInput } from "@/lib/redacted-sensitive";
+import { normalizeMomoProvider } from "@/lib/momo-providers";
 
 const EMPLOYMENT_TYPES = new Set<string>(Object.values(EmploymentType));
 const EMPLOYEE_STATUSES = new Set<string>(Object.values(EmployeeStatus));
@@ -78,13 +79,16 @@ export async function GET(
       data.bankName = decrypt(employee.bankNameEncrypted);
       data.bankAccount = decrypt(employee.bankAccountEncrypted);
       data.bankBranch = decrypt(employee.bankBranchEncrypted);
+      data.momoMsisdn = decrypt(employee.momoMsisdnEncrypted);
     } else {
       data.ssnit = employee.ssnitEncrypted ? maskSensitive("SSNIT") : null;
       data.tin = employee.tinEncrypted ? maskSensitive("TIN") : null;
       data.bankName = employee.bankNameEncrypted ? "********" : null;
       data.bankAccount = employee.bankAccountEncrypted ? maskSensitive("BANK") : null;
       data.bankBranch = employee.bankBranchEncrypted ? "********" : null;
+      data.momoMsisdn = employee.momoMsisdnEncrypted ? maskSensitive("MOMO") : null;
     }
+    data.momoProvider = employee.momoProvider;
 
     // Don't leak raw encrypted strings to the client
     delete data.ssnitEncrypted;
@@ -92,6 +96,7 @@ export async function GET(
     delete data.bankNameEncrypted;
     delete data.bankAccountEncrypted;
     delete data.bankBranchEncrypted;
+    delete data.momoMsisdnEncrypted;
 
     return NextResponse.json({
       ...data,
@@ -214,6 +219,29 @@ export async function PATCH(
       if ("bankBranch" in body && !isRedactedLikeInput(body.bankBranch)) {
         const raw = typeof body.bankBranch === "string" ? body.bankBranch.trim() : "";
         data.bankBranchEncrypted = encrypt(raw || null);
+      }
+      if ("momoProvider" in body) {
+        const raw = typeof body.momoProvider === "string" ? body.momoProvider.trim() : "";
+        const norm = normalizeMomoProvider(raw);
+        data.momoProvider = norm;
+        if (!norm) {
+          data.momoMsisdnEncrypted = encrypt(null);
+        }
+      }
+      if ("momoMsisdn" in body && !isRedactedLikeInput(body.momoMsisdn)) {
+        const raw =
+          typeof body.momoMsisdn === "string" ? body.momoMsisdn.replace(/\s+/g, "").trim() : "";
+        const prov =
+          "momoProvider" in body
+            ? normalizeMomoProvider(body.momoProvider)
+            : employee.momoProvider;
+        if (raw && !prov) {
+          return NextResponse.json(
+            { error: "Select a mobile money provider before saving a wallet number." },
+            { status: 400 },
+          );
+        }
+        data.momoMsisdnEncrypted = encrypt(raw || null);
       }
     }
 

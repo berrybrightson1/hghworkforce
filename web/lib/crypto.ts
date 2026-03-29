@@ -6,6 +6,17 @@ const IV_LENGTH = 12;
 const DEV_FALLBACK_KEY_HEX =
   "d0b5e4c2f1a3b4e5d6c7a8b9e0f1d2c3b4a5e6f7d8c9b0a1e2f3d4c5b6a7e8f9";
 
+/** True when production requires ENCRYPTION_KEY but it is missing or invalid. */
+export function isEncryptionKeyMisconfigured(): boolean {
+  const raw = process.env.ENCRYPTION_KEY?.trim();
+  const ok = raw && /^[a-f0-9]{64}$/i.test(raw);
+  return process.env.NODE_ENV === "production" && !ok;
+}
+
+export function isEncryptionKeyError(e: unknown): boolean {
+  return e instanceof Error && e.message.includes("ENCRYPTION_KEY");
+}
+
 function getKeyBuffer(): Buffer {
   const raw = process.env.ENCRYPTION_KEY?.trim();
   if (raw && /^[a-f0-9]{64}$/i.test(raw)) {

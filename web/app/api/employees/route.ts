@@ -4,7 +4,8 @@ import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { guardEmployeeCreation } from "@/lib/billing/guards";
 import { allocateEmployeeCode } from "@/lib/employee-code";
 import { prisma } from "@/lib/prisma";
-import { encrypt, maskSensitive } from "@/lib/crypto";
+import { encrypt, isEncryptionKeyError, isEncryptionKeyMisconfigured, maskSensitive } from "@/lib/crypto";
+import { normalizeMomoProvider } from "@/lib/momo-providers";
 
 export async function GET(req: NextRequest) {
   const auth = await requireDbUser();
@@ -48,7 +49,15 @@ export async function GET(req: NextRequest) {
 
     // List view: flag only for admin UX (kiosk checklist)
     const masked = employees.map(
-      ({ kioskDeviceTokenHash, ssnitEncrypted, tinEncrypted, bankAccountEncrypted, ...rest }) => ({
+      ({
+        kioskDeviceTokenHash,
+        ssnitEncrypted,
+        tinEncrypted,
+        bankAccountEncrypted,
+        momoProvider: _m,
+        momoMsisdnEncrypted: _mm,
+        ...rest
+      }) => ({
         ...rest,
         hasDeviceBound: kioskDeviceTokenHash != null,
         ssnitEncrypted: ssnitEncrypted ? maskSensitive("SSNIT") : null,
@@ -127,6 +136,22 @@ export async function POST(req: NextRequest) {
     const basicDec = new Prisma.Decimal(basicN.toFixed(2));
     const recentCutoff = new Date(Date.now() - 90_000);
 
+    const momoProv = normalizeMomoProvider(body.momoProvider);
+    const momoMsisdnRaw =
+      typeof body.momoMsisdn === "string" ? body.momoMsisdn.replace(/\s+/g, "").trim() : "";
+    if (momoProv && !momoMsisdnRaw) {
+      return NextResponse.json(
+        { error: "Mobile money wallet number is required when a provider is selected." },
+        { status: 400 },
+      );
+    }
+    if (momoMsisdnRaw && !momoProv) {
+      return NextResponse.json(
+        { error: "Select a mobile money provider when entering a wallet number." },
+        { status: 400 },
+      );
+    }
+
     try {
       const employee = await prisma.$transaction(async (tx) => {
       const duplicateRecent = await tx.employee.findFirst({
@@ -181,6 +206,8 @@ export async function POST(req: NextRequest) {
               ? body.bankBranch.trim()
               : null,
           ),
+          momoProvider: momoProv,
+          momoMsisdnEncrypted: encrypt(momoMsisdnRaw || null),
         },
         include: {
           company: { select: { name: true } },
@@ -213,6 +240,16 @@ export async function POST(req: NextRequest) {
       throw e;
     }
   } catch (e) {
+    if (isEncryptionKeyError(e)) {
+      return NextResponse.json(
+        {
+          error:
+            "ENCRYPTION_KEY is missing or invalid in production. Add a 64-character hex key to your host environment and redeploy.",
+          code: "ENCRYPTION_CONFIG",
+        },
+        { status: 503 },
+      );
+    }
     console.error("[employees POST]", e);
     return NextResponse.json({ error: "Failed to create employee" }, { status: 500 });
   }

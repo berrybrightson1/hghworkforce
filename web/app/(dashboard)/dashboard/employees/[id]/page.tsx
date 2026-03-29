@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useId, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -52,6 +52,8 @@ import {
 import { isRedactedLikeInput } from "@/lib/redacted-sensitive";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
+import { SearchablePicklist } from "@/components/ui/searchable-picklist";
+import { MOMO_PROVIDER_CODES, MOMO_PROVIDER_LABELS, isMomoProviderCode } from "@/lib/momo-providers";
 import { DismissibleCallout } from "@/components/ui/dismissible-callout";
 
 type DetailConfirm =
@@ -106,6 +108,8 @@ interface Employee {
   bankName?: string;
   bankAccount?: string;
   bankBranch?: string;
+  momoProvider?: string | null;
+  momoMsisdn?: string | null;
 }
 
 const componentSchema = z.object({
@@ -125,19 +129,40 @@ const docSchema = z.object({
 });
 type DocFormValues = z.infer<typeof docSchema>;
 
-const profileSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  department: z.string().min(1, "Department is required"),
-  jobTitle: z.string().min(1, "Job title is required"),
-  employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACTOR"]),
-  basicSalary: z.coerce.number().positive("Must be positive"),
-  startDate: z.string().min(1, "Start date is required"),
-  ssnit: z.string().optional(),
-  tin: z.string().optional(),
-  bankName: z.string().optional(),
-  bankAccount: z.string().optional(),
-  bankBranch: z.string().optional(),
-});
+const profileSchema = z
+  .object({
+    name: z.string().min(1, "Name is required"),
+    department: z.string().min(1, "Department is required"),
+    jobTitle: z.string().min(1, "Job title is required"),
+    employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACTOR"]),
+    basicSalary: z.coerce.number().positive("Must be positive"),
+    startDate: z.string().min(1, "Start date is required"),
+    ssnit: z.string().optional(),
+    tin: z.string().optional(),
+    bankName: z.string().optional(),
+    bankAccount: z.string().optional(),
+    bankBranch: z.string().optional(),
+    momoProvider: z.string().optional(),
+    momoMsisdn: z.string().optional(),
+  })
+  .superRefine((data, ctx) => {
+    const p = (data.momoProvider ?? "").trim();
+    const m = (data.momoMsisdn ?? "").replace(/\s+/g, "").trim();
+    if (p && !m) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter mobile money wallet number.",
+        path: ["momoMsisdn"],
+      });
+    }
+    if (m && !p) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Select mobile money network.",
+        path: ["momoProvider"],
+      });
+    }
+  });
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 function EmployeeDetailPageContent() {
@@ -165,8 +190,6 @@ function EmployeeDetailPageContent() {
     ? `/api/employees/field-options?companyId=${employee.company.id}`
     : null;
   const { data: fieldOptions } = useApi<FieldOptions>(fieldOptionsUrl);
-  const deptListId = useId();
-  const jobListId = useId();
   const [headerMenuBusy, setHeaderMenuBusy] = useState(false);
   const [detailConfirm, setDetailConfirm] = useState<DetailConfirm | null>(null);
   const [detailConfirmBusy, setDetailConfirmBusy] = useState(false);
@@ -228,6 +251,7 @@ function EmployeeDetailPageContent() {
   // Sync profile form when employee data loads
   useEffect(() => {
     if (employee) {
+      const isSelfProfile = Boolean(employee.userId && me?.id === employee.userId);
       resetProfile({
         name: employee.name?.trim() || employee.user?.name || "",
         department: employee.department,
@@ -242,9 +266,11 @@ function EmployeeDetailPageContent() {
         bankName: revealed ? employee.bankName : "",
         bankAccount: revealed ? employee.bankAccount : "",
         bankBranch: revealed ? employee.bankBranch : "",
+        momoProvider: !isSelfProfile ? (employee.momoProvider ?? "") : "",
+        momoMsisdn: !isSelfProfile && revealed ? (employee.momoMsisdn ?? "") : "",
       });
     }
-  }, [employee, resetProfile, revealed]);
+  }, [employee, resetProfile, revealed, me?.id]);
 
   const onUpdateProfile = handleProfileSubmit(async (values) => {
     setSubmittingProfile(true);
@@ -257,8 +283,10 @@ function EmployeeDetailPageContent() {
         delete payload.bankName;
         delete payload.bankAccount;
         delete payload.bankBranch;
+        delete payload.momoProvider;
+        delete payload.momoMsisdn;
       } else {
-        for (const key of ["ssnit", "tin", "bankName", "bankAccount", "bankBranch"] as const) {
+        for (const key of ["ssnit", "tin", "bankName", "bankAccount", "bankBranch", "momoMsisdn"] as const) {
           const v = payload[key];
           if (isRedactedLikeInput(v)) delete payload[key];
         }
@@ -652,6 +680,31 @@ function EmployeeDetailPageContent() {
                   <div className="col-span-2">
                     <p className="text-xs text-hgh-muted">Account Number</p>
                     <p className="font-medium text-hgh-navy">{employee.bankAccount || "—"}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Smartphone size={18} />
+                  Mobile money
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-hgh-muted">Network</p>
+                    <p className="font-medium text-hgh-navy">
+                      {employee.momoProvider && isMomoProviderCode(employee.momoProvider)
+                        ? MOMO_PROVIDER_LABELS[employee.momoProvider]
+                        : employee.momoProvider || "—"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-hgh-muted">Wallet number</p>
+                    <p className="font-medium text-hgh-navy">{employee.momoMsisdn || "—"}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1053,26 +1106,36 @@ function EmployeeDetailPageContent() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-hgh-slate">Department</label>
-              <Input
-                list={deptListId}
-                autoComplete="off"
-                {...regProfile("department")}
+              <Controller
+                name="department"
+                control={controlProfile}
+                render={({ field }) => (
+                  <SearchablePicklist
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={fieldOptions?.departments ?? []}
+                    placeholder="Search or pick department…"
+                    aria-invalid={profileErrors.department ? true : undefined}
+                  />
+                )}
               />
-              <datalist id={deptListId}>
-                {(fieldOptions?.departments ?? []).map((d) => (
-                  <option key={d} value={d} />
-                ))}
-              </datalist>
               {profileErrors.department && <p className="mt-1 text-xs text-hgh-danger">{profileErrors.department.message}</p>}
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium text-hgh-slate">Job Title</label>
-              <Input list={jobListId} autoComplete="off" {...regProfile("jobTitle")} />
-              <datalist id={jobListId}>
-                {(fieldOptions?.jobTitles ?? []).map((t) => (
-                  <option key={t} value={t} />
-                ))}
-              </datalist>
+              <Controller
+                name="jobTitle"
+                control={controlProfile}
+                render={({ field }) => (
+                  <SearchablePicklist
+                    value={field.value}
+                    onChange={field.onChange}
+                    options={fieldOptions?.jobTitles ?? []}
+                    placeholder="Search or pick job title…"
+                    aria-invalid={profileErrors.jobTitle ? true : undefined}
+                  />
+                )}
+              />
               {profileErrors.jobTitle && <p className="mt-1 text-xs text-hgh-danger">{profileErrors.jobTitle.message}</p>}
             </div>
           </div>
@@ -1183,6 +1246,50 @@ function EmployeeDetailPageContent() {
                   placeholder={revealed ? "" : "Loading…"}
                   disabled={!revealed}
                 />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 border-t border-hgh-border pt-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-hgh-slate">Mobile money network</label>
+                  <Controller
+                    name="momoProvider"
+                    control={controlProfile}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value?.trim() ? field.value : "__none__"}
+                        onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)}
+                        disabled={!revealed}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={revealed ? "None" : "Loading…"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">None</SelectItem>
+                          {MOMO_PROVIDER_CODES.map((code) => (
+                            <SelectItem key={code} value={code}>
+                              {MOMO_PROVIDER_LABELS[code]}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {profileErrors.momoProvider && (
+                    <p className="mt-1 text-xs text-hgh-danger">{profileErrors.momoProvider.message}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-hgh-slate">MoMo wallet number</label>
+                  <Input
+                    {...regProfile("momoMsisdn")}
+                    placeholder={revealed ? "e.g. 0244123456" : "Loading…"}
+                    disabled={!revealed}
+                    inputMode="numeric"
+                    autoComplete="off"
+                  />
+                  {profileErrors.momoMsisdn && (
+                    <p className="mt-1 text-xs text-hgh-danger">{profileErrors.momoMsisdn.message}</p>
+                  )}
+                </div>
               </div>
               {!revealed && (
                 <p className="text-xs text-hgh-muted">

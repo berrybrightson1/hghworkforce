@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
+import { mergeDepartmentOptions, mergeJobTitleOptions } from "@/lib/ghana-hr-field-presets";
 
 /**
  * GET /api/employees/field-options?companyId=
@@ -23,12 +24,10 @@ export async function GET(req: NextRequest) {
       where: { companyId, deletedAt: null },
       select: { department: true, jobTitle: true },
     });
-    const departments = [...new Set(rows.map((r) => r.department).filter(Boolean))].sort((a, b) =>
-      a.localeCompare(b),
-    );
-    const jobTitles = [...new Set(rows.map((r) => r.jobTitle).filter(Boolean))].sort((a, b) =>
-      a.localeCompare(b),
-    );
+    const fromDept = [...new Set(rows.map((r) => r.department).filter(Boolean))];
+    const fromTitles = [...new Set(rows.map((r) => r.jobTitle).filter(Boolean))];
+    const departments = mergeDepartmentOptions(fromDept);
+    const jobTitles = mergeJobTitleOptions(fromTitles);
     return NextResponse.json({ departments, jobTitles });
   } catch {
     return NextResponse.json({ error: "Failed to load options" }, { status: 500 });
