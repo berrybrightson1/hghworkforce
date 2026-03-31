@@ -4,17 +4,46 @@ import {
   canAccessCompany,
   canManagePayroll,
   gateCompanyBilling,
+  gateBillingForEmployeeSelf,
   requireDbUser,
+  requireEmployeeSelf,
 } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
-  const auth = await requireDbUser();
-  if (!auth.ok) return auth.response;
-
   try {
     const companyId = req.nextUrl.searchParams.get("companyId");
     const employeeId = req.nextUrl.searchParams.get("employeeId");
+
+    const self = await requireEmployeeSelf();
+    if (self.ok) {
+      const targetId = employeeId ?? self.employee.id;
+      if (employeeId && employeeId !== self.employee.id) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      if (companyId && companyId !== self.employee.companyId) {
+        return NextResponse.json({ error: "Company mismatch" }, { status: 400 });
+      }
+      const billing = await gateBillingForEmployeeSelf(self.employee, self.via, self.dbUser);
+      if (billing) return billing;
+      const loans = await prisma.loan.findMany({
+        where: { employeeId: targetId },
+        include: {
+          employee: {
+            select: {
+              employeeCode: true,
+              name: true,
+              jobTitle: true,
+              department: true,
+              user: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      });
+      return NextResponse.json(loans);
+    }
 
     if (!companyId && !employeeId) {
       return NextResponse.json(
@@ -22,6 +51,9 @@ export async function GET(req: NextRequest) {
         { status: 400 },
       );
     }
+
+    const auth = await requireDbUser();
+    if (!auth.ok) return auth.response;
 
     let where: Prisma.LoanWhereInput;
 

@@ -1,21 +1,15 @@
 import { NextResponse } from "next/server";
-import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { gateBillingForEmployeeSelf, requireEmployeeSelf } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const auth = await requireDbUser();
-  if (!auth.ok) return auth.response;
+  const self = await requireEmployeeSelf();
+  if (!self.ok) return self.response;
 
   try {
-    const employee = await prisma.employee.findUnique({
-      where: { userId: auth.dbUser.id },
-    });
+    const { employee, via, dbUser } = self;
 
-    if (!employee) {
-      return NextResponse.json([]);
-    }
-
-    const billing = await gateCompanyBilling(auth.dbUser, employee.companyId);
+    const billing = await gateBillingForEmployeeSelf(employee, via, dbUser);
     if (billing) return billing;
 
     const payslips = await prisma.payslip.findMany({

@@ -420,7 +420,7 @@ export default function EmployeesPage() {
                   </HintTooltip>
                 </th>
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
-                  <HintTooltip content="Device binding for kiosk QR check-in. Employees bind their phone on first scan.">
+                  <HintTooltip content="Kiosk device binding: required before staff can verify at the office kiosk (QR + code). Phone binds on first scan.">
                     <span className="inline cursor-default">Device</span>
                   </HintTooltip>
                 </th>
@@ -453,7 +453,7 @@ export default function EmployeesPage() {
                     onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
                   >
                     <td className="px-5 py-3 font-medium text-hgh-navy">
-                      <HintTooltip content="Open this person’s full profile — salary, documents, check-in, and actions.">
+                      <HintTooltip content="Open this person’s full profile — salary, documents, portal/kiosk setup, and actions.">
                         <span className="block">{employeeDisplayName(emp)}</span>
                       </HintTooltip>
                     </td>
@@ -494,7 +494,7 @@ export default function EmployeesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="min-w-[14rem]">
-                            <HintTooltip content="Open their full record — salary, components, documents, and check-in setup." side="left">
+                            <HintTooltip content="Open their full record — salary, components, documents, and kiosk binding." side="left">
                               <DropdownMenuItem onClick={() => router.push(`/dashboard/employees/${emp.id}`)}>
                                 View profile
                               </DropdownMenuItem>
@@ -512,7 +512,7 @@ export default function EmployeesPage() {
                             ) : null}
                             {emp.status === "SUSPENDED" ? (
                               <HintTooltip
-                                content="Return them to active payroll and allow check-in again."
+                                content="Return them to active payroll and allow kiosk clock-in again."
                                 side="left"
                               >
                                 <DropdownMenuItem onClick={() => void setEmployeeStatus(emp.id, "ACTIVE")}>

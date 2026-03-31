@@ -127,6 +127,11 @@ interface PayslipData {
     address?: string;
     logoUrl?: string;
   };
+  theme?: {
+    primaryHex: string;
+    accentHex: string;
+    variant: string;
+  };
   employee: {
     name: string;
     code: string;
@@ -149,6 +154,10 @@ interface PayslipData {
 }
 
 export const PayslipDocument = ({ data }: { data: PayslipData }) => {
+  const primary = data.theme?.primaryHex ?? "#0f172a";
+  const accent = data.theme?.accentHex ?? "#b45309";
+  const striped = data.theme?.variant === "STRIPED";
+
   const formatCurrency = (amount: number) => {
     return amount.toLocaleString("en-GH", {
       minimumFractionDigits: 2,
@@ -160,15 +169,15 @@ export const PayslipDocument = ({ data }: { data: PayslipData }) => {
     <Document>
       <Page size="A4" style={styles.page}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { borderBottomColor: accent }]}>
           <View>
-            <Text style={styles.companyName}>{data.company.name}</Text>
+            <Text style={[styles.companyName, { color: primary }]}>{data.company.name}</Text>
             {data.company.address && (
               <Text style={styles.companyDetails}>{data.company.address}</Text>
             )}
           </View>
           <View>
-            <Text style={styles.payslipTitle}>PAYSLIP</Text>
+            <Text style={[styles.payslipTitle, { color: accent }]}>PAYSLIP</Text>
             <Text style={styles.period}>
               {new Date(data.period.start).toLocaleDateString()} - {new Date(data.period.end).toLocaleDateString()}
             </Text>
@@ -211,9 +220,11 @@ export const PayslipDocument = ({ data }: { data: PayslipData }) => {
 
         {/* Earnings */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>EARNINGS</Text>
+          <Text style={[styles.sectionHeader, { backgroundColor: striped ? "#f8fafc" : "#f8fafc", borderBottomColor: accent }]}>
+            EARNINGS
+          </Text>
           {data.earnings.map((item, i) => (
-            <View key={i} style={styles.row}>
+            <View key={i} style={[styles.row, striped && i % 2 === 1 ? { backgroundColor: "#fafafa" } : {}]}>
               <Text style={styles.label}>{item.name}</Text>
               <Text style={styles.value}>{formatCurrency(item.amount)}</Text>
             </View>
@@ -222,9 +233,9 @@ export const PayslipDocument = ({ data }: { data: PayslipData }) => {
 
         {/* Deductions */}
         <View style={styles.section}>
-          <Text style={styles.sectionHeader}>DEDUCTIONS</Text>
+          <Text style={[styles.sectionHeader, { borderBottomColor: accent }]}>DEDUCTIONS</Text>
           {data.deductions.map((item, i) => (
-            <View key={i} style={styles.row}>
+            <View key={i} style={[styles.row, striped && i % 2 === 1 ? { backgroundColor: "#fafafa" } : {}]}>
               <Text style={styles.label}>{item.name}</Text>
               <Text style={styles.value}>{formatCurrency(item.amount)}</Text>
             </View>
@@ -241,9 +252,9 @@ export const PayslipDocument = ({ data }: { data: PayslipData }) => {
             <Text style={styles.label}>Total Deductions</Text>
             <Text style={styles.value}>{formatCurrency(data.summary.totalDeductions)}</Text>
           </View>
-          <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>NET PAY</Text>
-            <Text style={styles.totalValue}>GHS {formatCurrency(data.summary.netPay)}</Text>
+          <View style={[styles.totalRow, { backgroundColor: `${accent}15` }]}>
+            <Text style={[styles.totalLabel, { color: primary }]}>NET PAY</Text>
+            <Text style={[styles.totalValue, { color: primary }]}>GHS {formatCurrency(data.summary.netPay)}</Text>
           </View>
         </View>
 

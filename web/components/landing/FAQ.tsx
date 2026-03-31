@@ -23,7 +23,7 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "Who is HGH WorkForce built for?",
       answer:
-        "HGH WorkForce supports four roles: Super Admins who oversee the whole platform, Company Admins who approve pay runs for their business, HR Managers who handle day-to-day payroll and attendance operations, and Employees who use self-service for check-ins, payslips, leave, and loan balances.",
+        "HGH WorkForce supports four roles: Super Admins who oversee the whole platform, Company Admins who approve pay runs for their business, HR Managers who handle day-to-day payroll and attendance operations, and Employees who use self-service for payslips, leave, loan balances, Attendance, and kiosk clock-in/out.",
     },
     {
       question: "How do trials and billing work?",
@@ -32,7 +32,7 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "How do I get started?",
       answer:
-        "Create an account with your work email, then add your organization and companies. Your workspace trial starts when the company is created. Invite teammates with the right roles, import employees individually or bulk-import via CSV, turn on check-in options that fit your business (portal, kiosk, device binding), configure payroll settings (including optional Ghana Tier 2 pension on basic and webhooks if you use them), and start tracking attendance and drafting pay runs. If you already have an account, sign in and pick the company you want to work in.",
+        "Create an account with your work email, then add your organization and companies. Your workspace trial starts when the company is created. Invite teammates with the right roles, import employees individually or bulk-import via CSV, set up the office kiosk link and employee device binding, configure payroll settings (including optional Ghana Tier 2 pension on basic and webhooks if you use them), and start tracking attendance and drafting pay runs. If you already have an account, sign in and pick the company you want to work in.",
     },
     {
       question: "Can I install HGH WorkForce on my phone?",
@@ -76,7 +76,7 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "How does employee check-in work?",
       answer:
-        "Employees can check in from the self-service portal (signed in) or from an office kiosk link: they enter name and employee code, then confirm via a bound device. Companies can add enterprise controls such as audit sessions and device binding. Tardiness and overtime follow assigned shift rules, and attendance feeds payroll in real time.",
+        "Clock-in and clock-out happen at the office kiosk: staff enter name and employee code, scan a QR code on their bound phone, then enter the one-time code on the kiosk. The self-service portal shows today's activity and lets them request corrections—it does not record punches. Tardiness and overtime follow assigned shift rules, and attendance feeds payroll.",
     },
     {
       question: "What if someone needs to correct a check-in or clock-out?",
@@ -103,7 +103,7 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
     {
       question: "What can employees access through the self-service portal?",
       answer:
-        "Employees can view and download their payslips from a dedicated payslip history page, check in and out from the portal (or your company’s kiosk flow in the office), submit leave requests, view leave balances via a calendar, and track loan or salary advance repayment progress - all from a mobile-friendly portal.",
+        "Employees can view and download payslips, see today's Attendance log and submit correction requests (punches happen at the office kiosk only), request leave, view leave balances, and track loan or advance repayments — all from a mobile-friendly portal.",
     },
     {
       question: "How do leave requests work?",

@@ -82,10 +82,15 @@ export async function POST(req: Request) {
     );
   }
 
+  const normalizedEmail = String(email).trim().toLowerCase();
+  if (!normalizedEmail.includes("@")) {
+    return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 });
+  }
+
   // Check if there's already a pending invite for this email + company
   const existing = await prisma.invitation.findFirst({
     where: {
-      email,
+      email: { equals: normalizedEmail, mode: "insensitive" },
       companyId,
       status: "PENDING",
     },
@@ -97,6 +102,20 @@ export async function POST(req: Request) {
       { status: 409 },
     );
   }
+  const existingMember = await prisma.user.findFirst({
+    where: {
+      companyId,
+      isActive: true,
+      email: { equals: normalizedEmail, mode: "insensitive" },
+    },
+    select: { id: true },
+  });
+  if (existingMember) {
+    return NextResponse.json(
+      { error: "A user with this email is already active in this company" },
+      { status: 409 },
+    );
+  }
 
   const code = generateInviteCode();
   const expiresAt = new Date();
@@ -104,7 +123,7 @@ export async function POST(req: Request) {
 
   const invitation = await prisma.invitation.create({
     data: {
-      email,
+      email: normalizedEmail,
       role,
       companyId,
       code,

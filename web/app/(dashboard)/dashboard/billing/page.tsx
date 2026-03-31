@@ -32,6 +32,7 @@ export default function BillingPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [summaryReloadKey, setSummaryReloadKey] = useState(0);
 
   useEffect(() => {
     if (!selected?.id) {
@@ -67,7 +68,45 @@ export default function BillingPage() {
     return () => {
       cancelled = true;
     };
-  }, [selected?.id, toast]);
+  }, [selected?.id, toast, summaryReloadKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    const checkout = q.get("checkout");
+    const sessionId = q.get("session_id");
+    if (checkout !== "success" || !sessionId) return;
+
+    const k = `hgh-checkout-done-${sessionId}`;
+    if (sessionStorage.getItem(k)) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/billing/complete-checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        if (res.ok) {
+          sessionStorage.setItem(k, "1");
+          toast.success("Subscription activated for this workspace.");
+          setSummaryReloadKey((n) => n + 1);
+          window.history.replaceState({}, "", "/dashboard/billing");
+        } else {
+          toast.error(data.error ?? "Could not confirm payment");
+        }
+      } catch {
+        if (!cancelled) toast.error("Could not confirm payment");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [toast]);
 
   useEffect(() => {
     if (me?.role === "SUPER_ADMIN") return;
@@ -92,6 +131,10 @@ export default function BillingPage() {
       const data = await res.json();
       if (data.bypassed && data.message) {
         toast.success(data.message);
+        return;
+      }
+      if (data.url && typeof data.url === "string") {
+        window.location.href = data.url;
         return;
       }
       if (!res.ok) {
@@ -200,8 +243,10 @@ export default function BillingPage() {
             className="items-start rounded-lg border border-dashed border-hgh-border bg-white px-4 py-3 text-xs text-hgh-muted"
           >
             <p>
-              <strong className="text-hgh-slate">Paying customers:</strong> when Stripe is connected, use the button
-              below to open checkout. Until then, your operator can set{" "}
+              <strong className="text-hgh-slate">Paying customers:</strong> set{" "}
+              <code className="rounded bg-hgh-offwhite px-1">STRIPE_SECRET_KEY</code> and{" "}
+              <code className="rounded bg-hgh-offwhite px-1">STRIPE_PRICE_ID</code> (recurring price) to enable checkout.
+              Until then, your operator can set{" "}
               <code className="rounded bg-hgh-offwhite px-1">subscriptionStatus</code> to{" "}
               <code className="rounded bg-hgh-offwhite px-1">ACTIVE</code> for this company in the database to unlock
               immediately after trial.
@@ -222,7 +267,9 @@ export default function BillingPage() {
               </Button>
             </HintTooltip>
             {!summary?.paymentProviderConfigured ? (
-              <p className="text-xs text-hgh-muted">Online checkout activates when Stripe is configured.</p>
+              <p className="text-xs text-hgh-muted">
+                Add Stripe secret key and subscription price id to enable checkout.
+              </p>
             ) : null}
           </div>
 

@@ -519,7 +519,7 @@ export default function SetupWizardPage() {
                   Manage shifts
                 </Link>
               </HintTooltip>
-              <HintTooltip content="Open this employee’s full record (pay, documents, check-in).">
+              <HintTooltip content="Open this employee’s full record (pay, documents, kiosk device binding).">
                 <Link
                   href={`/dashboard/employees/${employeeId ?? ""}`}
                   className={cn(buttonVariants({ variant: "ghost" }))}

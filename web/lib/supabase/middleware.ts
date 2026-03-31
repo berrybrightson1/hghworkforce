@@ -1,5 +1,61 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { PORTAL_COOKIE_NAME, verifyPortalJwt } from "@/lib/portal-jwt";
+
+const PORTAL_PUBLIC = new Set(["/portal/login", "/portal/forgot-pin", "/portal/first-pin"]);
+
+function withPortalHeaders(
+  request: NextRequest,
+  payload: { employeeId: string; companyId: string; tenantId: string },
+) {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-hgh-portal-employee-id", payload.employeeId);
+  requestHeaders.set("x-hgh-portal-company-id", payload.companyId);
+  requestHeaders.set("x-hgh-portal-tenant-id", payload.tenantId);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
+/**
+ * PIN portal cookie takes precedence on /portal/* so admins can test employee portal
+ * in the same browser without being redirected to /dashboard.
+ * If there is no portal cookie and no Supabase user, send to /portal/login.
+ * If there is no portal cookie but user is signed in (e.g. Supabase EMPLOYEE), continue.
+ */
+async function resolveProtectedPortalRoute(
+  request: NextRequest,
+  path: string,
+  hasSupabaseUser: boolean,
+): Promise<NextResponse | null> {
+  if (!path.startsWith("/portal") || PORTAL_PUBLIC.has(path)) {
+    return null;
+  }
+
+  const token = request.cookies.get(PORTAL_COOKIE_NAME)?.value;
+  const payload = token ? await verifyPortalJwt(token) : null;
+
+  if (payload) {
+    if (payload.requiresPinChange && path !== "/portal/set-pin") {
+      return NextResponse.redirect(new URL("/portal/set-pin", request.url));
+    }
+    if (!payload.requiresPinChange && path === "/portal/set-pin") {
+      return NextResponse.redirect(new URL("/portal", request.url));
+    }
+    return withPortalHeaders(request, {
+      employeeId: payload.employeeId,
+      companyId: payload.companyId,
+      tenantId: payload.tenantId || payload.companyId,
+    });
+  }
+
+  if (!hasSupabaseUser) {
+    const u = request.nextUrl.clone();
+    u.pathname = "/portal/login";
+    u.searchParams.set("next", path);
+    return NextResponse.redirect(u);
+  }
+
+  return null;
+}
 
 function safeNextPath(raw: string | null): string {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
@@ -64,7 +120,17 @@ export async function updateSession(request: NextRequest) {
     user = null;
   }
 
-  // Not logged in + protected route -> sign-in
+  /** Employee PIN portal: public pages */
+  if (path.startsWith("/portal") && PORTAL_PUBLIC.has(path)) {
+    return supabaseResponse;
+  }
+
+  const portalResolution = await resolveProtectedPortalRoute(request, path, !!user);
+  if (portalResolution) {
+    return portalResolution;
+  }
+
+  // Not logged in + protected route -> sign-in (dashboard / onboarding)
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
@@ -124,6 +190,12 @@ export async function updateSession(request: NextRequest) {
         if (data.role === "EMPLOYEE" && !data.companyId) {
           const u = request.nextUrl.clone();
           u.pathname = "/onboarding";
+          u.search = "";
+          return NextResponse.redirect(u);
+        }
+        if (data.role === "EMPLOYEE" && path === "/portal/login") {
+          const u = request.nextUrl.clone();
+          u.pathname = "/portal";
           u.search = "";
           return NextResponse.redirect(u);
         }

@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Users, Building2, Banknote, CalendarDays, ArrowRight } from "lucide-react";
+import {
+  Users,
+  Building2,
+  Banknote,
+  CalendarDays,
+  ArrowRight,
+  UserCircle,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +24,7 @@ import { PayrollForecast } from "@/components/dashboard/payroll-forecast";
 import { CostRevenueCompact } from "@/components/dashboard/cost-revenue-compact";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
 
-type MeData = { name: string; role: string };
+type MeData = { name: string; role: string; email: string };
 
 export default function DashboardPage() {
   const { companies, selected } = useCompany();
@@ -51,6 +58,15 @@ export default function DashboardPage() {
   }>(selected ? `/api/dashboard/insights?companyId=${selected.id}` : null);
 
   const isManager = me && ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"].includes(me.role);
+  const { data: celebrations } = useApi<{
+    enabled: boolean;
+    birthdays: { name: string; code: string; nextDate: string }[];
+    anniversaries: { name: string; code: string; years: number; nextDate: string }[];
+  }>(
+    isManager && selected
+      ? `/api/dashboard/celebrations?companyId=${selected.id}`
+      : null,
+  );
   const empCount = employees?.length ?? 0;
   const pendingLeave = leaveRequests?.filter((r) => r.status === "PENDING").length ?? 0;
   const activeLoans = loans?.filter((l) => l.status === "ACTIVE").length ?? 0;
@@ -62,7 +78,7 @@ export default function DashboardPage() {
       value: empCount,
       icon: Users,
       href: "/dashboard/employees",
-      hint: "Open the employee directory for this workspace: payroll codes, salaries, and profiles.",
+      hint: "Open the employee directory: payroll codes, salaries, profiles, and kiosk device binding status.",
     },
     {
       label: "Companies",
@@ -90,7 +106,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Morning Briefing — canManage() roles only */}
-      {isManager && me && <MorningBriefing userName={me.name} />}
+      {isManager && me && <MorningBriefing userName={me.name} userEmail={me.email} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
@@ -127,6 +143,53 @@ export default function DashboardPage() {
           );
         })}
       </div>
+
+      {isManager &&
+        selected &&
+        celebrations?.enabled &&
+        (celebrations.birthdays.length > 0 || celebrations.anniversaries.length > 0) && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <UserCircle size={18} className="text-hgh-gold" aria-hidden />
+                Upcoming celebrations
+              </CardTitle>
+              <HintTooltip content="Birthdays and work anniversaries from employee records. Configure in Settings → Payroll & payslip branding.">
+                <Link href="/dashboard/workplace">
+                  <Button variant="ghost" size="sm">
+                    Workplace <ArrowRight size={14} />
+                  </Button>
+                </Link>
+              </HintTooltip>
+            </CardHeader>
+            <CardContent className="grid gap-4 text-sm sm:grid-cols-2">
+              {celebrations.birthdays.length > 0 ? (
+                <div>
+                  <p className="font-medium text-hgh-navy">Birthdays</p>
+                  <ul className="mt-2 space-y-1 text-hgh-muted">
+                    {celebrations.birthdays.slice(0, 6).map((b) => (
+                      <li key={`${b.code}-${b.nextDate}`}>
+                        {b.name} · {b.nextDate}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {celebrations.anniversaries.length > 0 ? (
+                <div>
+                  <p className="font-medium text-hgh-navy">Work anniversaries</p>
+                  <ul className="mt-2 space-y-1 text-hgh-muted">
+                    {celebrations.anniversaries.slice(0, 6).map((a) => (
+                      <li key={`${a.code}-${a.nextDate}`}>
+                        {a.name} · {a.years} yr · {a.nextDate}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        )}
 
       {/* Payroll Forecast — canManage() roles only */}
       {isManager && <PayrollForecast />}

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessCompany, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import {
+  canAccessCompany,
+  gateCompanyBilling,
+  gateBillingForEmployeeSelf,
+  requireDbUser,
+  requireEmployeeSelf,
+} from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 function monthsEmployedApprox(start: Date): number {
@@ -11,21 +17,34 @@ function monthsEmployedApprox(start: Date): number {
 }
 
 export async function GET(req: NextRequest) {
-  const auth = await requireDbUser();
-  if (!auth.ok) return auth.response;
-
   const { searchParams } = req.nextUrl;
-  const companyId = searchParams.get("companyId");
-  const employeeId = searchParams.get("employeeId");
+  let companyId = searchParams.get("companyId");
+  let employeeId = searchParams.get("employeeId");
 
-  if (!companyId) {
-    return NextResponse.json({ error: "Company ID required" }, { status: 400 });
-  }
+  const self = await requireEmployeeSelf();
+  if (self.ok) {
+    if (!companyId) {
+      companyId = self.employee.companyId;
+    }
+    if (companyId !== self.employee.companyId) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    if (employeeId && employeeId !== self.employee.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const billing = await gateBillingForEmployeeSelf(self.employee, self.via, self.dbUser);
+    if (billing) return billing;
+    employeeId = self.employee.id;
+  } else {
+    if (!companyId) {
+      return NextResponse.json({ error: "Company ID required" }, { status: 400 });
+    }
+    const auth = await requireDbUser();
+    if (!auth.ok) return auth.response;
 
-  const billing = await gateCompanyBilling(auth.dbUser, companyId);
-  if (billing) return billing;
+    const billing = await gateCompanyBilling(auth.dbUser, companyId);
+    if (billing) return billing;
 
-  try {
     if (employeeId) {
       const emp = await prisma.employee.findFirst({
         where: { id: employeeId, deletedAt: null },
@@ -40,7 +59,9 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     }
+  }
 
+  try {
     const entitlements = await prisma.leaveEntitlement.findMany({
       where: { companyId, isActive: true },
     });

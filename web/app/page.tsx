@@ -38,10 +38,10 @@ const services = [
     icon: "checkin" as const,
     title: "Employee Check-in",
     description:
-      "Attendance that feeds payroll: portal or office kiosk with device binding, shift-based late and overtime, correction requests when something was logged wrong, and exports your ops team already use.",
+      "Attendance that feeds payroll: office kiosk with device binding, shift-based late and overtime, portal Attendance and correction requests, and exports your ops team already use.",
     highlights: [
       "Office kiosk: shared device with name, code, and device binding",
-      "Portal check-in and correction requests from self-service",
+      "Portal Attendance: today's log + correction requests (punch only at kiosk)",
       "Enterprise options: audit sessions and device binding",
       "Automatic overtime and tardiness vs assigned shifts",
       "Shift scheduling and roster management",
@@ -86,7 +86,7 @@ const features = [
     icon: "selfService" as const,
     title: "Employee Self-Service",
     description:
-      "Payslips, check-in, leave requests, loan balances, documents, and onboarding task checklists — mobile-friendly; add to home screen like an app.",
+      "Payslips, Attendance and correction requests, leave, loan balances, documents, and onboarding task checklists — mobile-friendly; add to home screen like an app.",
   },
   {
     icon: "shifts" as const,
@@ -132,7 +132,7 @@ const workflow = [
     icon: Monitor,
     title: "Check In",
     description:
-      "Employees use the portal or the office kiosk (QR device-verified from their phone). Shift-based late and overtime rules apply automatically.",
+      "Employees punch at the office kiosk (QR device-verified from their phone). Shift-based late and overtime rules apply automatically.",
   },
   {
     step: "02",
@@ -191,7 +191,7 @@ const roles = [
     icon: "employee" as const,
     role: "Employee",
     access: [
-      "Clock in from the portal or kiosk; request attendance fixes",
+      "View Attendance and request fixes; clock in/out at the office kiosk",
       "View and download payslips",
       "Request leave and follow onboarding checklists",
       "Track loan balance from self-service",

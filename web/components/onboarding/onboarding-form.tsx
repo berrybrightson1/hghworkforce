@@ -25,7 +25,10 @@ export function OnboardingForm() {
     const body =
       mode === "create"
         ? { action: "create_company", companyName }
-        : { action: "join_company", inviteCode };
+        : {
+            action: "join_company",
+            inviteCode: inviteCode.trim().toUpperCase().replace(/\s+/g, ""),
+          };
 
     const res = await fetch("/api/onboarding", {
       method: "POST",

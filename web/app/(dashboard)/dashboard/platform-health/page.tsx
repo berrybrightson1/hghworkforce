@@ -29,6 +29,8 @@ export default async function PlatformHealthPage() {
   const since = new Date();
   since.setDate(since.getDate() - 30);
 
+  // Use $transaction (sequential) not Promise.all: with connection_limit=1 (Supabase pooler / prod),
+  // parallel queries exhaust the pool and throw P2024 "Timed out fetching a new connection".
   const [
     companies,
     activeUsers,
@@ -38,7 +40,7 @@ export default async function PlatformHealthPage() {
     pendingCorrections,
     bySubscription,
     allCompaniesRows,
-  ] = await Promise.all([
+  ] = await prisma.$transaction([
     prisma.company.count(),
     prisma.user.count({ where: { isActive: true } }),
     prisma.employee.count({ where: { status: "ACTIVE", deletedAt: null } }),
@@ -48,6 +50,7 @@ export default async function PlatformHealthPage() {
     prisma.company.groupBy({
       by: ["subscriptionStatus"],
       _count: { id: true },
+      orderBy: { subscriptionStatus: "asc" },
     }),
     prisma.company.findMany({
       orderBy: { name: "asc" },
@@ -122,11 +125,14 @@ export default async function PlatformHealthPage() {
           <CardTitle className="text-base">Companies by subscription status</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
-          {bySubscription.map((p) => (
-            <Badge key={p.subscriptionStatus} variant="default">
-              {p.subscriptionStatus}: {p._count.id}
-            </Badge>
-          ))}
+          {bySubscription.map((p) => {
+            const row = p as { subscriptionStatus: string; _count: { id: number } };
+            return (
+              <Badge key={row.subscriptionStatus} variant="default">
+                {row.subscriptionStatus}: {row._count.id}
+              </Badge>
+            );
+          })}
         </CardContent>
       </Card>
 

@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canManageCheckinSecurity, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import {
+  canManageCheckinSecurity,
+  gateCompanyBilling,
+  gateBillingForEmployeeSelf,
+  requireDbUser,
+  requireEmployeeSelf,
+} from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 /** GET ?companyId= — pending + recent correction requests */
@@ -37,9 +43,6 @@ export async function GET(req: NextRequest) {
 
 /** POST — employees submit a correction for their own check-in */
 export async function POST(req: NextRequest) {
-  const auth = await requireDbUser();
-  if (!auth.ok) return auth.response;
-
   let body: {
     checkInId?: string;
     reason?: string;
@@ -67,19 +70,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Check-in not found" }, { status: 404 });
     }
 
-    const billing = await gateCompanyBilling(auth.dbUser, checkIn.companyId);
-    if (billing) return billing;
+    const self = await requireEmployeeSelf();
+    let requestedByUserId: string | null = null;
 
-    if (auth.dbUser.role === "EMPLOYEE") {
-      const emp = await prisma.employee.findUnique({
-        where: { userId: auth.dbUser.id },
-        select: { id: true },
-      });
-      if (!emp || emp.id !== checkIn.employeeId) {
+    if (self.ok) {
+      if (self.employee.id !== checkIn.employeeId) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-    } else if (!canManageCheckinSecurity(auth.dbUser.role)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      const billing = await gateBillingForEmployeeSelf(self.employee, self.via, self.dbUser);
+      if (billing) return billing;
+      requestedByUserId = null;
+    } else {
+      const auth = await requireDbUser();
+      if (!auth.ok) return auth.response;
+
+      const billing = await gateCompanyBilling(auth.dbUser, checkIn.companyId);
+      if (billing) return billing;
+
+      if (auth.dbUser.role === "EMPLOYEE") {
+        const emp = await prisma.employee.findUnique({
+          where: { userId: auth.dbUser.id },
+          select: { id: true },
+        });
+        if (!emp || emp.id !== checkIn.employeeId) {
+          return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+        requestedByUserId = auth.dbUser.id;
+      } else if (!canManageCheckinSecurity(auth.dbUser.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      } else {
+        requestedByUserId = auth.dbUser.id;
+      }
     }
 
     const dup = await prisma.attendanceCorrectionRequest.findFirst({
@@ -97,7 +118,7 @@ export async function POST(req: NextRequest) {
         checkInId,
         employeeId: checkIn.employeeId,
         companyId: checkIn.companyId,
-        requestedByUserId: auth.dbUser.id,
+        requestedByUserId,
         reason,
         proposedClockIn,
         proposedClockOut,

@@ -1,15 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  CheckCircle2,
-  Circle,
-  Clock,
-  LogIn,
-  LogOut,
-  Repeat,
-  TimerOff,
-} from "lucide-react";
+import { useState } from "react";
+import { ClipboardList, LogIn, LogOut, Timer } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { useApi } from "@/lib/swr";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
@@ -26,13 +19,12 @@ import {
 const CORR_SESSION_NONE = "__hgh_corr_session_none__";
 
 type ShiftInfo = {
-  shift: { name: string; startTime: string; endTime: string };
+  shift: { name: string; startTime: string; endTime: string; breakMinutes?: number };
 } | null;
 
 type CheckinContext = {
-  employeeId: string;
-  companyId: string;
-  checkinEnterpriseEnabled: boolean;
+  localToday: string;
+  kioskTimezone: string;
 };
 
 type CheckInRecord = {
@@ -57,306 +49,118 @@ function formatDuration(hours: string | null) {
   return `${hrs}h ${mins}m`;
 }
 
-// ── Live clock hook ──────────────────────────────────────────────────────────
-
-function useLiveClock() {
-  const [now, setNow] = useState(new Date());
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  return now;
-}
-
-// ── Component ────────────────────────────────────────────────────────────────
-
-export default function PortalCheckInPage() {
+export default function PortalAttendancePage() {
   const { selected } = useCompany();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [checkinCtx, setCheckinCtx] = useState<CheckinContext | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [corrCheckInId, setCorrCheckInId] = useState("");
   const [corrReason, setCorrReason] = useState("");
+  const [corrProposedIn, setCorrProposedIn] = useState("");
+  const [corrProposedOut, setCorrProposedOut] = useState("");
   const [corrBusy, setCorrBusy] = useState(false);
-  const sentTabHidden = useRef(false);
 
-  const now = useLiveClock();
-  const today = new Date().toISOString().slice(0, 10);
-  const apiUrl = selected
-    ? `/api/checkins?companyId=${selected.id}&date=${today}`
-    : null;
-  const { data: checkins, mutate } = useApi<CheckInRecord[]>(apiUrl);
+  const { data: checkinCtx } = useApi<CheckinContext>("/api/checkin-context");
+  const apiUrl =
+    selected && checkinCtx?.localToday
+      ? `/api/checkins?companyId=${selected.id}&date=${checkinCtx.localToday}`
+      : null;
+  const { data: checkins } = useApi<CheckInRecord[]>(apiUrl);
 
-  const openCheckIn =
-    checkins?.find((c) => c.status === "CLOCKED_IN") ?? null;
-  const completedToday =
-    checkins?.filter((c) => c.status === "CLOCKED_OUT") ?? [];
+  const openCheckIn = checkins?.find((c) => c.status === "CLOCKED_IN") ?? null;
+  const completedToday = checkins?.filter((c) => c.status === "CLOCKED_OUT") ?? [];
   const totalHoursToday = completedToday.reduce(
     (sum, c) => sum + (c.hoursWorked ? parseFloat(c.hoursWorked) : 0),
     0,
   );
   const lateToday = checkins?.filter((c) => c.lateMinutes && c.lateMinutes > 0).length ?? 0;
 
-  // Shift info from the most recent check-in or open one
-  const currentShift =
-    openCheckIn?.shiftAssignment?.shift ??
-    (checkins && checkins.length > 0 ? checkins[0]?.shiftAssignment?.shift : null) ??
-    null;
-
-  // Load enterprise check-in context + start session when enabled
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/checkin-context");
-        if (!res.ok) return;
-        const ctx = (await res.json()) as CheckinContext;
-        if (cancelled) return;
-        setCheckinCtx(ctx);
-        if (!ctx.checkinEnterpriseEnabled) {
-          setSessionId(null);
-          return;
-        }
-        const sRes = await fetch("/api/checkins/session", { method: "POST" });
-        if (!sRes.ok) return;
-        const sData = (await sRes.json()) as { sessionId: string | null };
-        if (cancelled) return;
-        setSessionId(sData.sessionId);
-      } catch {
-        /* ignore */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const postSessionEvent = useCallback(
-    async (
-      type:
-        | "TAB_HIDDEN"
-        | "TAB_VISIBLE"
-        | "SESSION_INTERRUPTED",
-    ) => {
-      if (!sessionId) return;
-      try {
-        await fetch(`/api/checkins/session/${sessionId}/events`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type }),
-        });
-      } catch {
-        /* ignore */
-      }
-    },
-    [sessionId],
-  );
-
-  useEffect(() => {
-    if (!sessionId) return;
-    const onVis = () => {
-      if (document.visibilityState === "hidden") {
-        void postSessionEvent("TAB_HIDDEN");
-        sentTabHidden.current = true;
-      } else if (sentTabHidden.current) {
-        void postSessionEvent("TAB_VISIBLE");
-      }
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [sessionId, postSessionEvent]);
-
-  const handleAction = useCallback(
-    async (action: "clock-in" | "clock-out") => {
-      const enterprise = checkinCtx?.checkinEnterpriseEnabled;
-
-      if (enterprise && !sessionId) {
-        toast.error("Check-in session is not ready. Refresh the page and try again.");
-        return;
-      }
-
-      setLoading(true);
-      try {
-        const body: Record<string, unknown> = { action };
-        if (enterprise && sessionId) body.sessionId = sessionId;
-
-        const res = await fetch("/api/checkins", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          throw new Error(data.error || "Request failed");
-        }
-        toast.success(
-          action === "clock-in" ? "Clocked in successfully" : "Clocked out successfully",
-        );
-        // Show overtime/late info
-        if (action === "clock-out" && data._meta?.overtimeHours) {
-          toast.info(
-            `Overtime: ${data._meta.overtimeHours}h logged`,
-          );
-        }
-        mutate();
-        if (action === "clock-out" && enterprise) {
-          try {
-            const sRes = await fetch("/api/checkins/session", { method: "POST" });
-            const sData = (await sRes.json()) as { sessionId: string | null };
-            setSessionId(sData.sessionId ?? null);
-          } catch {
-            setSessionId(null);
-          }
-        }
-      } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Something went wrong",
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
-    [toast, mutate, checkinCtx, sessionId],
-  );
-
-  const timeString = now.toLocaleTimeString("en-GB", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const dateString = now.toLocaleDateString("en-GB", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      {/* Current time & status */}
-      <div className="rounded-2xl border border-hgh-border bg-white p-6 text-center md:p-8">
-        <p className="text-sm text-hgh-muted">{dateString}</p>
-        <p className="mt-1 font-mono text-4xl font-bold tracking-tight text-hgh-navy md:text-5xl">
-          {timeString}
+    <div className="space-y-6">
+      <div>
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-hgh-gold/15 text-hgh-gold">
+            <Timer className="h-5 w-5" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-hgh-navy">Attendance</h1>
+            <p className="mt-1 text-sm text-hgh-muted">
+              Check-in and check-out happen only at your company&apos;s{" "}
+              <strong className="font-medium text-hgh-navy">office kiosk</strong>. This page shows
+              today&apos;s record and lets you request time corrections.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-hgh-border border-dashed bg-white p-4 shadow-sm">
+        <p className="text-sm text-hgh-slate">
+          Ask HR or your admin for the kiosk URL (it includes your company code). Use the kiosk screen
+          to verify with your phone, then enter the code shown on your device.
         </p>
-
-        {/* Shift info */}
-        {currentShift && (
-          <div className="mt-3 flex items-center justify-center gap-2 text-sm text-hgh-slate">
-            <Clock className="h-4 w-4 text-hgh-gold" aria-hidden />
-            Shift: {currentShift.startTime} - {currentShift.endTime}
-          </div>
-        )}
-
-        {checkinCtx?.checkinEnterpriseEnabled && (
-          <p className="mt-3 text-center text-xs text-hgh-muted">
-            Secure check-in session is active. Visibility changes may be logged for audit.
-          </p>
-        )}
-        {/* Status badge */}
-        <div className="mt-6">
-          {openCheckIn ? (
-            <div className="space-y-2">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-hgh-success/10 px-4 py-1.5 text-sm font-medium text-hgh-success">
-                <CheckCircle2 className="h-4 w-4" aria-hidden />
-                Clocked in since {formatClockTime12h(openCheckIn.clockIn)}
-              </span>
-              {openCheckIn.lateMinutes && openCheckIn.lateMinutes > 0 && (
-                <p className="text-xs text-hgh-danger">
-                  Late by {formatLateMinutesHuman(openCheckIn.lateMinutes)}
-                </p>
-              )}
-            </div>
-          ) : (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-hgh-muted/10 px-4 py-1.5 text-sm font-medium text-hgh-muted">
-              <Circle className="h-4 w-4" aria-hidden />
-              Not clocked in
+        {checkinCtx?.kioskTimezone ? (
+          <p className="mt-2 text-xs text-hgh-muted">
+            Attendance dates use the company timezone{" "}
+            <span className="font-medium text-hgh-navy">
+              {checkinCtx.kioskTimezone.replace(/_/g, " ")}
             </span>
-          )}
-        </div>
-
-        {/* Action button */}
-        <div className="mt-8">
-          {openCheckIn ? (
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleAction("clock-out")}
-              className="inline-flex items-center gap-2 rounded-xl bg-hgh-danger px-10 py-4 text-lg font-semibold text-white shadow-lg shadow-hgh-danger/20 transition-all hover:bg-hgh-danger/90 disabled:opacity-50"
-            >
-              <LogOut className="h-6 w-6" aria-hidden />
-              {loading ? "Processing..." : "Clock Out"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled={loading}
-              onClick={() => handleAction("clock-in")}
-              className="inline-flex items-center gap-2 rounded-xl bg-hgh-success px-10 py-4 text-lg font-semibold text-white shadow-lg shadow-hgh-success/20 transition-all hover:bg-hgh-success/90 disabled:opacity-50"
-            >
-              <LogIn className="h-6 w-6" aria-hidden />
-              {loading ? "Processing..." : "Clock In"}
-            </button>
-          )}
-        </div>
+            .
+          </p>
+        ) : null}
       </div>
 
-      {/* Today's summary */}
+      {openCheckIn ? (
+        <div className="rounded-xl border border-hgh-success/30 bg-hgh-success/10 px-4 py-3 text-sm text-hgh-navy">
+          You are currently <strong>clocked in</strong> (since {formatClockTime12h(openCheckIn.clockIn)}
+          {openCheckIn.lateMinutes && openCheckIn.lateMinutes > 0
+            ? ` — ${formatLateMinutesHuman(openCheckIn.lateMinutes)} late`
+            : ""}
+          ). Use the <strong>kiosk</strong> to clock out.
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-3 gap-4">
-        <div className="rounded-xl border border-hgh-border bg-white p-5">
-          <div className="flex items-center gap-2 text-sm text-hgh-muted">
-            <Clock className="h-[18px] w-[18px]" aria-hidden />
-            Hours today
-          </div>
-          <p className="mt-2 text-2xl font-bold text-hgh-navy">
-            {formatDuration(totalHoursToday.toFixed(2))}
-          </p>
-        </div>
-        <div className="rounded-xl border border-hgh-border bg-white p-5">
-          <div className="flex items-center gap-2 text-sm text-hgh-muted">
-            <Repeat className="h-[18px] w-[18px]" aria-hidden />
-            Sessions
-          </div>
-          <p className="mt-2 text-2xl font-bold text-hgh-navy">
-            {completedToday.length + (openCheckIn ? 1 : 0)}
-          </p>
-        </div>
-        <div className="rounded-xl border border-hgh-border bg-white p-5">
-          <div className="flex items-center gap-2 text-sm text-hgh-muted">
-            <TimerOff className="h-[18px] w-[18px] text-hgh-danger" aria-hidden />
-            Late
-          </div>
-          <p className="mt-2 text-2xl font-bold text-hgh-navy">
-            {lateToday}
-          </p>
-        </div>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-2 text-sm text-hgh-muted">
+              <Timer className="h-[18px] w-[18px]" aria-hidden />
+              Hours today
+            </div>
+            <p className="mt-2 text-2xl font-bold text-hgh-navy">
+              {formatDuration(totalHoursToday.toFixed(2))}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-2 text-sm text-hgh-muted">Sessions</div>
+            <p className="mt-2 text-2xl font-bold text-hgh-navy">
+              {completedToday.length + (openCheckIn ? 1 : 0)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="py-4">
+            <div className="flex items-center gap-2 text-sm text-hgh-muted">Late (today)</div>
+            <p className="mt-2 text-2xl font-bold text-hgh-navy">{lateToday}</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Today's log */}
-      <div className="rounded-xl border border-hgh-border bg-white">
+      <div className="rounded-xl border border-hgh-border bg-white shadow-sm">
         <div className="border-b border-hgh-border px-5 py-4">
-          <h2 className="text-sm font-semibold text-hgh-navy">
-            Today&apos;s Activity
-          </h2>
+          <h2 className="text-sm font-semibold text-hgh-navy">Today&apos;s activity</h2>
         </div>
         {!checkins || checkins.length === 0 ? (
           <div className="px-5 py-8 text-center text-sm text-hgh-muted">
-            No check-ins recorded today. Clock in to get started.
+            No check-ins recorded today yet. Use the office kiosk when you arrive.
           </div>
         ) : (
           <div className="divide-y divide-hgh-border">
             {checkins.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center gap-4 px-5 py-3.5"
-              >
+              <div key={c.id} className="flex items-center gap-4 px-5 py-3.5">
                 <div
                   className={cn(
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-                    c.status === "CLOCKED_IN"
-                      ? "bg-hgh-success/10"
-                      : "bg-hgh-muted/10",
+                    c.status === "CLOCKED_IN" ? "bg-hgh-success/10" : "bg-hgh-muted/10",
                   )}
                 >
                   {c.status === "CLOCKED_IN" ? (
@@ -377,9 +181,7 @@ export default function PortalCheckInPage() {
                   </p>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-hgh-muted">
                     <span>
-                      {c.status === "CLOCKED_IN"
-                        ? "In progress"
-                        : formatDuration(c.hoursWorked)}
+                      {c.status === "CLOCKED_IN" ? "In progress" : formatDuration(c.hoursWorked)}
                     </span>
                     {c.lateMinutes && c.lateMinutes > 0 && (
                       <span className="rounded bg-hgh-danger/10 px-1.5 py-0.5 text-hgh-danger">
@@ -391,6 +193,11 @@ export default function PortalCheckInPage() {
                         OT {c.overtimeHours}h
                       </span>
                     )}
+                    {c.note ? (
+                      <span className="max-w-[14rem] truncate text-hgh-slate" title={c.note}>
+                        Note: {c.note}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
                 <div>
@@ -412,11 +219,14 @@ export default function PortalCheckInPage() {
       </div>
 
       {checkins && checkins.length > 0 && (
-        <div className="rounded-xl border border-hgh-border bg-white p-5">
-          <h2 className="text-sm font-semibold text-hgh-navy">Request a time correction</h2>
+        <div className="rounded-xl border border-hgh-border bg-white p-5 shadow-sm">
+          <div className="flex items-center gap-2 text-hgh-navy">
+            <ClipboardList className="h-5 w-5 text-hgh-gold" aria-hidden />
+            <h2 className="text-sm font-semibold">Request a time correction</h2>
+          </div>
           <p className="mt-1 text-xs text-hgh-muted">
-            HR can approve adjustments to your recorded times. Describe the issue; optional proposed
-            times can be added later from the dashboard.
+            HR can approve adjustments to your recorded times. Describe the issue. You may suggest
+            corrected clock-in and clock-out times (optional, your local date and time).
           </p>
           <div className="mt-4 space-y-3">
             <Select
@@ -438,6 +248,32 @@ export default function PortalCheckInPage() {
                 ))}
               </SelectContent>
             </Select>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-hgh-slate" htmlFor="corr-proposed-in">
+                  Suggested clock-in (optional)
+                </label>
+                <input
+                  id="corr-proposed-in"
+                  type="datetime-local"
+                  className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm"
+                  value={corrProposedIn}
+                  onChange={(e) => setCorrProposedIn(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-hgh-slate" htmlFor="corr-proposed-out">
+                  Suggested clock-out (optional)
+                </label>
+                <input
+                  id="corr-proposed-out"
+                  type="datetime-local"
+                  className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm"
+                  value={corrProposedOut}
+                  onChange={(e) => setCorrProposedOut(e.target.value)}
+                />
+              </div>
+            </div>
             <textarea
               className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm"
               rows={3}
@@ -451,19 +287,30 @@ export default function PortalCheckInPage() {
               onClick={async () => {
                 setCorrBusy(true);
                 try {
+                  const payload: Record<string, string> = {
+                    checkInId: corrCheckInId,
+                    reason: corrReason.trim(),
+                  };
+                  if (corrProposedIn.trim()) {
+                    const d = new Date(corrProposedIn);
+                    if (!Number.isNaN(d.getTime())) payload.proposedClockIn = d.toISOString();
+                  }
+                  if (corrProposedOut.trim()) {
+                    const d = new Date(corrProposedOut);
+                    if (!Number.isNaN(d.getTime())) payload.proposedClockOut = d.toISOString();
+                  }
                   const res = await fetch("/api/attendance-corrections", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      checkInId: corrCheckInId,
-                      reason: corrReason.trim(),
-                    }),
+                    body: JSON.stringify(payload),
                   });
                   const data = await res.json().catch(() => ({}));
                   if (!res.ok) throw new Error(data.error || "Failed");
                   toast.success("Request submitted for review.");
                   setCorrReason("");
                   setCorrCheckInId("");
+                  setCorrProposedIn("");
+                  setCorrProposedOut("");
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : "Failed");
                 } finally {

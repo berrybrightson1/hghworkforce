@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { UserRole } from "@prisma/client";
 
 type UserRow = {
@@ -80,6 +81,12 @@ export function UsersClient({
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<UserRole>("EMPLOYEE");
   const [inviting, setInviting] = useState(false);
+  const [deactivateTarget, setDeactivateTarget] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
+  const [deactivateBusy, setDeactivateBusy] = useState(false);
 
   const showCompanyColumn =
     currentUserRole === "SUPER_ADMIN" && listScope === "all";
@@ -155,7 +162,7 @@ export function UsersClient({
     }
   };
 
-  const handleToggleActive = async (userId: string, isActive: boolean) => {
+  const applyToggleActive = async (userId: string, isActive: boolean) => {
     const res = await fetch("/api/users", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -163,10 +170,22 @@ export function UsersClient({
     });
     if (res.ok) {
       toast.success(isActive ? "User activated" : "User deactivated");
-      fetchData();
-    } else {
-      const data = await res.json();
-      toast.error(data.error ?? "Failed to update status");
+      await fetchData();
+      return true;
+    }
+    const data = await res.json();
+    toast.error(data.error ?? "Failed to update status");
+    return false;
+  };
+
+  const confirmDeactivate = async () => {
+    if (!deactivateTarget) return;
+    setDeactivateBusy(true);
+    try {
+      const ok = await applyToggleActive(deactivateTarget.id, false);
+      if (ok) setDeactivateTarget(null);
+    } finally {
+      setDeactivateBusy(false);
     }
   };
 
@@ -183,7 +202,12 @@ export function UsersClient({
     setInviting(false);
 
     if (res.ok) {
-      toast.success(`Invitation created. Code: ${data.code}`);
+      const code = typeof data.code === "string" ? data.code : "";
+      toast.success(
+        code
+          ? `Invitation created. Code: ${code} — they sign up, verify email, then use “Join with invite code” on onboarding.`
+          : "Invitation created — they sign up, verify email, then use “Join with invite code” on onboarding.",
+      );
       setInviteEmail("");
       fetchData();
     } else {
@@ -289,6 +313,10 @@ export function UsersClient({
       {canInvite && (
         <div className="rounded-xl border border-hgh-border bg-white p-6">
           <h2 className="mb-4 text-base font-semibold text-hgh-navy">Invite a team member</h2>
+          <p className="mb-4 text-xs text-hgh-muted">
+            Invited people create an account, confirm their email, then open onboarding and choose{" "}
+            <strong className="text-hgh-slate">Join with invite code</strong>. Paste-ins are case-insensitive.
+          </p>
           <form onSubmit={handleInvite} className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1">
               <label className="mb-1 block text-xs font-medium text-hgh-slate" htmlFor="invite-email">
@@ -377,11 +405,12 @@ export function UsersClient({
             </p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="w-full min-w-[760px] text-sm">
                 <thead>
                   <tr className="border-b border-hgh-border bg-hgh-offwhite/50 text-left text-xs font-medium uppercase tracking-wider text-hgh-muted">
                     <th className="px-6 py-3">Name</th>
                     {showCompanyColumn && <th className="px-6 py-3">Company</th>}
+                    <th className="px-6 py-3 whitespace-nowrap">Joined</th>
                     <th className="px-6 py-3">Role</th>
                     <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3 text-right">Actions</th>
@@ -399,6 +428,12 @@ export function UsersClient({
                           {u.company?.name ?? "—"}
                         </td>
                       )}
+                      <td className="whitespace-nowrap px-6 py-4 text-xs text-hgh-slate">
+                        {format(new Date(u.createdAt), "d MMM yyyy")}
+                        <span className="mt-0.5 block font-mono text-[11px] text-hgh-muted">
+                          {format(new Date(u.createdAt), "HH:mm")}
+                        </span>
+                      </td>
                       <td className="px-6 py-4">
                         {u.role === "SUPER_ADMIN" ? (
                           <span
@@ -442,7 +477,11 @@ export function UsersClient({
                         {u.role !== "SUPER_ADMIN" && (
                           <button
                             type="button"
-                            onClick={() => handleToggleActive(u.id, !u.isActive)}
+                            onClick={() =>
+                              u.isActive
+                                ? setDeactivateTarget({ id: u.id, name: u.name, email: u.email })
+                                : void applyToggleActive(u.id, true)
+                            }
                             className="text-xs font-medium text-hgh-muted transition-colors hover:text-hgh-navy"
                           >
                             {u.isActive ? "Deactivate" : "Activate"}
@@ -462,10 +501,11 @@ export function UsersClient({
             <p className="px-6 py-10 text-center text-sm text-hgh-muted">No invitations sent yet.</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[820px] text-sm">
                 <thead>
                   <tr className="border-b border-hgh-border bg-hgh-offwhite/50 text-left text-xs font-medium uppercase tracking-wider text-hgh-muted">
                     <th className="px-6 py-3">Email</th>
+                    <th className="px-6 py-3 whitespace-nowrap">Sent</th>
                     <th className="px-6 py-3">Role</th>
                     <th className="px-6 py-3">Code</th>
                     <th className="px-6 py-3">Expires</th>
@@ -481,6 +521,12 @@ export function UsersClient({
                         <p className="text-xs text-hgh-muted">
                           Invited by {inv.inviter?.name || inv.inviter?.email || "—"}
                         </p>
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-xs text-hgh-slate">
+                        {format(new Date(inv.createdAt), "d MMM yyyy")}
+                        <span className="mt-0.5 block font-mono text-[11px] text-hgh-muted">
+                          {format(new Date(inv.createdAt), "HH:mm")}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <span
@@ -532,6 +578,29 @@ export function UsersClient({
           )}
         </div>
       )}
+      <ConfirmDialog
+        open={Boolean(deactivateTarget)}
+        onClose={() => {
+          if (!deactivateBusy) setDeactivateTarget(null);
+        }}
+        title="Deactivate this user?"
+        requireAcknowledge={false}
+        confirmLabel="Deactivate"
+        cancelLabel="Cancel"
+        busy={deactivateBusy}
+        description={
+          deactivateTarget ? (
+            <>
+              <p>
+                <strong>{deactivateTarget.name}</strong> ({deactivateTarget.email}) will no longer be able to
+                sign in until an admin activates them again.
+              </p>
+              <p className="mt-2 text-xs text-hgh-muted">This does not delete their history.</p>
+            </>
+          ) : null
+        }
+        onConfirm={confirmDeactivate}
+      />
     </div>
   );
 }

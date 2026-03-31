@@ -27,6 +27,8 @@ import {
   Radio,
   BarChart3,
   Settings,
+  Inbox,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 import { SidebarAccountMenu } from "@/components/dashboard/sidebar-account-menu";
@@ -65,6 +67,12 @@ const navigation: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
       {
+        href: "/dashboard/inbox",
+        label: "Inbox",
+        icon: Inbox,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
+      {
         href: "/dashboard/setup-wizard",
         label: "Setup wizard",
         icon: ListChecks,
@@ -92,6 +100,12 @@ const navigation: NavGroup[] = [
         href: "/dashboard/exits",
         label: "Exits",
         icon: DoorOpen,
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+      },
+      {
+        href: "/dashboard/workplace",
+        label: "Workplace",
+        icon: Briefcase,
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
       },
     ],
@@ -178,14 +192,19 @@ const SIDEBAR_NAV_HINTS: Partial<Record<string, SidebarNavHint>> = {
     body: "See a quick snapshot of your company: headcount, pending leave, loans, and other items that may need your attention today.",
     learnHref: "/dashboard/help",
   },
+  "/dashboard/inbox": {
+    palette: "amber",
+    body: "Approve or reject pending leave requests and attendance corrections for the selected workspace in one place.",
+    learnHref: "/dashboard/help",
+  },
   "/dashboard/setup-wizard": {
     palette: "teal",
-    body: "Follow a guided checklist to finish the basics—company details, employees, tax settings, and check-in—so payroll and attendance work end to end.",
+    body: "Follow a guided checklist to finish the basics—company details, employees, tax settings, and office kiosk setup—so payroll and attendance work end to end.",
     learnHref: "/dashboard/help",
   },
   "/dashboard/employees": {
     palette: "indigo",
-    body: "Add and maintain your team here: names, salaries, bank and tax details, documents, and check-in profile. Payroll uses this information on every run.",
+    body: "Add and maintain your team here: names, salaries, bank and tax details, documents, and kiosk device binding for clock-in. Payroll uses this information on every run.",
     learnHref: "/dashboard/help",
   },
   "/dashboard/onboarding": {
@@ -205,12 +224,12 @@ const SIDEBAR_NAV_HINTS: Partial<Record<string, SidebarNavHint>> = {
   },
   "/dashboard/attendance/live": {
     palette: "emerald",
-    body: "Watch who is clocked in right now—useful for reception or HR when you need a live picture of today’s attendance.",
+    body: "Watch who is clocked in right now from kiosk punches—useful for reception or HR when you need a live picture of today's attendance.",
     learnHref: "/dashboard/help",
   },
   "/dashboard/attendance": {
     palette: "sky",
-    body: "Review clock-in and clock-out history, hours, and corrections so you can answer questions and fix mistakes fairly.",
+    body: "Review kiosk clock-in/out history, hours, late flags, and employee correction requests so payroll stays fair and auditable.",
     learnHref: "/dashboard/help",
   },
   "/dashboard/shifts": {

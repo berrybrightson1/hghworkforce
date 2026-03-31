@@ -523,3 +523,282 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- Kiosk device binding: fast lookup for “token already bound to another employee”
 CREATE INDEX IF NOT EXISTS "Employee_kioskDeviceTokenHash_idx" ON "Employee"("kioskDeviceTokenHash");
+
+-- ── Employee PIN portal + notifications (additive) ────────────────────────────
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "portalPin" TEXT;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "temporaryPin" TEXT;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "pinChangedAt" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "portalLastLoginAt" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "portalEnabled" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "portalFailedAttempts" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "portalLockedUntil" TIMESTAMP(3);
+
+DO $$ BEGIN
+  ALTER TABLE "AttendanceCorrectionRequest" ALTER COLUMN "requestedByUserId" DROP NOT NULL;
+EXCEPTION WHEN others THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "PortalNotificationType" AS ENUM (
+    'PAYSLIP_PUBLISHED', 'LEAVE_APPROVED', 'LEAVE_REJECTED', 'LOAN_APPROVED', 'LOAN_REJECTED',
+    'QUERY_RESPONDED', 'SHIFT_SWAP_APPROVED', 'SHIFT_SWAP_REJECTED', 'ONBOARDING_TASK_DUE',
+    'PERFORMANCE_REVIEW_OPEN', 'DOCUMENT_REQUIRED', 'PIN_RESET', 'GENERAL'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE "PinResetRequestStatus" AS ENUM ('PENDING', 'RESOLVED', 'CANCELLED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "PortalNotification" (
+  "id" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "tenantId" TEXT NOT NULL,
+  "type" "PortalNotificationType" NOT NULL,
+  "title" TEXT NOT NULL,
+  "message" TEXT NOT NULL,
+  "linkUrl" TEXT,
+  "isRead" BOOLEAN NOT NULL DEFAULT false,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PortalNotification_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "PortalNotification_employeeId_isRead_idx" ON "PortalNotification"("employeeId", "isRead");
+CREATE INDEX IF NOT EXISTS "PortalNotification_tenantId_createdAt_idx" ON "PortalNotification"("tenantId", "createdAt");
+
+DO $$ BEGIN
+  ALTER TABLE "PortalNotification" ADD CONSTRAINT "PortalNotification_employeeId_fkey"
+    FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "PinResetRequest" (
+  "id" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL,
+  "status" "PinResetRequestStatus" NOT NULL DEFAULT 'PENDING',
+  "otpHash" TEXT,
+  "otpExpiresAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "resolvedAt" TIMESTAMP(3),
+  "adminNote" TEXT,
+  CONSTRAINT "PinResetRequest_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "PinResetRequest_companyId_status_idx" ON "PinResetRequest"("companyId", "status");
+CREATE INDEX IF NOT EXISTS "PinResetRequest_employeeId_idx" ON "PinResetRequest"("employeeId");
+
+DO $$ BEGIN
+  ALTER TABLE "PinResetRequest" ADD CONSTRAINT "PinResetRequest_employeeId_fkey"
+    FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TABLE "PinResetRequest" ADD CONSTRAINT "PinResetRequest_companyId_fkey"
+    FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- LoanStatus: add PENDING for employee loan requests (payroll still uses only ACTIVE). Idempotent.
+DO $$ BEGIN
+  ALTER TYPE "LoanStatus" ADD VALUE 'PENDING';
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Employee.manager (dashboard user who sees this person in inbox "My team")
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "managedByUserId" TEXT;
+CREATE INDEX IF NOT EXISTS "Employee_managedByUserId_idx" ON "Employee"("managedByUserId");
+DO $$ BEGIN
+  ALTER TABLE "Employee" ADD CONSTRAINT "Employee_managedByUserId_fkey"
+    FOREIGN KEY ("managedByUserId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ─── Workplace / HR extensions (Features 1–12) ─────────────────────────────
+
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "showBirthdaysOnDashboard" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "birthdayLookaheadDays" INTEGER NOT NULL DEFAULT 30;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "payslipPrimaryHex" TEXT NOT NULL DEFAULT '#0f172a';
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "payslipAccentHex" TEXT NOT NULL DEFAULT '#b45309';
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "payslipThemeVariant" TEXT NOT NULL DEFAULT 'DEFAULT';
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "overtimeHourlyMultiplier" DECIMAL(5,2) NOT NULL DEFAULT 1.5;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "standardHoursPerMonth" DECIMAL(6,2) NOT NULL DEFAULT 173;
+ALTER TABLE "Company" ADD COLUMN IF NOT EXISTS "includeAttendanceOvertimeInPayrun" BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "dateOfBirth" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "probationEndDate" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "contractType" TEXT;
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "contractStartDate" TIMESTAMP(3);
+ALTER TABLE "Employee" ADD COLUMN IF NOT EXISTS "contractEndDate" TIMESTAMP(3);
+
+DO $$ BEGIN
+  ALTER TYPE "PortalNotificationType" ADD VALUE 'COMPANY_NOTICE';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE "PortalNotificationType" ADD VALUE 'PAY_QUERY_UPDATE';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER TYPE "PortalNotificationType" ADD VALUE 'PROFILE_REQUEST_DECIDED';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN CREATE TYPE "PayQueryStatus" AS ENUM ('OPEN', 'IN_PROGRESS', 'RESOLVED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "AnonymousFeedbackStatus" AS ENUM ('NEW', 'REVIEWED', 'ARCHIVED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "ProfileChangeRequestStatus" AS ENUM ('PENDING', 'APPROVED', 'REJECTED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE TYPE "CompanyNoticeStatus" AS ENUM ('DRAFT', 'PUBLISHED', 'ARCHIVED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "PublicHoliday" (
+  "id" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL,
+  "date" TIMESTAMP(3) NOT NULL,
+  "name" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PublicHoliday_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "PublicHoliday_companyId_date_key" ON "PublicHoliday"("companyId", "date");
+CREATE INDEX IF NOT EXISTS "PublicHoliday_companyId_idx" ON "PublicHoliday"("companyId");
+DO $$ BEGIN ALTER TABLE "PublicHoliday" ADD CONSTRAINT "PublicHoliday_companyId_fkey"
+  FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "LatenessPolicy" (
+  "id" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL UNIQUE,
+  "graceMinutes" INTEGER NOT NULL DEFAULT 5,
+  "lateInstancesBeforeWarning" INTEGER,
+  "warningLetterBodyTemplate" TEXT,
+  CONSTRAINT "LatenessPolicy_pkey" PRIMARY KEY ("id")
+);
+DO $$ BEGIN ALTER TABLE "LatenessPolicy" ADD CONSTRAINT "LatenessPolicy_companyId_fkey"
+  FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "LateRecord" (
+  "id" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "checkInId" TEXT,
+  "date" TIMESTAMP(3) NOT NULL,
+  "minutesLate" INTEGER NOT NULL,
+  "warningLetterSentAt" TIMESTAMP(3),
+  "notes" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "LateRecord_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "LateRecord_companyId_date_idx" ON "LateRecord"("companyId", "date");
+CREATE INDEX IF NOT EXISTS "LateRecord_employeeId_idx" ON "LateRecord"("employeeId");
+DO $$ BEGIN ALTER TABLE "LateRecord" ADD CONSTRAINT "LateRecord_companyId_fkey"
+  FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "LateRecord" ADD CONSTRAINT "LateRecord_employeeId_fkey"
+  FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "LateRecord" ADD CONSTRAINT "LateRecord_checkInId_fkey"
+  FOREIGN KEY ("checkInId") REFERENCES "CheckIn"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "PayQuery" (
+  "id" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "subject" TEXT NOT NULL,
+  "body" TEXT NOT NULL,
+  "status" "PayQueryStatus" NOT NULL DEFAULT 'OPEN',
+  "responseBody" TEXT,
+  "respondedById" TEXT,
+  "respondedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "PayQuery_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "PayQuery_companyId_status_idx" ON "PayQuery"("companyId", "status");
+CREATE INDEX IF NOT EXISTS "PayQuery_employeeId_idx" ON "PayQuery"("employeeId");
+DO $$ BEGIN ALTER TABLE "PayQuery" ADD CONSTRAINT "PayQuery_companyId_fkey"
+  FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "PayQuery" ADD CONSTRAINT "PayQuery_employeeId_fkey"
+  FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "PayQuery" ADD CONSTRAINT "PayQuery_respondedById_fkey"
+  FOREIGN KEY ("respondedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "AnonymousFeedback" (
+  "id" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL,
+  "message" TEXT NOT NULL,
+  "category" TEXT,
+  "status" "AnonymousFeedbackStatus" NOT NULL DEFAULT 'NEW',
+  "reviewedById" TEXT,
+  "reviewedAt" TIMESTAMP(3),
+  "internalNote" TEXT,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "AnonymousFeedback_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "AnonymousFeedback_companyId_status_idx" ON "AnonymousFeedback"("companyId", "status");
+DO $$ BEGIN ALTER TABLE "AnonymousFeedback" ADD CONSTRAINT "AnonymousFeedback_companyId_fkey"
+  FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "AnonymousFeedback" ADD CONSTRAINT "AnonymousFeedback_reviewedById_fkey"
+  FOREIGN KEY ("reviewedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "ProfileChangeRequest" (
+  "id" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "changesJson" JSONB NOT NULL,
+  "employeeNote" TEXT,
+  "status" "ProfileChangeRequestStatus" NOT NULL DEFAULT 'PENDING',
+  "reviewerNote" TEXT,
+  "decidedById" TEXT,
+  "decidedAt" TIMESTAMP(3),
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "ProfileChangeRequest_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "ProfileChangeRequest_companyId_status_idx" ON "ProfileChangeRequest"("companyId", "status");
+CREATE INDEX IF NOT EXISTS "ProfileChangeRequest_employeeId_idx" ON "ProfileChangeRequest"("employeeId");
+DO $$ BEGIN ALTER TABLE "ProfileChangeRequest" ADD CONSTRAINT "ProfileChangeRequest_companyId_fkey"
+  FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "ProfileChangeRequest" ADD CONSTRAINT "ProfileChangeRequest_employeeId_fkey"
+  FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "ProfileChangeRequest" ADD CONSTRAINT "ProfileChangeRequest_decidedById_fkey"
+  FOREIGN KEY ("decidedById") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "CompanyNotice" (
+  "id" TEXT NOT NULL,
+  "companyId" TEXT NOT NULL,
+  "title" TEXT NOT NULL,
+  "body" TEXT NOT NULL,
+  "status" "CompanyNoticeStatus" NOT NULL DEFAULT 'PUBLISHED',
+  "publishedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "expiresAt" TIMESTAMP(3),
+  "createdById" TEXT NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "CompanyNotice_pkey" PRIMARY KEY ("id")
+);
+CREATE INDEX IF NOT EXISTS "CompanyNotice_companyId_publishedAt_idx" ON "CompanyNotice"("companyId", "publishedAt");
+DO $$ BEGIN ALTER TABLE "CompanyNotice" ADD CONSTRAINT "CompanyNotice_companyId_fkey"
+  FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "CompanyNotice" ADD CONSTRAINT "CompanyNotice_createdById_fkey"
+  FOREIGN KEY ("createdById") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+CREATE TABLE IF NOT EXISTS "NoticeReceipt" (
+  "id" TEXT NOT NULL,
+  "noticeId" TEXT NOT NULL,
+  "employeeId" TEXT NOT NULL,
+  "readAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT "NoticeReceipt_pkey" PRIMARY KEY ("id")
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "NoticeReceipt_noticeId_employeeId_key" ON "NoticeReceipt"("noticeId", "employeeId");
+CREATE INDEX IF NOT EXISTS "NoticeReceipt_employeeId_idx" ON "NoticeReceipt"("employeeId");
+DO $$ BEGIN ALTER TABLE "NoticeReceipt" ADD CONSTRAINT "NoticeReceipt_noticeId_fkey"
+  FOREIGN KEY ("noticeId") REFERENCES "CompanyNotice"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE "NoticeReceipt" ADD CONSTRAINT "NoticeReceipt_employeeId_fkey"
+  FOREIGN KEY ("employeeId") REFERENCES "Employee"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;

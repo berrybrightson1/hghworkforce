@@ -1,25 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
 import { companyHasFullAccess } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
-import {
-  evaluateKioskClockInGate,
-  localDateString,
-  startOfLocalDayUtc,
-  endOfLocalDayUtc,
-} from "@/lib/kiosk-time";
-import { wallMinutesFromDateInZone } from "@/lib/shift-wall-time";
-
-function hhmToMinutes(t: string) {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-}
+import { tryClockIn, tryClockOut } from "@/lib/checkin-clock";
 
 /**
  * POST /api/kiosk/clock
  * Body: { challengeId, code, action: "clock-in" | "clock-out", note? }
  *
- * Verifies the 6-digit code from the device-bound challenge, then clocks in/out.
+ * Verifies the 6-digit code from the device-bound challenge, then clocks in/out
+ * via shared tryClockIn / tryClockOut (kiosk is the only supported channel for employees).
  */
 export async function POST(req: NextRequest) {
   let body: {
@@ -47,7 +36,6 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Verify the challenge
     const challenge = await prisma.kioskChallenge.findUnique({
       where: { id: challengeId },
     });
@@ -68,13 +56,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Incorrect code — check your phone and try again" }, { status: 403 });
     }
 
-    // Mark challenge as consumed
     await prisma.kioskChallenge.update({
       where: { id: challengeId },
       data: { consumed: true },
     });
 
-    // Load company
     const company = await prisma.company.findUnique({
       where: { id: challenge.companyId },
       select: {
@@ -85,6 +71,7 @@ export async function POST(req: NextRequest) {
         subscriptionStatus: true,
         trialEndsAt: true,
         createdAt: true,
+        checkinEnterpriseEnabled: true,
       },
     });
 
@@ -103,7 +90,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Load employee
     const employee = await prisma.employee.findUnique({
       where: { id: challenge.employeeId },
       select: { id: true, companyId: true, status: true },
@@ -116,137 +102,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Employee is not active" }, { status: 403 });
     }
 
-    const tz = company.kioskTimezone || "Africa/Accra";
-    const now = new Date();
-
-    const openCheckIn = await prisma.checkIn.findFirst({
-      where: { employeeId: employee.id, status: "CLOCKED_IN" },
-      orderBy: { clockIn: "desc" },
-      include: {
-        shiftAssignment: {
-          include: { shift: { select: { startTime: true, endTime: true, breakMinutes: true } } },
-        },
-      },
-    });
-
-    const localDate = localDateString(now, tz);
-    const dayStart = startOfLocalDayUtc(localDate, tz);
-    const dayEnd = endOfLocalDayUtc(localDate, tz);
-
-    const activeAssignment = await prisma.shiftAssignment.findFirst({
-      where: {
-        employeeId: employee.id,
-        startDate: { lte: dayEnd },
-        OR: [{ endDate: null }, { endDate: { gte: dayStart } }],
-      },
-      include: {
-        shift: { select: { startTime: true, endTime: true, breakMinutes: true } },
-      },
-      orderBy: { startDate: "desc" },
-    });
+    const gateFields = {
+      kioskTimezone: company.kioskTimezone ?? null,
+      kioskOfficeOpensAt: company.kioskOfficeOpensAt ?? null,
+      kioskOfficeClosesAt: company.kioskOfficeClosesAt ?? null,
+      kioskCutoffTime: company.kioskCutoffTime ?? null,
+    };
 
     if (action === "clock-in") {
-      if (openCheckIn) {
-        return NextResponse.json(
-          { error: "Already checked in. Check out first.", clockedIn: true },
-          { status: 409 },
-        );
-      }
-
-      const gate = evaluateKioskClockInGate({
-        now,
-        timezone: tz,
-        opensAt: company.kioskOfficeOpensAt,
-        closesAt: company.kioskOfficeClosesAt,
-        cutoffTime: company.kioskCutoffTime,
+      const result = await tryClockIn({
+        employeeId: employee.id,
+        companyId: employee.companyId,
+        note: note ?? null,
+        checkinSessionId: null,
+        company: gateFields,
       });
-      if (!gate.ok) {
-        return NextResponse.json({ error: gate.message }, { status: 403 });
+      if (!result.ok) {
+        const payload: Record<string, unknown> = { error: result.error };
+        if (result.status === 409) payload.clockedIn = true;
+        return NextResponse.json(payload, { status: result.status });
       }
-
-      if (!activeAssignment) {
-        return NextResponse.json(
-          { error: "No shift is assigned to you for today — use the portal or contact HR." },
-          { status: 403 },
-        );
-      }
-
-      let lateMinutes: number | null = null;
-      if (activeAssignment.shift) {
-        const shiftStartMins = hhmToMinutes(activeAssignment.shift.startTime);
-        const clockInMins = wallMinutesFromDateInZone(now, tz);
-        const diff = clockInMins - shiftStartMins;
-        if (diff > 5) lateMinutes = diff;
-      }
-
-      const checkIn = await prisma.checkIn.create({
-        data: {
-          employeeId: employee.id,
-          companyId: employee.companyId,
-          clockIn: now,
-          status: "CLOCKED_IN",
-          lateMinutes,
-          shiftAssignmentId: activeAssignment.id,
-          note: note ?? null,
-          checkinSessionId: null,
-        },
-      });
 
       return NextResponse.json(
         {
-          ...checkIn,
+          ...result.checkIn,
           _meta: {
-            lateMinutes,
-            shiftName: activeAssignment.shift
-              ? `${activeAssignment.shift.startTime} - ${activeAssignment.shift.endTime}`
-              : null,
+            lateMinutes: result._meta.lateMinutes,
+            publicHoliday: result._meta.publicHoliday,
+            shiftName: result._meta.shiftName,
           },
         },
         { status: 201 },
       );
     }
 
-    // clock-out
-    if (!openCheckIn) {
-      return NextResponse.json({ error: "No open check-in to close" }, { status: 404 });
-    }
-
-    const clockOut = new Date();
-    const diffMs = clockOut.getTime() - openCheckIn.clockIn.getTime();
-    const hoursWorked = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
-
-    let overtimeHours: number | null = null;
-    let earlyDepartMinutes: number | null = null;
-    const shift = openCheckIn.shiftAssignment?.shift ?? activeAssignment?.shift;
-
-    if (shift) {
-      const shiftEndMins = hhmToMinutes(shift.endTime);
-      const clockOutMins = wallMinutesFromDateInZone(clockOut, tz);
-      if (shiftEndMins - clockOutMins > 5) {
-        earlyDepartMinutes = shiftEndMins - clockOutMins;
-      }
-      const shiftStartMins = hhmToMinutes(shift.startTime);
-      const scheduledHours = (shiftEndMins - shiftStartMins - (shift.breakMinutes ?? 0)) / 60;
-      if (hoursWorked > scheduledHours + 0.08) {
-        overtimeHours = Math.round((hoursWorked - scheduledHours) * 100) / 100;
-      }
-    }
-
-    const updated = await prisma.checkIn.update({
-      where: { id: openCheckIn.id },
-      data: {
-        clockOut,
-        status: "CLOCKED_OUT",
-        hoursWorked: new Prisma.Decimal(hoursWorked.toFixed(2)),
-        overtimeHours: overtimeHours != null ? new Prisma.Decimal(overtimeHours.toFixed(2)) : null,
-        earlyDepartMinutes,
-        note: note ?? openCheckIn.note,
+    const result = await tryClockOut({
+      employeeId: employee.id,
+      companyId: employee.companyId,
+      company: {
+        ...gateFields,
+        checkinEnterpriseEnabled: Boolean(company.checkinEnterpriseEnabled),
       },
+      sessionId: null,
+      note: note ?? null,
     });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
+    }
 
     return NextResponse.json({
-      ...updated,
-      _meta: { overtimeHours, earlyDepartMinutes },
+      ...result.updated,
+      _meta: result._meta,
     });
   } catch (e) {
     console.error(e);

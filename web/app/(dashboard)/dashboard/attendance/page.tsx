@@ -235,7 +235,7 @@ export default function AttendancePage() {
         <div>
           <h2 className="text-lg font-semibold text-hgh-navy">Attendance</h2>
           <p className="text-sm text-hgh-muted">
-            Track employee check-ins, tardiness, and overtime
+            Kiosk punch log, tardiness, and overtime (staff clock in/out only at Settings → Office kiosk)
           </p>
         </div>
         <div className="flex items-center gap-2">

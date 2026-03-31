@@ -109,7 +109,8 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
                 Your workforce, simplified
               </p>
               <p className="mt-1 text-[0.8125rem] font-semibold leading-snug text-hgh-navy sm:text-[13px] sm:leading-snug">
-                Payroll management and employee check-in—one flow from clock-in to payslip.
+                Payroll plus kiosk attendance—punches at the office kiosk, portal for payslips, leave, and today&apos;s
+                Attendance view.
               </p>
             </div>
           </div>
@@ -121,8 +122,9 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-hgh-muted">
-          Payroll and attendance for Ghana teams—one place for pay runs, clock-ins, and staff self-service. Works great on
-          mobile. Try the full product free for {TRIAL_DAYS} days; subscribe when you&apos;re ready to keep going.
+          Payroll and attendance for Ghana teams—pay runs, office kiosk clock-in/out, and a staff portal for payslips,
+          leave, loans, and Attendance (view + corrections). Works great on mobile. Try the full product free for{" "}
+          {TRIAL_DAYS} days; subscribe when you&apos;re ready to keep going.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
@@ -155,10 +157,10 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
           <p className="mt-6 text-sm text-hgh-muted">
             Employees:{" "}
             <Link
-              href="/sign-in?next=/portal/checkin"
+              href="/sign-in?next=/portal"
               className="font-medium text-hgh-navy underline decoration-hgh-gold/50 underline-offset-2 hover:text-hgh-gold"
             >
-              Sign in to check in
+              Employee sign in
             </Link>
             {" · "}
             <Link

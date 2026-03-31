@@ -76,11 +76,15 @@ export async function middleware(request: NextRequest) {
     if (!path.startsWith("/api/health") && !path.startsWith("/api/cron/")) {
       const ip = clientIp(request);
 
-      if (path.startsWith("/api/auth/")) {
+      if (
+        path.startsWith("/api/auth/") ||
+        (method === "POST" &&
+          (path === "/api/portal/auth/login" ||
+            path === "/api/portal/auth/initial-pin"))
+      ) {
         const denied = await applyLimit(ratelimitAuth, ip);
         if (denied) return denied;
       } else if (
-        (method === "POST" && path === "/api/checkins") ||
         (method === "POST" && (path === "/api/kiosk/verify" || path === "/api/kiosk/clock")) ||
         (method === "POST" && path === "/api/kiosk/device-verify")
       ) {

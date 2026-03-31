@@ -32,18 +32,14 @@ function KioskInner() {
   const [deviceVerified, setDeviceVerified] = useState(false);
   const [expired, setExpired] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
-  /** Server challenge expiry (ISO) — aligns phone + kiosk countdown. */
   const [challengeExpiresAt, setChallengeExpiresAt] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch company status on mount
   useEffect(() => {
     if (!companyId) return;
     void (async () => {
       try {
-        const res = await fetch(
-          `/api/kiosk/status?companyId=${encodeURIComponent(companyId)}`,
-        );
+        const res = await fetch(`/api/kiosk/status?companyId=${encodeURIComponent(companyId)}`);
         const data = (await res.json().catch(() => ({}))) as {
           companyName?: string;
           clockInAllowed?: boolean;
@@ -72,7 +68,6 @@ function KioskInner() {
     })();
   }, [companyId]);
 
-  // Poll challenge status when on scan-qr step
   useEffect(() => {
     if (step !== "scan-qr" || !challengeId) return;
 
@@ -109,7 +104,6 @@ function KioskInner() {
     };
   }, [step, challengeId]);
 
-  // Cleanup poll on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -256,42 +250,45 @@ function KioskInner() {
     }
   }
 
+  const cardClass =
+    "space-y-4 rounded-xl border border-hgh-border bg-white p-6 shadow-sm";
+
   if (!companyId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 p-6 text-white">
-        <p className="max-w-md text-center text-sm text-slate-300">
-          Missing company in the URL. Ask your admin for the full kiosk link (it ends with{" "}
-          <span className="font-mono text-slate-400">?c=…</span>).
-        </p>
+      <div className="flex min-h-screen min-h-[100dvh] items-center justify-center bg-hgh-offwhite p-6">
+        <div className={cardClass}>
+          <p className="text-center text-sm text-hgh-muted">
+            Missing company in the URL. Ask your admin for the full kiosk link (it ends with{" "}
+            <span className="font-mono text-hgh-navy">?c=…</span>).
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 p-6 text-white">
-      <div className="mx-auto max-w-lg space-y-6">
-        <header>
-          <h1 className="text-2xl font-semibold tracking-tight">Check in / out</h1>
-          {companyTitle ? (
-            <p className="mt-1 text-sm text-slate-300">{companyTitle}</p>
-          ) : null}
+    <div className="min-h-screen min-h-[100dvh] bg-hgh-offwhite p-4 md:p-8">
+      <div className="mx-auto w-full max-w-lg space-y-6">
+        <header className="rounded-xl border border-hgh-border bg-white px-5 py-4 shadow-sm">
+          <h1 className="text-lg font-semibold text-hgh-navy md:text-xl">Office check-in / out</h1>
+          {companyTitle ? <p className="mt-1 text-sm text-hgh-muted">{companyTitle}</p> : null}
           {clockInHint && step === "identify" ? (
-            <p className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+            <p className="mt-3 rounded-lg border border-hgh-gold/30 bg-hgh-gold/10 px-3 py-2 text-xs text-hgh-navy">
               {clockInHint}
             </p>
           ) : null}
-          {linkError ? (
-            <p className="mt-2 text-sm text-red-300">{linkError}</p>
-          ) : null}
+          {linkError ? <p className="mt-2 text-sm text-hgh-danger">{linkError}</p> : null}
         </header>
 
-        {/* Step 1: Identify — employee code + name */}
         {step === "identify" && (
-          <form onSubmit={(e) => void handleVerify(e)} className="space-y-4 rounded-xl bg-slate-800 p-6">
+          <form onSubmit={(e) => void handleVerify(e)} className={cardClass}>
             <div>
-              <label className="text-xs text-slate-400">Your name</label>
+              <label className="text-xs font-medium text-hgh-muted" htmlFor="kiosk-name">
+                Your name
+              </label>
               <Input
-                className="mt-1 border-slate-600 bg-slate-900 text-white placeholder:text-slate-600"
+                id="kiosk-name"
+                className="mt-1"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
                 autoComplete="name"
@@ -300,135 +297,129 @@ function KioskInner() {
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400">Employee code</label>
+              <label className="text-xs font-medium text-hgh-muted" htmlFor="kiosk-code">
+                Employee code
+              </label>
               <Input
-                className="mt-1 border-slate-600 bg-slate-900 text-white placeholder:text-slate-600"
+                id="kiosk-code"
+                className="mt-1 font-mono uppercase"
                 value={employeeCode}
                 onChange={(e) => setEmployeeCode(e.target.value)}
                 autoComplete="off"
                 placeholder="e.g. ACME-F4E2D1-0001"
                 required
               />
-              <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
-                Your company's auto-assigned code (letters, numbers, two hyphens). Case doesn't matter.
+              <p className="mt-1.5 text-[11px] leading-snug text-hgh-muted">
+                Your company&apos;s auto-assigned code (letters, numbers, two hyphens). Case
+                doesn&apos;t matter.
               </p>
             </div>
-            {error ? <p className="text-sm text-red-300">{error}</p> : null}
-            <Button
-              type="submit"
-              disabled={busy || !!linkError}
-              className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
-            >
+            {error ? <p className="text-sm text-hgh-danger">{error}</p> : null}
+            <Button type="submit" variant="secondary" disabled={busy || !!linkError} className="w-full">
               {busy ? "Checking…" : "Continue"}
             </Button>
           </form>
         )}
 
-        {/* Step 2: Scan QR — show QR code, wait for phone scan */}
         {step === "scan-qr" && (
-          <div className="space-y-5 rounded-xl bg-slate-800 p-6 text-center">
+          <div className={`${cardClass} text-center`}>
             <div>
-              <p className="text-sm text-slate-300">
-                <span className="font-medium text-white">{label}</span>
+              <p className="text-sm text-hgh-slate">
+                <span className="font-medium text-hgh-navy">{label}</span>
                 {clockedIn ? (
-                  <span className="block text-xs text-amber-200/90">Currently checked in — scan to check out</span>
+                  <span className="mt-1 block text-xs text-hgh-gold">
+                    Currently checked in — scan to check out
+                  </span>
                 ) : (
-                  <span className="block text-xs text-slate-500">Scan to check in</span>
+                  <span className="mt-1 block text-xs text-hgh-muted">Scan to check in</span>
                 )}
               </p>
             </div>
 
             {expired ? (
               <div className="space-y-3">
-                <p className="text-sm text-amber-300">QR code expired.</p>
+                <p className="text-sm font-medium text-hgh-navy">QR code expired.</p>
                 <Button
+                  type="button"
+                  variant="secondary"
                   onClick={() => void regenerateChallenge()}
                   disabled={busy}
-                  className="bg-amber-500 text-slate-900 hover:bg-amber-400"
+                  className="w-full"
                 >
                   {busy ? "Generating…" : "Generate new code"}
                 </Button>
               </div>
             ) : (
               <>
-                <div className="mx-auto flex w-fit rounded-xl bg-white p-4">
+                <div className="mx-auto flex w-fit rounded-xl border border-hgh-border bg-white p-4 shadow-inner">
                   <QRCodeSVG value={getQrUrl()} size={220} level="M" />
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-center text-xs text-hgh-muted">
                   Open your phone camera and scan this QR code.
                   <br />
                   A page will appear with your verification code.
                 </p>
                 {challengeExpiresAt ? (
-                  <div className="flex flex-col items-center gap-2 border-t border-slate-700/80 pt-4">
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
-                      {"Time to scan & enter code"}
+                  <div className="flex flex-col items-center gap-2 border-t border-hgh-border pt-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-hgh-muted">
+                      Time to scan & enter code
                     </p>
                     <AuthenticatorCountdown
                       expiresAtIso={challengeExpiresAt}
                       onExpired={() => setExpired(true)}
                       size={64}
                       strokeWidth={3.5}
-                      ringClassName="text-amber-400"
-                      trackClassName="text-slate-600"
-                      labelClassName="text-slate-500"
+                      ringClassName="text-hgh-gold"
+                      trackClassName="text-hgh-border"
+                      labelClassName="text-hgh-muted"
                     />
                   </div>
                 ) : null}
                 <div className="flex items-center justify-center gap-2">
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-amber-400" />
-                  <span className="text-xs text-slate-400">Waiting for phone scan…</span>
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-hgh-gold" />
+                  <span className="text-xs text-hgh-muted">Waiting for phone scan…</span>
                 </div>
               </>
             )}
 
-            {error ? <p className="text-sm text-red-300">{error}</p> : null}
-            <Button
-              type="button"
-              variant="ghost"
-              className="w-full text-slate-400 hover:text-white"
-              onClick={() => resetSession()}
-            >
+            {error ? <p className="text-sm text-hgh-danger">{error}</p> : null}
+            <Button type="button" variant="ghost" className="w-full text-hgh-muted hover:text-hgh-navy" onClick={() => resetSession()}>
               Start over
             </Button>
           </div>
         )}
 
-        {/* Step 3: Enter code — type the 6-digit code from phone */}
         {step === "enter-code" && (
-          <div className="space-y-5 rounded-xl bg-slate-800 p-6 text-center">
+          <div className={cardClass + " text-center"}>
             {expired ? (
               <div className="space-y-4">
-                <p className="text-sm text-amber-300">This code has expired.</p>
-                <p className="text-xs text-slate-500">Generate a fresh QR code and scan again with your phone.</p>
+                <p className="text-sm font-medium text-hgh-navy">This code has expired.</p>
+                <p className="text-xs text-hgh-muted">
+                  Generate a fresh QR code and scan again with your phone.
+                </p>
                 <Button
                   onClick={() => void regenerateChallenge()}
                   disabled={busy}
-                  className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
+                  className="w-full bg-hgh-navy hover:bg-hgh-navy/90"
                 >
                   {busy ? "Generating…" : "Generate new code"}
                 </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full text-slate-400 hover:text-white"
-                  onClick={() => resetSession()}
-                >
+                <Button type="button" variant="ghost" className="w-full text-hgh-muted hover:text-hgh-navy" onClick={() => resetSession()}>
                   Start over
                 </Button>
               </div>
             ) : (
               <form onSubmit={(e) => void handleSubmitCode(e)} className="space-y-5">
                 <div>
-                  <p className="text-sm text-slate-300">
-                    <span className="font-medium text-white">{label}</span>
+                  <p className="text-sm text-hgh-slate">
+                    <span className="font-medium text-hgh-navy">{label}</span>
                   </p>
-                  <p className="mt-1 text-xs text-emerald-400">Device verified</p>
+                  <p className="mt-1 text-xs font-medium text-hgh-success">Device verified</p>
                 </div>
 
                 {challengeExpiresAt ? (
-                  <div className="flex flex-col items-center gap-2 border-b border-slate-700/80 pb-4">
-                    <p className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                  <div className="flex flex-col items-center gap-2 border-b border-hgh-border pb-4">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-hgh-muted">
                       Code expires in
                     </p>
                     <AuthenticatorCountdown
@@ -436,19 +427,20 @@ function KioskInner() {
                       onExpired={() => setExpired(true)}
                       size={72}
                       strokeWidth={4}
-                      ringClassName="text-amber-400"
-                      trackClassName="text-slate-600"
-                      labelClassName="text-slate-500"
+                      ringClassName="text-hgh-gold"
+                      trackClassName="text-hgh-border"
+                      labelClassName="text-hgh-muted"
                     />
                   </div>
                 ) : null}
 
-                <div>
-                  <label className="text-xs text-slate-400">
+                <div className="text-left">
+                  <label className="text-xs font-medium text-hgh-muted" htmlFor="kiosk-six">
                     Enter the 6-digit code from your phone
                   </label>
                   <Input
-                    className="mt-2 border-slate-600 bg-slate-900 text-center text-2xl font-mono tracking-[0.3em] text-white placeholder:text-slate-600"
+                    id="kiosk-six"
+                    className="mt-2 text-center text-2xl font-mono tracking-[0.3em]"
                     value={codeInput}
                     onChange={(e) => setCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="------"
@@ -459,22 +451,22 @@ function KioskInner() {
                   />
                 </div>
 
-                {error ? <p className="text-sm text-red-300">{error}</p> : null}
+                {error ? <p className="text-sm text-hgh-danger">{error}</p> : null}
 
                 <Button
                   type="submit"
                   disabled={busy || codeInput.length < 6}
-                  className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
+                  variant={clockedIn ? "danger" : "secondary"}
+                  className={
+                    clockedIn
+                      ? "w-full"
+                      : "w-full bg-hgh-success hover:bg-hgh-success/90 focus-visible:ring-hgh-success/35"
+                  }
                 >
                   {busy ? "Processing…" : clockedIn ? "Check out" : "Check in"}
                 </Button>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full text-slate-400 hover:text-white"
-                  onClick={() => resetSession()}
-                >
+                <Button type="button" variant="ghost" className="w-full text-hgh-muted hover:text-hgh-navy" onClick={() => resetSession()}>
                   Start over
                 </Button>
               </form>
@@ -482,22 +474,16 @@ function KioskInner() {
           </div>
         )}
 
-        {/* Step 4: Done — success confirmation */}
         {step === "done" && (
-          <div className="space-y-5 rounded-xl bg-slate-800 p-6 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20">
-              <svg className="h-8 w-8 text-emerald-400" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
+          <div className={cardClass + " text-center"}>
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-hgh-success/15">
+              <svg className="h-8 w-8 text-hgh-success" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
               </svg>
             </div>
-            <p className="text-lg font-medium text-white">{label}</p>
-            {resultMessage ? (
-              <p className="text-sm text-emerald-300">{resultMessage}</p>
-            ) : null}
-            <Button
-              className="w-full bg-amber-500 text-slate-900 hover:bg-amber-400"
-              onClick={() => resetSession()}
-            >
+            <p className="text-lg font-semibold text-hgh-navy">{label}</p>
+            {resultMessage ? <p className="text-sm text-hgh-success">{resultMessage}</p> : null}
+            <Button type="button" variant="secondary" className="w-full" onClick={() => resetSession()}>
               Next person
             </Button>
           </div>
@@ -511,8 +497,8 @@ export default function KioskCheckinPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-slate-900 p-6 text-white">
-          Loading…
+        <div className="flex min-h-screen min-h-[100dvh] items-center justify-center bg-hgh-offwhite p-6">
+          <p className="text-sm text-hgh-muted">Loading…</p>
         </div>
       }
     >

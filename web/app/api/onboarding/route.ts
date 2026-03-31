@@ -59,7 +59,8 @@ export async function POST(req: Request) {
   }
 
   if (body.action === "join_company") {
-    const code = (body.inviteCode ?? "").trim();
+    const raw = typeof body.inviteCode === "string" ? body.inviteCode : "";
+    const code = raw.trim().toUpperCase().replace(/\s+/g, "");
     if (!code) {
       return NextResponse.json({ error: "Invite code is required" }, { status: 400 });
     }
@@ -85,7 +86,11 @@ export async function POST(req: Request) {
     }
 
     // Check email matches if the invitation was for a specific email
-    if (invitation.email && invitation.email !== dbUser.email) {
+    const userEmail = (dbUser.email ?? "").trim().toLowerCase();
+    if (
+      invitation.email &&
+      invitation.email.trim().toLowerCase() !== userEmail
+    ) {
       return NextResponse.json(
         { error: "This invitation was sent to a different email address" },
         { status: 403 },

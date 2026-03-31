@@ -30,8 +30,9 @@ export function SettingsLayoutClient({ children }: { children: React.ReactNode }
         <header className="border-b border-zinc-200/80 pb-8 pt-2">
           <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Settings</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">
-            Configure payroll, taxes, check-in, and integrations for your workspace. PAYE and SSNIT apply
-            to pay runs; check-in options affect kiosk and employee portal.
+            Configure payroll, taxes, office kiosk / attendance policy, and integrations. PAYE and SSNIT apply to pay
+            runs; kiosk hours and timezone control punch rules; the employee portal Attendance page is read-only plus
+            correction requests (no clock-in/out there).
           </p>
         </header>
 

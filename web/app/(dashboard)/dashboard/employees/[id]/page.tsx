@@ -18,6 +18,7 @@ import {
   UserX,
   UserCheck,
   LogOut,
+  KeyRound,
 } from "lucide-react";
 import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -86,12 +87,24 @@ interface EmployeeDocument {
   createdAt: string;
 }
 
+const LINE_MANAGER_NONE = "__line_manager_none__";
+
+interface CompanyUserRow {
+  id: string;
+  email: string;
+  name: string | null;
+  role: string;
+  isActive: boolean;
+}
+
 interface Employee {
   id: string;
   userId: string | null;
   employeeCode: string;
   name?: string | null;
   user?: { email: string; name: string } | null;
+  managedByUserId?: string | null;
+  managedBy?: { id: string; email: string; name: string | null } | null;
   department: string;
   jobTitle: string;
   employmentType: "FULL_TIME" | "PART_TIME" | "CONTRACTOR";
@@ -102,6 +115,11 @@ interface Employee {
   salaryComponents: SalaryComponent[];
   hasDeviceBound?: boolean;
   deviceBoundAt?: string | null;
+  portalEnabled?: boolean;
+  portalLastLoginAt?: string | null;
+  pinChangedAt?: string | null;
+  portalHasPermanentPin?: boolean;
+  portalAwaitingPinChange?: boolean;
   // Sensitive fields (masked by default)
   ssnit?: string;
   tin?: string;
@@ -225,6 +243,9 @@ function EmployeeDetailPageContent() {
   const [submittingDoc, setSubmittingDoc] = useState(false);
   const [submittingProfile, setSubmittingProfile] = useState(false);
   const [revealed, setRevealed] = useState(false);
+  const [portalTempPin, setPortalTempPin] = useState("");
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [managerBusy, setManagerBusy] = useState(false);
 
   const { data: employee, mutate, isLoading, error } = useApi<Employee>(
     `/api/employees/${id}${revealed ? "?decrypt=true" : ""}`
@@ -259,6 +280,12 @@ function EmployeeDetailPageContent() {
 
   const isPayrollAdmin =
     me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN" || me?.role === "HR";
+
+  const companyUsersUrl =
+    employee?.company?.id && isPayrollAdmin
+      ? `/api/users?companyId=${employee.company.id}`
+      : null;
+  const { data: companyUsers } = useApi<CompanyUserRow[]>(companyUsersUrl);
   const { data: onboardingTasks, mutate: mutateTasks } = useApi<
     { id: string; title: string; completed: boolean; sortOrder: number }[]
   >(
@@ -582,7 +609,7 @@ function EmployeeDetailPageContent() {
                   </HintTooltip>
                 ) : null}
                 {employee.status === "SUSPENDED" ? (
-                  <HintTooltip content="Return them to active payroll and allow check-in again." side="left">
+                  <HintTooltip content="Return them to active payroll and allow kiosk clock-in again." side="left">
                     <DropdownMenuItem onClick={() => void setEmployeeStatus("ACTIVE")}>
                       <UserCheck className="h-4 w-4 opacity-70" aria-hidden />
                       Reactivate
@@ -792,6 +819,231 @@ function EmployeeDetailPageContent() {
                 </p>
               </CardContent>
             </Card>
+
+            {isPayrollAdmin && employee.status === "ACTIVE" && (
+              <Card className="scroll-mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User size={18} />
+                    Line manager
+                  </CardTitle>
+                  <p className="text-xs text-hgh-muted">
+                    When set, pending leave, loans, and attendance corrections for this employee appear
+                    in that user&apos;s inbox under &quot;My team&quot; (in addition to company-wide
+                    views).
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <label className="mb-1 block text-xs font-medium text-hgh-slate" htmlFor="emp-line-manager">
+                    Reports to (dashboard user)
+                  </label>
+                  <Select
+                    value={employee.managedByUserId ?? LINE_MANAGER_NONE}
+                    disabled={managerBusy}
+                    onValueChange={async (v) => {
+                      const next = v === LINE_MANAGER_NONE ? null : v;
+                      setManagerBusy(true);
+                      try {
+                        const res = await fetch(`/api/employees/${id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ managedByUserId: next }),
+                        });
+                        const d = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                          throw new Error(typeof d.error === "string" ? d.error : "Update failed");
+                        }
+                        await mutate();
+                        toast.success(
+                          next ? "Line manager updated." : "Line manager cleared.",
+                        );
+                      } catch (e) {
+                        toast.error(e instanceof Error ? e.message : "Could not update line manager.");
+                      } finally {
+                        setManagerBusy(false);
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="emp-line-manager" className="w-full max-w-md">
+                      <SelectValue placeholder="No manager" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={LINE_MANAGER_NONE}>No manager</SelectItem>
+                      {(companyUsers ?? [])
+                        .filter((u) => u.isActive)
+                        .map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {(u.name || u.email).trim()} ({u.role})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  {employee.managedBy ? (
+                    <p className="mt-2 text-xs text-hgh-muted">
+                      Current: {employee.managedBy.name?.trim() || employee.managedBy.email}
+                    </p>
+                  ) : null}
+                </CardContent>
+              </Card>
+            )}
+
+            {isPayrollAdmin && employee.status === "ACTIVE" && (
+              <Card className="scroll-mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <KeyRound size={18} />
+                    Portal access
+                  </CardTitle>
+                  <p className="text-xs text-hgh-muted">
+                    Employees sign in at{" "}
+                    <Link href="/portal/login" className="text-hgh-gold underline underline-offset-2">
+                      /portal/login
+                    </Link>{" "}
+                    with employee code and PIN (no work email required). First-time users without a PIN can create
+                    one at{" "}
+                    <Link href="/portal/first-pin" className="text-hgh-gold underline underline-offset-2">
+                      /portal/first-pin
+                    </Link>
+                    . Share temporary PINs securely when you want HR to set the first login code.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-hgh-navy">Allow portal sign-in</p>
+                      <p className="text-xs text-hgh-muted">
+                        Last portal sign-in:{" "}
+                        {employee.portalLastLoginAt
+                          ? new Date(employee.portalLastLoginAt).toLocaleString("en-GH")
+                          : "Never"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={employee.portalEnabled !== false}
+                      aria-label={employee.portalEnabled === false ? "Enable portal access" : "Disable portal access"}
+                      title={employee.portalEnabled === false ? "Enable portal access" : "Disable portal access"}
+                      disabled={portalBusy}
+                      onClick={async () => {
+                        const next = employee.portalEnabled === false;
+                        setPortalBusy(true);
+                        try {
+                          const res = await fetch(`/api/employees/${id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ portalEnabled: next }),
+                          });
+                          if (!res.ok) {
+                            const d = await res.json().catch(() => ({}));
+                            throw new Error(typeof d.error === "string" ? d.error : "Update failed");
+                          }
+                          await mutate();
+                          toast.success(
+                            next
+                              ? "Portal access enabled."
+                              : "Portal access disabled. Existing sessions expire when their cookie ends.",
+                          );
+                        } catch (e) {
+                          toast.error(e instanceof Error ? e.message : "Could not update portal access.");
+                        } finally {
+                          setPortalBusy(false);
+                        }
+                      }}
+                      className={cn(
+                        "relative h-8 w-14 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold focus-visible:ring-offset-2 disabled:opacity-50",
+                        employee.portalEnabled !== false ? "bg-hgh-success" : "bg-hgh-border",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform",
+                          employee.portalEnabled !== false ? "left-7" : "left-1",
+                        )}
+                      />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {employee.portalHasPermanentPin ? (
+                      <Badge variant="success">PIN configured</Badge>
+                    ) : (
+                      <Badge variant="default">No permanent PIN yet</Badge>
+                    )}
+                    {employee.portalAwaitingPinChange ? (
+                      <Badge variant="warning">Must set own PIN on next login</Badge>
+                    ) : null}
+                  </div>
+                  {employee.portalEnabled !== false && (
+                    <div className="space-y-2 rounded-lg border border-hgh-border bg-hgh-offwhite/50 p-3">
+                      <p className="text-xs font-medium text-hgh-navy">Temporary PIN</p>
+                      <p className="text-[11px] text-hgh-muted">
+                        Sets a 4-digit code; employee chooses a permanent PIN after signing in.
+                      </p>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="min-w-[7rem] flex-1">
+                          <label htmlFor="portal-temp-pin" className="sr-only">
+                            Temporary PIN
+                          </label>
+                          <Input
+                            id="portal-temp-pin"
+                            inputMode="numeric"
+                            maxLength={4}
+                            autoComplete="off"
+                            placeholder="4 digits"
+                            value={portalTempPin}
+                            onChange={(e) => setPortalTempPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                            disabled={portalBusy}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          disabled={portalBusy}
+                          onClick={() => setPortalTempPin(String(Math.floor(1000 + Math.random() * 9000)))}
+                        >
+                          Generate
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-hgh-navy text-white hover:bg-hgh-navy/90"
+                          disabled={portalBusy || !/^\d{4}$/.test(portalTempPin)}
+                          onClick={async () => {
+                            setPortalBusy(true);
+                            try {
+                              const res = await fetch(`/api/employees/${id}/set-temp-pin`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ pin: portalTempPin }),
+                              });
+                              if (!res.ok) {
+                                const d = await res.json().catch(() => ({}));
+                                throw new Error(typeof d.error === "string" ? d.error : "Request failed");
+                              }
+                              const name = employeeDisplayName({
+                                name: employee.name,
+                                user: employee.user,
+                                employeeCode: employee.employeeCode,
+                              });
+                              toast.success(`Temporary PIN set. Share it with ${name} securely.`);
+                              setPortalTempPin("");
+                              await mutate();
+                            } catch (e) {
+                              toast.error(e instanceof Error ? e.message : "Could not set PIN.");
+                            } finally {
+                              setPortalBusy(false);
+                            }
+                          }}
+                        >
+                          Set temporary PIN
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {showDeviceBindingCard && (
               <Card className="scroll-mt-6">

@@ -63,8 +63,9 @@ export function HowItWorksContent() {
             You don&apos;t need to &quot;add check-in later&quot; as a second product —{" "}
             <strong className="font-medium text-hgh-slate">payroll and attendance</strong> are included in the same
             subscription once you move past the trial. HR and admins use the dashboard (insights, pay runs,
-            corrections); employees use the self-service portal for check-in, leave, payslips, and onboarding tasks —
-            works great on phones; you can add the site to your home screen for an app-like experience.
+            corrections). Employees use the portal for payslips, Attendance (view + correction requests), leave, and
+            onboarding tasks; clock-in/out stays on the office kiosk. Everything works great on phones—add the site to
+            your home screen for an app-like experience.
           </p>
         </div>
       </div>

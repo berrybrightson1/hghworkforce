@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { EmploymentType, EmployeeStatus, Prisma } from "@prisma/client";
+import { EmploymentType, EmployeeStatus, Prisma, UserRole } from "@prisma/client";
 import {
   canAccessCompany,
   canManagePayroll,
@@ -53,6 +53,7 @@ export async function GET(
         company: { select: { id: true, name: true } },
         salaryComponents: { orderBy: { createdAt: "desc" } },
         user: { select: { email: true, name: true } },
+        managedBy: { select: { id: true, email: true, name: true } },
       },
     });
     if (!employee) {
@@ -97,11 +98,15 @@ export async function GET(
     delete data.bankAccountEncrypted;
     delete data.bankBranchEncrypted;
     delete data.momoMsisdnEncrypted;
+    delete data.portalPin;
+    delete data.temporaryPin;
 
     return NextResponse.json({
       ...data,
       hasDeviceBound: !!employee.kioskDeviceTokenHash,
       deviceBoundAt: employee.deviceBoundAt ?? null,
+      portalHasPermanentPin: !!employee.portalPin,
+      portalAwaitingPinChange: !!employee.temporaryPin,
     });
   } catch {
     return NextResponse.json({ error: "Failed to load employee" }, { status: 500 });
@@ -138,7 +143,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const data: Prisma.EmployeeUpdateInput = {};
+    const data: Prisma.EmployeeUncheckedUpdateInput = {};
 
     if (typeof body.name === "string") {
       data.name = body.name.trim() || null;
@@ -245,6 +250,72 @@ export async function PATCH(
         }
         data.momoMsisdnEncrypted = encrypt(raw || null);
       }
+
+      if (body.portalEnabled !== undefined) {
+        data.portalEnabled = Boolean(body.portalEnabled);
+      }
+
+      if (body.managedByUserId !== undefined) {
+        const raw = body.managedByUserId;
+        if (raw === null || raw === "") {
+          data.managedByUserId = null;
+        } else {
+          const mgrId = String(raw);
+          const mgr = await prisma.user.findFirst({
+            where: { id: mgrId, isActive: true },
+            select: { id: true, companyId: true },
+          });
+          if (!mgr) {
+            return NextResponse.json({ error: "Manager user not found" }, { status: 400 });
+          }
+          if (
+            mgr.companyId !== employee.companyId &&
+            auth.dbUser.role !== UserRole.SUPER_ADMIN
+          ) {
+            return NextResponse.json(
+              { error: "Manager must belong to the same company" },
+              { status: 400 },
+            );
+          }
+          if (
+            auth.dbUser.role === UserRole.SUPER_ADMIN &&
+            mgr.companyId &&
+            mgr.companyId !== employee.companyId
+          ) {
+            return NextResponse.json(
+              { error: "Manager must belong to the same company" },
+              { status: 400 },
+            );
+          }
+          data.managedByUserId = mgrId;
+        }
+      }
+
+      const setOptDate = (
+        key: "dateOfBirth" | "probationEndDate" | "contractStartDate" | "contractEndDate",
+        raw: unknown,
+      ) => {
+        if (raw === null || raw === "") (data as Record<string, unknown>)[key] = null;
+        else {
+          const d = new Date(String(raw));
+          if (Number.isNaN(d.getTime())) {
+            throw new Error(`Invalid ${key}`);
+          }
+          (data as Record<string, unknown>)[key] = d;
+        }
+      };
+
+      try {
+        if (body.dateOfBirth !== undefined) setOptDate("dateOfBirth", body.dateOfBirth);
+        if (body.probationEndDate !== undefined) setOptDate("probationEndDate", body.probationEndDate);
+        if (body.contractStartDate !== undefined) setOptDate("contractStartDate", body.contractStartDate);
+        if (body.contractEndDate !== undefined) setOptDate("contractEndDate", body.contractEndDate);
+      } catch {
+        return NextResponse.json({ error: "Invalid date field" }, { status: 400 });
+      }
+      if (typeof body.contractType === "string") {
+        data.contractType = body.contractType.trim() || null;
+      }
     }
 
     const optionalNokKeys = ["nokName", "nokPhone", "nokRelationship"] as const;
@@ -274,7 +345,24 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(updated);
+    const out = { ...updated } as Record<string, unknown>;
+    delete out.kioskDeviceTokenHash;
+    delete out.portalPin;
+    delete out.temporaryPin;
+    delete out.ssnitEncrypted;
+    delete out.tinEncrypted;
+    delete out.bankNameEncrypted;
+    delete out.bankAccountEncrypted;
+    delete out.bankBranchEncrypted;
+    delete out.momoMsisdnEncrypted;
+    Object.assign(out, {
+      hasDeviceBound: !!updated.kioskDeviceTokenHash,
+      deviceBoundAt: updated.deviceBoundAt ?? null,
+      portalHasPermanentPin: !!updated.portalPin,
+      portalAwaitingPinChange: !!updated.temporaryPin,
+    });
+
+    return NextResponse.json(out);
   } catch (e) {
     if (isEncryptionKeyError(e)) {
       return NextResponse.json(

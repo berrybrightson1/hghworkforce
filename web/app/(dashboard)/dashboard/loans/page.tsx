@@ -29,7 +29,7 @@ interface Loan {
   amount: string;
   balance: string;
   monthlyRepayment: string;
-  status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+  status: "PENDING" | "ACTIVE" | "COMPLETED" | "CANCELLED";
   employee?: {
     employeeCode: string;
     name?: string | null;
@@ -47,6 +47,7 @@ interface EmployeeOpt {
 }
 
 const statusBadge = {
+  PENDING: "warning",
   ACTIVE: "success",
   COMPLETED: "default",
   CANCELLED: "danger",

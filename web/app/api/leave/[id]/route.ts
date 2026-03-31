@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { PortalNotificationType, Prisma } from "@prisma/client";
 import { canManageLeave, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { notifyEmployeeInApp } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
@@ -28,7 +29,9 @@ export async function PATCH(
   try {
     const lr = await prisma.leaveRequest.findUnique({
       where: { id },
-      include: { employee: { select: { companyId: true } } },
+      include: {
+        employee: { select: { companyId: true, employeeCode: true, name: true } },
+      },
     });
     if (!lr) {
       return NextResponse.json({ error: "Leave request not found" }, { status: 404 });
@@ -60,6 +63,28 @@ export async function PATCH(
         afterState: { status: updated.status } as Prisma.InputJsonValue,
       },
     });
+
+    const tenantId = lr.employee.companyId;
+    const periodLabel = `${updated.startDate.toISOString().slice(0, 10)} → ${updated.endDate.toISOString().slice(0, 10)}`;
+    if (body.status === "APPROVED") {
+      await notifyEmployeeInApp(
+        lr.employeeId,
+        tenantId,
+        PortalNotificationType.LEAVE_APPROVED,
+        "Leave approved",
+        `Your ${updated.type} leave (${periodLabel}) was approved.`,
+        "/portal/leave",
+      );
+    } else {
+      await notifyEmployeeInApp(
+        lr.employeeId,
+        tenantId,
+        PortalNotificationType.LEAVE_REJECTED,
+        "Leave not approved",
+        `Your ${updated.type} leave (${periodLabel}) was rejected.${updated.rejectionNote ? ` Note: ${updated.rejectionNote}` : ""}`,
+        "/portal/leave",
+      );
+    }
 
     return NextResponse.json(updated);
   } catch {

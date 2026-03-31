@@ -5,7 +5,9 @@ import {
   canAccessCompany,
   canManagePayroll,
   gateCompanyBilling,
+  gateBillingForEmployeeSelf,
   requireDbUser,
+  requireEmployeeSelf,
 } from "@/lib/api-auth";
 import { buildPayslipPdfData } from "@/lib/payslip-pdf-data";
 import { prisma } from "@/lib/prisma";
@@ -15,8 +17,6 @@ export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ lineId: string }> },
 ) {
-  const auth = await requireDbUser();
-  if (!auth.ok) return auth.response;
   const { lineId } = await ctx.params;
 
   try {
@@ -40,16 +40,26 @@ export async function GET(
       return NextResponse.json({ error: "Payslip not found" }, { status: 404 });
     }
 
-    const isSelf = auth.dbUser.id === line.employee.userId;
-    const isPayrollStaff =
-      canManagePayroll(auth.dbUser.role) && canAccessCompany(auth.dbUser, line.payrun.companyId);
+    const self = await requireEmployeeSelf();
 
-    if (!isSelf && !isPayrollStaff) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    if (self.ok) {
+      if (self.employee.id !== line.employeeId) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      const billing = await gateBillingForEmployeeSelf(self.employee, self.via, self.dbUser);
+      if (billing) return billing;
+    } else {
+      const auth = await requireDbUser();
+      if (!auth.ok) return auth.response;
+      const isSelf = line.employee.userId != null && auth.dbUser.id === line.employee.userId;
+      const isPayrollStaff =
+        canManagePayroll(auth.dbUser.role) && canAccessCompany(auth.dbUser, line.payrun.companyId);
+      if (!isSelf && !isPayrollStaff) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      const billing = await gateCompanyBilling(auth.dbUser, line.payrun.companyId);
+      if (billing) return billing;
     }
-
-    const billing = await gateCompanyBilling(auth.dbUser, line.payrun.companyId);
-    if (billing) return billing;
 
     if (line.payrun.status !== "APPROVED") {
       return NextResponse.json({ error: "Payslip not yet available" }, { status: 400 });
@@ -61,11 +71,12 @@ export async function GET(
       createElement(PayslipDocument, { data }) as Parameters<typeof renderToStream>[0],
     );
 
-    // Update download count (optional)
-    await prisma.payslip.update({
-      where: { payrunLineId: lineId },
-      data: { downloadCount: { increment: 1 } },
-    }).catch(() => {});
+    await prisma.payslip
+      .update({
+        where: { payrunLineId: lineId },
+        data: { downloadCount: { increment: 1 } },
+      })
+      .catch(() => {});
 
     return new NextResponse(stream as unknown as ReadableStream, {
       headers: {

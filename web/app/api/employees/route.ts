@@ -153,7 +153,8 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const employee = await prisma.$transaction(async (tx) => {
+      const employee = await prisma.$transaction(
+        async (tx) => {
       const duplicateRecent = await tx.employee.findFirst({
         where: {
           companyId,
@@ -214,7 +215,13 @@ export async function POST(req: NextRequest) {
           user: { select: { name: true, email: true } },
         },
       });
-      });
+      },
+      {
+        // Dev + Supabase pooler: parallel routes can saturate the pool; default maxWait (~2s) → P2028.
+        maxWait: 15_000,
+        timeout: 30_000,
+      },
+      );
       return NextResponse.json(employee, { status: 201 });
     } catch (e: unknown) {
       if (

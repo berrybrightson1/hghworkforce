@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FileText, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useApi } from "@/lib/swr";
@@ -91,17 +92,28 @@ export default function PayslipsPage() {
                         {new Date(p.createdAt).toLocaleDateString()}
                       </td>
                       <td className="py-3 text-right">
-                        <a
-                          href={`/api/payslips/${p.payrunLineId}/download`}
-                          download
-                          className={cn(
-                            buttonVariants({ variant: "ghost", size: "sm" }),
-                            "text-hgh-navy no-underline",
-                          )}
-                        >
-                          <Download size={16} className="mr-1" />
-                          PDF
-                        </a>
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <Link
+                            href={`/portal/payslips/${p.payrunLineId}`}
+                            className={cn(
+                              buttonVariants({ variant: "secondary", size: "sm" }),
+                              "text-hgh-navy no-underline",
+                            )}
+                          >
+                            View
+                          </Link>
+                          <a
+                            href={`/api/payslips/${p.payrunLineId}/download`}
+                            download
+                            className={cn(
+                              buttonVariants({ variant: "ghost", size: "sm" }),
+                              "text-hgh-navy no-underline",
+                            )}
+                          >
+                            <Download size={16} className="mr-1" />
+                            PDF
+                          </a>
+                        </div>
                       </td>
                     </tr>
                   ))}

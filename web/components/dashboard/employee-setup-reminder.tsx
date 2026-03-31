@@ -41,8 +41,9 @@ export function EmployeeSetupReminder({ companyId }: { companyId: string | null 
           {missing.length} active employee{missing.length === 1 ? "" : "s"} still need a device bound for kiosk check-in
         </p>
         <p className="text-xs leading-relaxed text-hgh-slate">
-          Open each person’s profile → <strong>Device binding</strong> to bind their device. New hires
-          are linked there automatically after you add them.
+          Open each person’s profile → <strong>Device binding</strong> so they can verify at the office
+          kiosk (QR flow). Without it, kiosk clock-in/out is blocked; the employee portal never records
+          punches—only shows Attendance and correction requests.
         </p>
         <ul className="flex flex-wrap gap-2 pt-1">
           {preview.map((e) => (
@@ -60,7 +61,7 @@ export function EmployeeSetupReminder({ companyId }: { companyId: string | null 
           {more > 0 ? <li className="self-center text-xs text-hgh-muted">+{more} more</li> : null}
         </ul>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 text-xs">
-          <HintTooltip content="Guided checklist: company, employees, taxes, and check-in basics.">
+          <HintTooltip content="Guided checklist: company, employees, taxes, and office kiosk basics.">
             <Link
               href="/dashboard/setup-wizard"
               className="font-semibold text-hgh-gold underline-offset-2 hover:underline"

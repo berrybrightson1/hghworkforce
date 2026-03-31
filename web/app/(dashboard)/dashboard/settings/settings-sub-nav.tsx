@@ -55,14 +55,14 @@ export function SettingsSubNav() {
         href: `${BASE}/office-kiosk`,
         label: "Office kiosk",
         section: "office-kiosk",
-        hint: "Kiosk link, branding, and how staff clock in on a shared device.",
+        hint: "Kiosk URL and hours. Staff punch in/out only here (QR + bound phone); the portal shows Attendance read-only.",
       });
       if (checkinSettings) {
         out.push({
           href: `${BASE}/checkin-security`,
           label: "Check-in security",
           section: "checkin-security",
-          hint: "Security rules and device binding for check-in.",
+          hint: "Optional enterprise audit flag; device binding for office kiosk verification.",
         });
       }
     }

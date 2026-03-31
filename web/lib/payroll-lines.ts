@@ -57,6 +57,9 @@ export async function regeneratePayrunLines(
           tier2PensionEnabled: true,
           tier2EmployeePercent: true,
           tier2EmployerPercent: true,
+          includeAttendanceOvertimeInPayrun: true,
+          overtimeHourlyMultiplier: true,
+          standardHoursPerMonth: true,
         },
       },
     },
@@ -98,6 +101,31 @@ export async function regeneratePayrunLines(
         if (c.type === "ALLOWANCE") allowanceTotal += amt;
         else if (c.name.toLowerCase().includes("provident")) provident += amt;
         else otherDed += amt;
+      }
+
+      const componentAllowanceTotal = allowanceTotal;
+
+      let overtimePay = 0;
+      let overtimeHoursInPeriod = 0;
+      if (payrun.company.includeAttendanceOvertimeInPayrun) {
+        const checkins = await prisma.checkIn.findMany({
+          where: {
+            employeeId: emp.id,
+            clockIn: { gte: periodStart, lte: periodEnd },
+          },
+          select: { overtimeHours: true },
+        });
+        overtimeHoursInPeriod = checkins.reduce(
+          (s, c) => s + (c.overtimeHours ? Number(c.overtimeHours) : 0),
+          0,
+        );
+        if (overtimeHoursInPeriod > 0 && basic > 0) {
+          const stdHours = Number(payrun.company.standardHoursPerMonth) || 173;
+          const mult = Number(payrun.company.overtimeHourlyMultiplier) || 1.5;
+          const hourly = basic / stdHours;
+          overtimePay = Math.round(overtimeHoursInPeriod * hourly * mult * 100) / 100;
+          allowanceTotal = componentAllowanceTotal + overtimePay;
+        }
       }
 
       let loanMonthly = 0;
@@ -152,12 +180,15 @@ export async function regeneratePayrunLines(
             JSON.stringify({
               basicSalary: basic,
               employmentType: emp.employmentType,
-              allowanceTotal,
+              allowanceTotal: componentAllowanceTotal,
+              overtimeHoursInPeriod,
+              overtimePay,
+              overtimeMultiplier: Number(payrun.company.overtimeHourlyMultiplier),
               provident,
               loanDeductions: loanMonthly,
               otherDeductions: otherDed,
               tier2Employee,
-              tier2Employer,
+           tier2Employer,
               tier2Enabled: tier2On,
               payeBracketsYear: year,
               breakdown: calc.breakdown,

@@ -1,22 +1,26 @@
 import { NextResponse } from "next/server";
-import { requireDbUser, gateCompanyBilling } from "@/lib/api-auth";
+import { canManage, requireDbUser, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 /**
  * GET /api/users?companyId=xxx
- * Lists users for a company. SUPER_ADMIN sees all, COMPANY_ADMIN sees own company.
+ * Lists users for a company. HR and admins may list their company for assignments (e.g. line manager).
  */
 export async function GET(req: Request) {
   const auth = await requireDbUser();
   if (!auth.ok) return auth.response;
 
   const { dbUser } = auth;
-  if (dbUser.role !== "SUPER_ADMIN" && dbUser.role !== "COMPANY_ADMIN") {
+  if (!canManage(dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { searchParams } = new URL(req.url);
   const companyId = searchParams.get("companyId") ?? dbUser.companyId;
+
+  if (!companyId && dbUser.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "companyId is required" }, { status: 400 });
+  }
 
   // SUPER_ADMIN with no companyId filter gets all users
   const where = companyId ? { companyId } : {};

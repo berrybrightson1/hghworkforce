@@ -47,7 +47,7 @@ const roadmapSteps: {
     step: 3,
     title: "Company settings, payroll add-ons, and check-in",
     summary:
-      "Configure company details, Ghana tax brackets, optional Tier 2 pension on basic (if your policy uses it), HTTPS webhooks for approved pay runs, check-in mode (kiosk, portal, device binding), and office timezone for shift-based late and overtime.",
+      "Configure company details, Ghana tax brackets, optional Tier 2 pension on basic (if your policy uses it), HTTPS webhooks for approved pay runs, office kiosk link and hours (clock-in/out is kiosk-only), device binding, and timezone for shift-based late and overtime.",
     href: "/dashboard/settings",
     hrefLabel: "Settings",
   },
@@ -69,7 +69,7 @@ const roadmapSteps: {
   },
   {
     step: 6,
-    title: "Device binding for check-in (do this early)",
+    title: "Device binding for the office kiosk (do this early)",
     summary:
       "For each active employee, open their profile and scroll to Device binding to bind their check-in device. Staff need this before the office kiosk can verify them; it is easy to miss if you jump straight to shifts or payroll.",
     href: "/dashboard/employees",
@@ -88,13 +88,13 @@ const roadmapSteps: {
   },
   {
     step: 8,
-    title: "Attendance and check-in",
+    title: "Attendance (kiosk + portal)",
     summary:
-      "Employees clock in from the portal or office kiosk; they can request attendance corrections with a reason. You review the daily log, correction requests, and summaries before payroll.",
+      "Employees clock in and out at the office kiosk; they can see today's log and request attendance corrections from the portal (Attendance). You review the daily log, correction requests, and summaries before payroll.",
     href: "/dashboard/attendance",
     hrefLabel: "Attendance",
     extra:
-      "Employee self-service is only for accounts with the EMPLOYEE role at /portal (payslips, leave, loans, check-in, corrections). Admins who sign in with a dashboard role are sent to /dashboard instead—invite staff with the employee role so they can use the portal.",
+      "Employee self-service is for accounts with the EMPLOYEE role at /portal (payslips, leave, loans, Attendance summary & correction requests, etc.). Admins who sign in with a dashboard role are sent to /dashboard instead—invite staff with the employee role so they can use the portal.",
   },
   {
     step: 9,
@@ -195,7 +195,7 @@ const sections = [
       {
         title: "Suspend, exit workflow, and ending employment",
         content:
-          "HR and admins can use the ··· menu on the employee list row or on the profile header: open the full record, temporarily suspend (payroll and check-in pause until reactivate), start an exit case under Exits for structured offboarding, or end employment after a confirmation dialog—terminated staff no longer appear on new pay runs, but history and payslips stay. If duplicate rows exist, “End by code” on the employee list ends the correct record by payroll code.",
+          "HR and admins can use the ··· menu on the employee list row or on the profile header: open the full record, temporarily suspend (payroll and kiosk access pause until reactivate), start an exit case under Exits for structured offboarding, or end employment after a confirmation dialog—terminated staff no longer appear on new pay runs, but history and payslips stay. If duplicate rows exist, “End by code” on the employee list ends the correct record by payroll code.",
       },
       {
         title: "Exits (offboarding cases)",
@@ -238,7 +238,8 @@ const sections = [
     icon: Calendar,
     color: "text-purple-500",
     bg: "bg-purple-50",
-    description: "Track team availability. Manage leave requests, check-ins, and shift assignments in one place.",
+    description:
+      "Track team availability. Manage leave, kiosk attendance, portal correction requests, and shift assignments in one place.",
     links: [
       {
         title: "Approving leave requests",
@@ -250,11 +251,13 @@ const sections = [
       },
       {
         title: "Managing employee shifts",
-        content: "Set up work shifts (e.g., Morning, Night) in the 'Shifts' page and assign employees to them. This allows the system to calculate lateness and overtime during check-ins."
+        content:
+          "Set up work shifts (e.g., Morning, Night) on the Shifts page and assign employees. Lateness and overtime are calculated when staff punch at the office kiosk against those shifts."
       },
       {
         title: "Attendance corrections",
-        content: "Employees submit correction requests from the portal with a reason. Review and resolve them from the dashboard Attendance view alongside normal clock events so payroll reflects approved adjustments."
+        content:
+          "Employees submit correction requests from the portal (Attendance) with a reason. Review and resolve them from the dashboard Attendance view alongside kiosk clock events so payroll reflects approved adjustments."
       },
     ],
   },
@@ -323,9 +326,9 @@ export default function HelpPage() {
                   ) : null}
                   {item.step === 8 ? (
                     <p className="text-sm">
-                      <HintTooltip content="Staff sign-in for payslips, leave, loans, and check-in—not the admin dashboard.">
+                      <HintTooltip content="Staff sign-in for payslips, leave, loans, Attendance, and more—not the admin dashboard.">
                         <Link
-                          href="/portal"
+                          href="/portal/login"
                           className="font-medium text-hgh-gold underline decoration-hgh-gold/40 underline-offset-2 hover:text-hgh-gold/80"
                         >
                           Open employee portal (staff sign-in)

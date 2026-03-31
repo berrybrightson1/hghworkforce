@@ -67,6 +67,7 @@ enum LoanType {
 }
 
 enum LoanStatus {
+  PENDING
   ACTIVE
   COMPLETED
   CANCELLED
@@ -119,11 +120,34 @@ model Company {
   tier2EmployeePercent Decimal @default(5) @db.Decimal(5, 2)
   tier2EmployerPercent Decimal @default(5) @db.Decimal(5, 2)
 
+  /// Dashboard: upcoming birthdays / anniversaries widget
+  showBirthdaysOnDashboard Boolean @default(true)
+  birthdayLookaheadDays    Int       @default(30)
+
+  /// Payslip PDF branding (react-pdf)
+  payslipPrimaryHex       String @default("#0f172a")
+  payslipAccentHex        String @default("#b45309")
+  /// DEFAULT | MINIMAL | STRIPED
+  payslipThemeVariant     String @default("DEFAULT")
+
+  /// Overtime pay = sum(overtime hours in period) × implied hourly rate × multiplier
+  overtimeHourlyMultiplier           Decimal @default(1.5) @db.Decimal(5, 2)
+  standardHoursPerMonth              Decimal @default(173) @db.Decimal(6, 2)
+  includeAttendanceOvertimeInPayrun  Boolean @default(true)
+
   kioskDayAbsences      KioskDayAbsence[]
   checkinSessions       CheckinSession[]
   kioskChallenges       KioskChallenge[]
   webhooks              CompanyWebhook[]
   attendanceCorrections AttendanceCorrectionRequest[]
+  pinResetRequests      PinResetRequest[]
+  publicHolidays        PublicHoliday[]
+  latenessPolicy        LatenessPolicy?
+  lateRecords           LateRecord[]
+  payQueries            PayQuery[]
+  anonymousFeedbacks    AnonymousFeedback[]
+  companyNotices        CompanyNotice[]
+  profileChangeRequests ProfileChangeRequest[]
 
   @@index([isActive])
 }
@@ -142,10 +166,16 @@ model User {
 
   company                        Company?                      @relation(fields: [companyId], references: [id])
   employee                       Employee?
+  /// Employees who report to this dashboard user (leave/inbox "my team").
+  managedEmployees               Employee[]                    @relation("EmployeeManager")
   auditLogs                      AuditLog[]
   invitations                    Invitation[]
   attendanceCorrectionsRequested AttendanceCorrectionRequest[] @relation("CorrectionRequestedBy")
   attendanceCorrectionsReviewed  AttendanceCorrectionRequest[] @relation("CorrectionReviewedBy")
+  companyNoticesAuthored         CompanyNotice[]                 @relation("NoticeAuthor")
+  payQueriesAnswered             PayQuery[]                      @relation("PayQueryResponder")
+  profileChangeReviews           ProfileChangeRequest[]          @relation("ProfileChangeReviewer")
+  anonymousFeedbackReviewed      AnonymousFeedback[]             @relation("AnonymousFeedbackReviewer")
 
   @@index([authUserId])
   @@index([companyId, role])
@@ -188,8 +218,25 @@ model Employee {
   /// User ID of the admin who last reset the device binding
   deviceResetBy        String?
 
+  /// Employee self-service (PIN auth, separate from Supabase)
+  portalPin            String?
+  temporaryPin         String?
+  pinChangedAt         DateTime?
+  portalLastLoginAt    DateTime?
+  portalEnabled        Boolean   @default(true)
+  portalFailedAttempts Int       @default(0)
+  portalLockedUntil    DateTime?
+
+  dateOfBirth       DateTime?
+  probationEndDate  DateTime?
+  contractType      String?
+  contractStartDate DateTime?
+  contractEndDate   DateTime?
+
   company                      Company                       @relation(fields: [companyId], references: [id])
   user                         User?                         @relation(fields: [userId], references: [id])
+  managedByUserId              String?
+  managedBy                    User?                         @relation("EmployeeManager", fields: [managedByUserId], references: [id])
   salaryComponents             SalaryComponent[]
   payrunLines                  PayrunLine[]
   payslips                     Payslip[]
@@ -206,10 +253,76 @@ model Employee {
   employeeOnboardings          EmployeeOnboarding[]
   performanceReviews           PerformanceReview[]
   exitRecords                  ExitRecord[]
+  portalNotifications          PortalNotification[]
+  pinResetRequests             PinResetRequest[]
+  payQueries                   PayQuery[]
+  profileChangeRequests       ProfileChangeRequest[]
+  lateRecords                  LateRecord[]
+  noticeReceipts               NoticeReceipt[]
 
   @@index([companyId, status])
   @@index([employeeCode])
   @@index([kioskDeviceTokenHash])
+}
+
+enum PortalNotificationType {
+  PAYSLIP_PUBLISHED
+  LEAVE_APPROVED
+  LEAVE_REJECTED
+  LOAN_APPROVED
+  LOAN_REJECTED
+  QUERY_RESPONDED
+  SHIFT_SWAP_APPROVED
+  SHIFT_SWAP_REJECTED
+  ONBOARDING_TASK_DUE
+  PERFORMANCE_REVIEW_OPEN
+  DOCUMENT_REQUIRED
+  PIN_RESET
+  COMPANY_NOTICE
+  PAY_QUERY_UPDATE
+  PROFILE_REQUEST_DECIDED
+  GENERAL
+}
+
+model PortalNotification {
+  id         String                 @id @default(cuid())
+  employeeId String
+  tenantId   String
+  type       PortalNotificationType
+  title      String
+  message    String
+  linkUrl    String?
+  isRead     Boolean                @default(false)
+  createdAt  DateTime               @default(now())
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, isRead])
+  @@index([tenantId, createdAt])
+}
+
+enum PinResetRequestStatus {
+  PENDING
+  RESOLVED
+  CANCELLED
+}
+
+model PinResetRequest {
+  id         String                @id @default(cuid())
+  employeeId String
+  companyId  String
+  status     PinResetRequestStatus @default(PENDING)
+  otpHash    String?
+  otpExpiresAt DateTime?
+  createdAt  DateTime              @default(now())
+  resolvedAt DateTime?
+  adminNote  String?
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([employeeId])
 }
 
 model EmployeeDocument {
@@ -438,6 +551,7 @@ model CheckIn {
   shiftAssignment    ShiftAssignment?              @relation(fields: [shiftAssignmentId], references: [id])
   checkinSession     CheckinSession?               @relation(fields: [checkinSessionId], references: [id])
   correctionRequests AttendanceCorrectionRequest[]
+  lateRecords        LateRecord[]
 
   @@index([employeeId, clockIn])
   @@index([companyId, clockIn])
@@ -612,7 +726,8 @@ model AttendanceCorrectionRequest {
   checkInId         String
   employeeId        String
   companyId         String
-  requestedByUserId String
+  /// Null when submitted from employee PIN portal (no linked User).
+  requestedByUserId String?
   reason            String
   proposedClockIn   DateTime?
   proposedClockOut  DateTime?
@@ -625,7 +740,7 @@ model AttendanceCorrectionRequest {
   checkIn     CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
   employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  requestedBy User     @relation("CorrectionRequestedBy", fields: [requestedByUserId], references: [id])
+  requestedBy User?    @relation("CorrectionRequestedBy", fields: [requestedByUserId], references: [id])
   reviewedBy  User?    @relation("CorrectionReviewedBy", fields: [reviewedById], references: [id])
 
   @@index([companyId, status])
@@ -892,4 +1007,163 @@ model RevenueEntry {
 
   @@unique([companyId, month, year])
   @@index([companyId])
+}
+
+// ─── Workplace / HR extensions (roadmap Feature 1–12) ────────────────────────
+
+enum PayQueryStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum AnonymousFeedbackStatus {
+  NEW
+  REVIEWED
+  ARCHIVED
+}
+
+enum ProfileChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum CompanyNoticeStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  companyId String
+  date      DateTime
+  name      String
+  createdAt DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+  @@index([companyId])
+}
+
+model LatenessPolicy {
+  id                         String  @id @default(cuid())
+  companyId                  String  @unique
+  graceMinutes               Int     @default(5)
+  lateInstancesBeforeWarning Int?
+  warningLetterBodyTemplate  String? @db.Text
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model LateRecord {
+  id                  String    @id @default(cuid())
+  companyId           String
+  employeeId          String
+  checkInId           String?
+  date                DateTime
+  minutesLate         Int
+  warningLetterSentAt DateTime?
+  notes               String?
+  createdAt           DateTime  @default(now())
+
+  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  checkIn  CheckIn? @relation(fields: [checkInId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, date])
+  @@index([employeeId])
+}
+
+model PayQuery {
+  id            String         @id @default(cuid())
+  companyId     String
+  employeeId    String
+  subject       String
+  body          String         @db.Text
+  status        PayQueryStatus @default(OPEN)
+  responseBody  String?        @db.Text
+  respondedById String?
+  respondedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  respondedBy User?    @relation("PayQueryResponder", fields: [respondedById], references: [id])
+
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+model AnonymousFeedback {
+  id           String                  @id @default(cuid())
+  companyId    String
+  message      String                  @db.Text
+  category     String?
+  status       AnonymousFeedbackStatus @default(NEW)
+  reviewedById String?
+  reviewedAt   DateTime?
+  internalNote String?                 @db.Text
+  createdAt    DateTime                @default(now())
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  reviewedBy User?   @relation("AnonymousFeedbackReviewer", fields: [reviewedById], references: [id])
+
+  @@index([companyId, status])
+}
+
+model ProfileChangeRequest {
+  id           String                     @id @default(cuid())
+  companyId    String
+  employeeId   String
+  changesJson  Json
+  employeeNote String?
+  status       ProfileChangeRequestStatus @default(PENDING)
+  reviewerNote String?
+  decidedById  String?
+  decidedAt    DateTime?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  decidedBy User?    @relation("ProfileChangeReviewer", fields: [decidedById], references: [id])
+
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+model CompanyNotice {
+  id          String              @id @default(cuid())
+  companyId   String
+  title       String
+  body        String              @db.Text
+  status      CompanyNoticeStatus @default(PUBLISHED)
+  publishedAt DateTime            @default(now())
+  expiresAt   DateTime?
+  createdById String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy User            @relation("NoticeAuthor", fields: [createdById], references: [id])
+  receipts  NoticeReceipt[]
+
+  @@index([companyId, publishedAt])
+}
+
+model NoticeReceipt {
+  id         String   @id @default(cuid())
+  noticeId   String
+  employeeId String
+  readAt     DateTime @default(now())
+
+  notice   CompanyNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, employeeId])
+  @@index([employeeId])
 }

@@ -1,8 +1,10 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { UserRole, type User } from "@prisma/client";
+import { EmployeeStatus, UserRole, type Employee, type User } from "@prisma/client";
 import { companyHasFullAccess } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { PORTAL_COOKIE_NAME, verifyPortalJwt, type PortalJwtPayload } from "@/lib/portal-jwt";
 
 export type AuthResult =
   | { ok: true; dbUser: User }
@@ -106,4 +108,91 @@ export async function gateCompanyBilling(dbUser: User, companyId: string): Promi
   if (!row) return NextResponse.json({ error: "Company not found" }, { status: 404 });
   if (!companyHasFullAccess(row)) return subscriptionRequiredResponse();
   return null;
+}
+
+/** Billing gate for employee self-service (no Supabase user; no SUPER_ADMIN bypass). */
+export async function gateCompanyBillingEmployee(companyId: string): Promise<NextResponse | null> {
+  const row = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { subscriptionStatus: true, trialEndsAt: true, createdAt: true },
+  });
+  if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!companyHasFullAccess(row)) return subscriptionRequiredResponse();
+  return null;
+}
+
+export async function getPortalJwtFromCookies(): Promise<PortalJwtPayload | null> {
+  const jar = await cookies();
+  const raw = jar.get(PORTAL_COOKIE_NAME)?.value;
+  if (!raw) return null;
+  return verifyPortalJwt(raw);
+}
+
+/**
+ * Resolves the current employee for portal APIs: PIN session (cookie) or linked Supabase EMPLOYEE user.
+ * Rejects PIN sessions that still require a permanent PIN change.
+ */
+export async function requireEmployeeSelf(): Promise<
+  | { ok: true; employee: Employee; via: "portal" | "supabase"; dbUser: User | null; jwt: PortalJwtPayload | null }
+  | { ok: false; response: NextResponse }
+> {
+  const jar = await cookies();
+  const raw = jar.get(PORTAL_COOKIE_NAME)?.value;
+  if (raw) {
+    const jwt = await verifyPortalJwt(raw);
+    if (!jwt) {
+      return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    }
+    if (jwt.requiresPinChange) {
+      return { ok: false, response: NextResponse.json({ error: "PIN change required" }, { status: 401 }) };
+    }
+    const employee = await prisma.employee.findFirst({
+      where: {
+        id: jwt.employeeId,
+        companyId: jwt.companyId,
+        status: EmployeeStatus.ACTIVE,
+        deletedAt: null,
+        portalEnabled: true,
+      },
+    });
+    if (!employee) {
+      return { ok: false, response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+    }
+    return { ok: true, employee, via: "portal", dbUser: null, jwt };
+  }
+
+  const auth = await requireDbUser();
+  if (!auth.ok) return { ok: false, response: auth.response };
+  if (auth.dbUser.role !== UserRole.EMPLOYEE) {
+    return { ok: false, response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+  }
+  const employee = await prisma.employee.findUnique({
+    where: { userId: auth.dbUser.id },
+  });
+  if (
+    !employee ||
+    employee.status !== EmployeeStatus.ACTIVE ||
+    employee.deletedAt ||
+    !employee.portalEnabled
+  ) {
+    return { ok: false, response: NextResponse.json({ error: "Not found" }, { status: 404 }) };
+  }
+  return { ok: true, employee, via: "supabase", dbUser: auth.dbUser, jwt: null };
+}
+
+export async function gateBillingForEmployeeSelf(
+  employee: Employee,
+  via: "portal" | "supabase",
+  dbUser: User | null,
+): Promise<NextResponse | null> {
+  const elevated = await requireDbUser();
+  if (elevated.ok && elevated.dbUser.role === UserRole.SUPER_ADMIN) {
+    return null;
+  }
+
+  if (via === "portal") {
+    return gateCompanyBillingEmployee(employee.companyId);
+  }
+  if (!dbUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  return gateCompanyBilling(dbUser, employee.companyId);
 }

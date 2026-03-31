@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma } from "@prisma/client";
+import { PortalNotificationType, Prisma } from "@prisma/client";
 import { canManageCheckinSecurity, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { notifyEmployeeInApp } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
@@ -80,6 +81,29 @@ export async function PATCH(
         afterState: { checkInId: row.checkInId } as Prisma.InputJsonValue,
       },
     });
+
+    const tenantId = row.companyId;
+    if (body.status === "APPROVED") {
+      await notifyEmployeeInApp(
+        row.employeeId,
+        tenantId,
+        PortalNotificationType.QUERY_RESPONDED,
+        "Attendance correction approved",
+        "Your requested change to your check-in times was approved." +
+          (body.reviewNote?.trim() ? ` Note: ${body.reviewNote.trim()}` : ""),
+        "/portal/corrections",
+      );
+    } else {
+      await notifyEmployeeInApp(
+        row.employeeId,
+        tenantId,
+        PortalNotificationType.QUERY_RESPONDED,
+        "Attendance correction declined",
+        "Your requested change to your check-in times was not approved." +
+          (body.reviewNote?.trim() ? ` Note: ${body.reviewNote.trim()}` : ""),
+        "/portal/corrections",
+      );
+    }
 
     const updated = await prisma.attendanceCorrectionRequest.findUnique({ where: { id } });
     return NextResponse.json(updated);

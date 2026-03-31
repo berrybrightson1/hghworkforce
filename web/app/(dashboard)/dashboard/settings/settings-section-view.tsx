@@ -81,7 +81,13 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
 
   const [savingCheckinToggle, setSavingCheckinToggle] = useState(false);
 
-  const { data: auditLogs } = useApi<AuditEntry[]>("/api/audit-log");
+  const [auditAction, setAuditAction] = useState("");
+  const [auditEntity, setAuditEntity] = useState("");
+  const auditUrl =
+    auditAction.trim() || auditEntity.trim()
+      ? `/api/audit-log?action=${encodeURIComponent(auditAction.trim())}&entityType=${encodeURIComponent(auditEntity.trim())}&take=200`
+      : "/api/audit-log?take=200";
+  const { data: auditLogs } = useApi<AuditEntry[]>(auditUrl);
   const logs = auditLogs ?? [];
 
   const canCompanyPayrollSettings =
@@ -94,6 +100,14 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
     tier2PensionEnabled: boolean;
     tier2EmployeePercent: number;
     tier2EmployerPercent: number;
+    showBirthdaysOnDashboard: boolean;
+    birthdayLookaheadDays: number;
+    payslipPrimaryHex: string;
+    payslipAccentHex: string;
+    payslipThemeVariant: string;
+    overtimeHourlyMultiplier: number;
+    standardHoursPerMonth: number;
+    includeAttendanceOvertimeInPayrun: boolean;
   }>(payrollSettingsUrl);
 
   const webhooksUrl =
@@ -400,7 +414,8 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
               </CardHeader>
               <CardContent className="space-y-4">
                 <p className="text-xs text-hgh-slate">
-                  Open this URL on the shared office PC. Employees check in by entering their name and code, then verifying with their bound phone via QR scan.
+                  Open this URL on the shared office PC. Staff check in and out here: name + employee code, then verify
+                  with their bound phone (QR scan and one-time code)—not from the employee portal.
                 </p>
                 <div className="flex items-start gap-2 rounded-lg border border-hgh-border bg-hgh-offwhite p-3">
                   <code className="min-w-0 flex-1 break-all font-mono text-xs text-hgh-slate">
@@ -415,6 +430,7 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                       selected.id
                     }
                     label="Copy kiosk URL"
+                    hint="Copies the office kiosk link. Open it on the shared PC used for punch-in/out; employees do not clock in from the portal."
                     size="md"
                     className="shrink-0 text-hgh-slate"
                   />
@@ -437,8 +453,8 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                         }}
                       />
                       <p className="mt-1 text-xs text-hgh-muted">
-                        Also used for shift late, early departure, and overtime (portal and kiosk)—must match
-                        how you define shift start/end times.
+                        Also used for shift late, early departure, overtime, and the employee portal Attendance
+                        page (same civil day as the kiosk)—must match how you define shift start/end times.
                       </p>
                     </div>
                     <div className="grid gap-3 sm:grid-cols-3">
@@ -532,7 +548,8 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
               </p>
               <h2 className="text-lg font-semibold text-zinc-900">Check-in security</h2>
               <p className="mt-1 text-sm text-zinc-500">
-                Enterprise sessions for the employee portal. Kiosk check-in uses QR code + device-bound verification.
+                Clock-in and clock-out happen only on the office kiosk (QR + device-bound phone verification). Optional
+                enterprise check-in adds extra audit metadata; it does not enable portal punching.
               </p>
             <Card className={cn("mt-4", settingsPanelClass)}>
               <CardHeader className={cn("flex flex-row items-center gap-3", settingsPanelHeaderClass)}>
@@ -557,7 +574,7 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                       })
                     }
                   />
-                  Enable enterprise check-in (audit sessions and detailed event logs)
+                  Enable enterprise check-in (audit / session metadata — kiosk remains the only punch channel)
                 </label>
               </CardContent>
             </Card>
@@ -620,11 +637,31 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
               <CardTitle className="text-zinc-900">Recent entries</CardTitle>
             </CardHeader>
             <CardContent>
+              <div className="mb-4 flex flex-wrap items-end gap-2">
+                <div>
+                  <label className="mb-1 block text-xs text-hgh-muted">Action contains</label>
+                  <Input value={auditAction} onChange={(e) => setAuditAction(e.target.value)} className="w-40" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-hgh-muted">Entity type contains</label>
+                  <Input value={auditEntity} onChange={(e) => setAuditEntity(e.target.value)} className="w-40" />
+                </div>
+                <a
+                  className="text-sm font-medium text-hgh-gold underline underline-offset-2"
+                  href={
+                    "/api/audit-log?format=csv&take=2000" +
+                    (auditAction.trim() ? `&action=${encodeURIComponent(auditAction.trim())}` : "") +
+                    (auditEntity.trim() ? `&entityType=${encodeURIComponent(auditEntity.trim())}` : "")
+                  }
+                >
+                  Download CSV
+                </a>
+              </div>
               {logs.length === 0 ? (
                 <p className="text-sm text-hgh-muted">No audit entries yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {logs.slice(0, 10).map((log) => (
+                  {logs.slice(0, 50).map((log) => (
                     <div key={log.id} className="flex items-center justify-between text-sm">
                       <div>
                         <span className="font-medium text-hgh-slate">{log.action}</span>
@@ -755,6 +792,113 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
               }}
             >
               Save rates
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className={cn("mt-4", settingsPanelClass)}>
+          <CardHeader className={cn("flex flex-row items-center gap-2", settingsPanelHeaderClass)}>
+            <FileText className="text-hgh-gold" size={20} aria-hidden />
+            <CardTitle className="text-base text-zinc-900">Payslip branding &amp; overtime</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-hgh-muted">
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                checked={payrollSettings.showBirthdaysOnDashboard}
+                onChange={async (e) => {
+                  const res = await fetch(`/api/companies/${selected.id}/payroll-settings`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ showBirthdaysOnDashboard: e.target.checked }),
+                  });
+                  if (res.ok) mutPayrollSettings();
+                }}
+                className="rounded border-hgh-border"
+              />
+              Show birthdays / anniversaries widget (dashboard workplace hub)
+            </label>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-hgh-muted">Birthday lookahead (days)</label>
+              <Input
+                type="number"
+                min={0}
+                max={365}
+                defaultValue={payrollSettings.birthdayLookaheadDays}
+                id="bdays-lookahead"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-hgh-muted">Payslip primary (#hex)</label>
+                <Input defaultValue={payrollSettings.payslipPrimaryHex} id="pslip-primary" />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-hgh-muted">Payslip accent (#hex)</label>
+                <Input defaultValue={payrollSettings.payslipAccentHex} id="pslip-accent" />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-hgh-muted">Payslip variant</label>
+              <Input defaultValue={payrollSettings.payslipThemeVariant} id="pslip-variant" placeholder="DEFAULT | MINIMAL | STRIPED" />
+            </div>
+            <label className="flex cursor-pointer items-center gap-2">
+              <input
+                type="checkbox"
+                defaultChecked={payrollSettings.includeAttendanceOvertimeInPayrun}
+                id="ot-include"
+                className="rounded border-hgh-border"
+              />
+              Include attendance overtime in draft pay runs
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-hgh-muted">OT hourly multiplier</label>
+                <Input
+                  type="number"
+                  step={0.1}
+                  defaultValue={payrollSettings.overtimeHourlyMultiplier}
+                  id="ot-mult"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-hgh-muted">Std hours / month (for OT rate)</label>
+                <Input
+                  type="number"
+                  step={1}
+                  defaultValue={payrollSettings.standardHoursPerMonth}
+                  id="ot-std"
+                />
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              onClick={async () => {
+                const res = await fetch(`/api/companies/${selected.id}/payroll-settings`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    birthdayLookaheadDays: Number(
+                      (document.getElementById("bdays-lookahead") as HTMLInputElement).value,
+                    ),
+                    payslipPrimaryHex: (document.getElementById("pslip-primary") as HTMLInputElement).value,
+                    payslipAccentHex: (document.getElementById("pslip-accent") as HTMLInputElement).value,
+                    payslipThemeVariant: (document.getElementById("pslip-variant") as HTMLInputElement).value,
+                    includeAttendanceOvertimeInPayrun: (
+                      document.getElementById("ot-include") as HTMLInputElement
+                    ).checked,
+                    overtimeHourlyMultiplier: Number((document.getElementById("ot-mult") as HTMLInputElement).value),
+                    standardHoursPerMonth: Number((document.getElementById("ot-std") as HTMLInputElement).value),
+                  }),
+                });
+                if (res.ok) {
+                  mutPayrollSettings();
+                  toast.success("Saved payslip / overtime / birthday settings.");
+                } else toast.error("Save failed");
+              }}
+            >
+              Save payslip &amp; overtime
             </Button>
           </CardContent>
         </Card>

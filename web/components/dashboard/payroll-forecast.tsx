@@ -42,50 +42,61 @@ export function PayrollForecast() {
 
   return (
     <>
-      <div className="rounded-2xl border border-hgh-gold/20 bg-hgh-navy p-6">
-        <p className="text-sm text-hgh-muted">Payroll Forecast &mdash; {data.month}</p>
-        <p className="mt-2 text-4xl font-bold text-white">GHS {formatGHS(data.totalMonthlyLiability)}</p>
-        <p className="mt-1 text-sm text-hgh-muted">
-          Estimated total liability for {data.activeEmployeeCount} active employee{data.activeEmployeeCount !== 1 ? "s" : ""}
-        </p>
+      <div className="rounded-2xl border border-teal-400/25 bg-gradient-to-br from-slate-950 via-[#0f1729] to-emerald-950/25 p-5 shadow-lg shadow-black/25 lg:p-6">
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-0">
+          <div className="min-w-0 lg:border-r lg:border-white/10 lg:pr-6">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-teal-200/85">
+              Payroll Forecast &mdash; {data.month}
+            </p>
+            <p className="mt-1 w-full max-w-none break-words text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">
+              GHS {formatGHS(data.totalMonthlyLiability)}
+            </p>
+            <p className="mt-1.5 text-xs text-white/55">
+              Estimated total liability for {data.activeEmployeeCount} active employee
+              {data.activeEmployeeCount !== 1 ? "s" : ""}
+            </p>
+          </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
-          <span className={`flex items-center gap-1 ${countdownColor}`}>
-            <Hourglass size={18} />
-            Next payrun in {data.daysUntilNextPayrun} day{data.daysUntilNextPayrun !== 1 ? "s" : ""}
-          </span>
+          <div className="flex min-w-0 flex-col justify-center gap-3 lg:pl-6">
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+              <span className={`flex items-center gap-1.5 ${countdownColor}`}>
+                <Hourglass size={18} className="shrink-0" />
+                Next payrun in {data.daysUntilNextPayrun} day{data.daysUntilNextPayrun !== 1 ? "s" : ""}
+              </span>
 
-          {data.lastPayrun && (
-            <span className="flex items-center gap-1">
-              {data.lastPayrun.isPaid ? (
-                <>
-                  <CheckCircle size={18} className="text-hgh-success" />
-                  <span className="text-hgh-success">
-                    {new Date(data.lastPayrun.periodEnd).toLocaleDateString("en-GH", { month: "long" })} salaries paid
-                  </span>
-                </>
-              ) : (
-                <>
-                  <AlertTriangle size={18} className="text-hgh-gold" />
-                  <Link
-                    href={`/dashboard/payroll/${data.lastPayrun.id}`}
-                    className="text-hgh-gold underline underline-offset-2 hover:text-hgh-gold-light"
-                  >
-                    {new Date(data.lastPayrun.periodEnd).toLocaleDateString("en-GH", { month: "long" })} salaries not marked as paid
-                  </Link>
-                </>
+              {data.lastPayrun && (
+                <span className="flex min-w-0 items-center gap-1.5">
+                  {data.lastPayrun.isPaid ? (
+                    <>
+                      <CheckCircle size={18} className="shrink-0 text-hgh-success" />
+                      <span className="text-hgh-success">
+                        {new Date(data.lastPayrun.periodEnd).toLocaleDateString("en-GH", { month: "long" })} salaries paid
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={18} className="shrink-0 text-teal-300" />
+                      <Link
+                        href={`/dashboard/payroll/${data.lastPayrun.id}`}
+                        className="min-w-0 text-teal-300 underline underline-offset-2 hover:text-teal-200"
+                      >
+                        {new Date(data.lastPayrun.periodEnd).toLocaleDateString("en-GH", { month: "long" })} salaries not marked as paid
+                      </Link>
+                    </>
+                  )}
+                </span>
               )}
-            </span>
-          )}
-        </div>
+            </div>
 
-        <button
-          type="button"
-          onClick={() => setShowBreakdown(!showBreakdown)}
-          className="mt-3 text-xs font-medium text-hgh-gold underline underline-offset-2 hover:text-hgh-gold-light"
-        >
-          {showBreakdown ? "Hide breakdown" : "View breakdown"}
-        </button>
+            <button
+              type="button"
+              onClick={() => setShowBreakdown(!showBreakdown)}
+              className="w-fit text-left text-xs font-medium text-teal-200 underline underline-offset-2 hover:text-teal-100"
+            >
+              {showBreakdown ? "Hide breakdown" : "View breakdown"}
+            </button>
+          </div>
+        </div>
       </div>
 
       {showBreakdown && (
