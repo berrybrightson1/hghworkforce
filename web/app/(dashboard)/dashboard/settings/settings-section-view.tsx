@@ -59,7 +59,12 @@ const YEAR = new Date().getFullYear();
 export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
   const { selected } = useCompany();
   const { toast } = useToast();
-  const { data: me } = useApi<{ role: string }>("/api/me");
+  const { data: me } = useApi<{
+    role: string;
+    referralCode?: string | null;
+    referralCount?: number;
+    referralMonthsEarned?: number;
+  }>("/api/me");
   const isSuper = me?.role === "SUPER_ADMIN";
   const canEditCheckin =
     me?.role === "SUPER_ADMIN" ||
@@ -1050,6 +1055,38 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
           >
             Change password
           </Link>
+        </CardContent>
+      </Card>
+      <Card className={cn("mt-4", settingsPanelClass)}>
+        <CardHeader className={cn("flex flex-row items-center gap-2", settingsPanelHeaderClass)}>
+          <CardTitle className="text-base text-zinc-900">Referrals</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 text-sm text-hgh-muted">
+          <p>
+            Share your code with another organisation owner. When they create a workspace with it and complete
+            subscription checkout, your company receives one extra month of full access (stackable).
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-hgh-offwhite px-3 py-1.5 font-mono text-sm font-semibold text-hgh-navy">
+              {me?.referralCode ?? "—"}
+            </span>
+            {me?.referralCode ? (
+              <CopyIconButton
+                text={me.referralCode}
+                label="Copy referral code"
+                hint="Copy your HGH referral code to send by email or chat."
+              />
+            ) : null}
+          </div>
+          <div className="grid gap-1 border-t border-hgh-border/80 pt-3 sm:grid-cols-2">
+            <p>
+              <span className="font-medium text-hgh-slate">Successful referrals:</span> {me?.referralCount ?? 0}
+            </p>
+            <p>
+              <span className="font-medium text-hgh-slate">Months earned:</span>{" "}
+              {me?.referralMonthsEarned ?? 0}
+            </p>
+          </div>
         </CardContent>
       </Card>
       </section>

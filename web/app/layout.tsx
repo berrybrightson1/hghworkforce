@@ -19,6 +19,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "HGH Payroll",
   description: `Payroll and attendance for Ghana — PAYE, SSNIT, payslips, and employee self-service. ${TRIAL_DAYS}-day full-access trial per workspace, then subscribe.`,
+  icons: {
+    icon: "/hgh-logo.svg",
+  },
   appleWebApp: {
     capable: true,
     title: "HGH Payroll",
@@ -38,6 +41,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap"
+        />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans`}>
         <AppProviders>{children}</AppProviders>
       </body>

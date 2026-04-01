@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
         subscriptionStatus: true,
         trialEndsAt: true,
         createdAt: true,
+        referralAccessUntil: true,
         checkinEnterpriseEnabled: true,
       },
     });

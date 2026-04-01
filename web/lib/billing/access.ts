@@ -8,6 +8,8 @@ export type CompanyBillingFields = {
   subscriptionStatus: SubscriptionStatus;
   trialEndsAt: Date | null;
   createdAt: Date;
+  /** Optional: stacked referral reward access window. */
+  referralAccessUntil?: Date | null;
 };
 
 export function effectiveTrialEndsAt(c: CompanyBillingFields): Date {
@@ -19,8 +21,10 @@ export function isSubscriptionActive(c: CompanyBillingFields): boolean {
   return c.subscriptionStatus === "ACTIVE";
 }
 
-/** Full product access: valid paid subscription, or still within the trial window. */
+/** Full product access: valid paid subscription, referral credit window, or trial window. */
 export function companyHasFullAccess(c: CompanyBillingFields): boolean {
+  const ref = c.referralAccessUntil;
+  if (ref && new Date(ref).getTime() > Date.now()) return true;
   if (isSubscriptionActive(c)) return true;
   return Date.now() < effectiveTrialEndsAt(c).getTime();
 }

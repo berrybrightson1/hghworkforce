@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { TRIAL_DAYS } from "@/lib/billing/access";
 import { prisma } from "@/lib/prisma";
 import { createClient } from "@/lib/supabase/server";
+import { isValidReferralCodeFormat, normalizeReferralCodeInput } from "@/lib/referral-code";
 
 /**
  * POST /api/onboarding
@@ -40,6 +41,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Company name is required (min 2 characters)" }, { status: 400 });
     }
 
+    let pendingReferralCode: string | null = null;
+    const refRaw = body.referralCode;
+    if (typeof refRaw === "string" && refRaw.trim()) {
+      const norm = normalizeReferralCodeInput(refRaw);
+      if (!isValidReferralCodeFormat(norm)) {
+        return NextResponse.json(
+          { error: "Invalid referral code format.", field: "referralCode" },
+          { status: 400 },
+        );
+      }
+      const refUser = await prisma.user.findFirst({
+        where: { referralCode: norm },
+        select: { id: true },
+      });
+      if (!refUser) {
+        return NextResponse.json(
+          { error: "Referral code not found.", field: "referralCode" },
+          { status: 400 },
+        );
+      }
+      if (refUser.id === dbUser.id) {
+        return NextResponse.json(
+          { error: "You cannot use your own referral code.", field: "referralCode" },
+          { status: 400 },
+        );
+      }
+      pendingReferralCode = norm;
+    }
+
     const trialEndsAt = addDays(new Date(), TRIAL_DAYS);
     const company = await prisma.company.create({
       data: { name, trialEndsAt },
@@ -52,6 +82,7 @@ export async function POST(req: Request) {
       data: {
         companyId: company.id,
         role: dbUser.role === "SUPER_ADMIN" ? "SUPER_ADMIN" : "COMPANY_ADMIN",
+        pendingReferralCode,
       },
     });
 
@@ -103,6 +134,7 @@ export async function POST(req: Request) {
       data: {
         companyId: invitation.companyId,
         role: invitation.role,
+        pendingReferralCode: null,
       },
     });
 

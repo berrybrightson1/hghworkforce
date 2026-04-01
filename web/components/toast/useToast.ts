@@ -11,7 +11,8 @@ export function useToast() {
     if (add) {
       return {
         toast: {
-          success: (message: string) => add({ variant: "success", message }),
+          success: (message: string, opts?: { useRedeemIcon?: boolean }) =>
+            add({ variant: "success", message, useRedeemIcon: opts?.useRedeemIcon }),
           error: (message: string) => add({ variant: "error", message }),
           warning: (message: string) => add({ variant: "warning", message }),
           info: (message: string) => add({ variant: "info", message }),
@@ -25,7 +26,8 @@ export function useToast() {
         : () => {};
     return {
       toast: {
-        success: (message: string) => devLog("toast:success", message),
+        success: (message: string, _opts?: { useRedeemIcon?: boolean }) =>
+          devLog("toast:success", message),
         error: (message: string) => devLog("toast:error", message),
         warning: (message: string) => devLog("toast:warning", message),
         info: (message: string) => devLog("toast:info", message),

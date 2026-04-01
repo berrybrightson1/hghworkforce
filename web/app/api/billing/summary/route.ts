@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
         subscriptionStatus: true,
         trialEndsAt: true,
         createdAt: true,
+        referralAccessUntil: true,
       },
     });
     if (!company) {
@@ -89,6 +90,7 @@ export async function GET(req: NextRequest) {
       subscriptionStatus: true,
       trialEndsAt: true,
       createdAt: true,
+      referralAccessUntil: true,
     },
   });
   if (!company) {

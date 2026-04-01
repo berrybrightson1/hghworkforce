@@ -122,9 +122,8 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-hgh-muted">
-          Payroll and attendance for Ghana teams—pay runs, office kiosk clock-in/out, and a staff portal for payslips,
-          leave, loans, and Attendance (view + corrections). Works great on mobile. Try the full product free for{" "}
-          {TRIAL_DAYS} days; subscribe when you&apos;re ready to keep going.
+          Clock-ins, payslips, leave requests, loan tracking, and attendance corrections — all in one place, built for
+          Ghanaian teams. Staff access it on any device. You get three full days to explore everything, no card required.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">

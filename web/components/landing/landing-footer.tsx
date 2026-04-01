@@ -26,7 +26,7 @@ export function LandingFooter() {
             <span className="hidden md:inline">·</span>
             <span>Ghana · GRA-aligned</span>
             <span className="hidden md:inline">·</span>
-            <span>Secure by design</span>
+            <span>Secure by HGH Workforce</span>
           </div>
         </div>
         <nav
@@ -44,7 +44,7 @@ export function LandingFooter() {
           ))}
         </nav>
         <div className="mt-8 border-t border-white/5 pt-8 text-center text-sm text-white/30">
-          Powered by HGH WorkForce. All rights reserved.
+          Powered by Hoggar Global Holding. 2026 All rights reserved.
         </div>
       </div>
     </footer>

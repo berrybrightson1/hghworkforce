@@ -5,8 +5,21 @@ import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
 import type { ToastMessage, ToastVariant } from "./toast-types";
 import { ToastContext } from "./toast-context";
 
-function ToastIcon({ variant }: { variant: ToastVariant }) {
+function ToastIcon({
+  variant,
+  useRedeemIcon,
+}: {
+  variant: ToastVariant;
+  useRedeemIcon?: boolean;
+}) {
   const cls = "shrink-0";
+  if (variant === "success" && useRedeemIcon) {
+    return (
+      <span className={`material-symbols-outlined ${cls} text-hgh-gold`} style={{ fontSize: 22 }} aria-hidden>
+        redeem
+      </span>
+    );
+  }
   switch (variant) {
     case "success":
       return <CheckCircle2 size={20} className={`${cls} text-hgh-success`} />;
@@ -65,7 +78,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             className={`pointer-events-auto animate-toast-in overflow-hidden rounded-lg border border-white/10 border-l-4 ${borderClass(t.variant)} bg-hgh-navy/95 text-white shadow-lg backdrop-blur-sm`}
           >
             <div className="flex items-start gap-3 p-3">
-              <ToastIcon variant={t.variant} />
+              <ToastIcon variant={t.variant} useRedeemIcon={t.useRedeemIcon} />
               <p className="flex-1 text-sm leading-snug">{t.message}</p>
               <button
                 type="button"

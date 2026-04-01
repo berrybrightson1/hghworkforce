@@ -21,6 +21,7 @@ async function runKioskAbsenceJob() {
       subscriptionStatus: true,
       trialEndsAt: true,
       createdAt: true,
+      referralAccessUntil: true,
     },
   });
 

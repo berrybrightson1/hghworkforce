@@ -2,6 +2,7 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 import type { User } from "@prisma/client";
 import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { generateUniqueReferralCode } from "@/lib/referral-code";
 
 /**
  * Ensures a row exists in `User` for this Supabase account.
@@ -118,6 +119,31 @@ export async function ensureAppUser(
         data: { status: "ACCEPTED" },
       });
     }
+  }
+
+  const patch: {
+    referralCode?: string;
+    firstName?: string | null;
+    lastName?: string | null;
+  } = {};
+
+  if (!row.referralCode) {
+    patch.referralCode = await generateUniqueReferralCode();
+  }
+
+  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  if (parts[0] && !row.firstName) {
+    patch.firstName = parts[0];
+  }
+  if (parts.length > 1 && !row.lastName) {
+    patch.lastName = parts.slice(1).join(" ");
+  }
+
+  if (Object.keys(patch).length > 0) {
+    row = await prisma.user.update({
+      where: { id: row.id },
+      data: patch,
+    });
   }
 
   return row;

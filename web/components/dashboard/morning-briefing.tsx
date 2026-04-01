@@ -41,12 +41,10 @@ function formatLiveTime(d: Date): string {
 }
 
 export function MorningBriefing({
-  userName,
-  userEmail,
+  greetingName,
 }: {
-  userName: string;
-  /** Shown prominently when set (e.g. work email). */
-  userEmail: string;
+  /** Title-cased first and last name (or best available). */
+  greetingName: string;
 }) {
   const { selected } = useCompany();
   const { data } = useApi<BriefingData>(
@@ -61,7 +59,7 @@ export function MorningBriefing({
 
   if (!data) return null;
 
-  const line = userEmail.trim() || userName.trim() || "there";
+  const nameLine = greetingName.trim() || "there";
 
   const statTiles = [
     {
@@ -100,13 +98,10 @@ export function MorningBriefing({
   return (
     <div className="mb-6 rounded-2xl border border-white/10 bg-hgh-navy shadow-lg shadow-hgh-navy/20">
       <div className="grid grid-cols-1 gap-4 p-5 lg:grid-cols-[minmax(0,0.95fr)_auto_minmax(0,2.1fr)] lg:items-center lg:gap-0 lg:p-6">
-        {/* 1 — Left: greeting & date (compact); name/email line slightly emphasized */}
+        {/* 1 — Left: greeting & date (compact) */}
         <div className="flex min-w-0 flex-col justify-center border-b border-white/10 pb-4 lg:border-b-0 lg:border-r lg:pb-0 lg:pr-4">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-hgh-gold/90">
-            {getGreeting()},
-          </p>
-          <p className="mt-0.5 w-full max-w-none break-words text-base font-semibold leading-snug text-white sm:text-lg">
-            {line}
+          <p className="w-full max-w-none break-words text-base font-semibold leading-snug text-white sm:text-lg">
+            {getGreeting()}, {nameLine}
           </p>
           <p className="mt-1.5 text-xs text-white/55">{formatDate()}</p>
         </div>

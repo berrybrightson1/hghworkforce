@@ -12,6 +12,7 @@ export type PlatformCompanyAccessRow = {
   subscriptionStatus: SubscriptionStatus;
   trialEndsAtIso: string | null;
   createdAtIso: string;
+  referralAccessUntilIso: string | null;
   employeeCount: number;
 };
 
@@ -73,7 +74,7 @@ export function PlatformCompaniesAccessBrowser({ companies }: { companies: Platf
               filtered.map((c) => (
                 <tr key={c.id} className="border-b border-hgh-border last:border-0">
                   <td className="px-4 py-2 font-medium text-hgh-navy">{c.name}</td>
-                  <td className="px-4 py-2 font-mono text-xs text-hgh-muted" title={c.id}>
+                  <td className="px-4 py-2 font-mono text-xs text-hgh-muted" aria-label={c.id}>
                     {c.id.length > 12 ? `${c.id.slice(0, 12)}…` : c.id}
                   </td>
                   <td className="px-4 py-2 text-hgh-muted">
@@ -89,6 +90,7 @@ export function PlatformCompaniesAccessBrowser({ companies }: { companies: Platf
                       subscriptionStatus={c.subscriptionStatus}
                       trialEndsAtIso={c.trialEndsAtIso}
                       createdAtIso={c.createdAtIso}
+                      referralAccessUntilIso={c.referralAccessUntilIso}
                     />
                   </td>
                 </tr>

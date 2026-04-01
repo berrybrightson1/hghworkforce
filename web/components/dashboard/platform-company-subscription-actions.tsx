@@ -6,6 +6,7 @@ import type { SubscriptionStatus } from "@prisma/client";
 import { companyHasFullAccess } from "@/lib/billing/access";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/toast/useToast";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 
 type Props = {
   companyId: string;
@@ -13,6 +14,7 @@ type Props = {
   subscriptionStatus: SubscriptionStatus;
   trialEndsAtIso: string | null;
   createdAtIso: string;
+  referralAccessUntilIso?: string | null;
 };
 
 export function PlatformCompanySubscriptionActions({
@@ -21,6 +23,7 @@ export function PlatformCompanySubscriptionActions({
   subscriptionStatus,
   trialEndsAtIso,
   createdAtIso,
+  referralAccessUntilIso,
 }: Props) {
   const router = useRouter();
   const { toast } = useToast();
@@ -30,6 +33,7 @@ export function PlatformCompanySubscriptionActions({
     subscriptionStatus,
     trialEndsAt: trialEndsAtIso ? new Date(trialEndsAtIso) : null,
     createdAt: new Date(createdAtIso),
+    referralAccessUntil: referralAccessUntilIso ? new Date(referralAccessUntilIso) : null,
   });
 
   async function patchStatus(next: SubscriptionStatus, action: "grant" | "revoke") {
@@ -63,9 +67,9 @@ export function PlatformCompanySubscriptionActions({
           {loading === "grant" ? "Saving…" : "Grant full access"}
         </Button>
         {locked ? (
-          <span className="text-xs text-amber-700" title="Trial ended or no subscription">
-            Locked
-          </span>
+          <HintTooltip content="This workspace is past its trial window and does not have an active subscription or referral credit window.">
+            <span className="cursor-help text-xs text-amber-700">Locked</span>
+          </HintTooltip>
         ) : null}
       </div>
     );

@@ -49,7 +49,6 @@ export function CopyIconButton({
         type="button"
         onClick={() => void onCopy()}
         aria-label={label}
-        title={label}
         className={cn(
           "inline-flex shrink-0 items-center justify-center rounded-md text-hgh-muted transition-colors",
           "hover:bg-hgh-offwhite hover:text-hgh-navy focus:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold",

@@ -6,6 +6,7 @@ import { Inbox, ThumbsDown, ThumbsUp } from "lucide-react";
 import { useCompany } from "@/components/company-context";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
@@ -189,11 +190,31 @@ export default function InboxPage() {
     );
   }
 
-  const tabs: { id: Filter; label: string; count: number }[] = [
-    { id: "all", label: "All", count: leave.length + corrections.length + loans.length },
-    { id: "leave", label: "Leave", count: leave.length },
-    { id: "loans", label: "Loans", count: loans.length },
-    { id: "corrections", label: "Attendance", count: corrections.length },
+  const tabs: { id: Filter; label: string; count: number; hint: string }[] = [
+    {
+      id: "all",
+      label: "All",
+      count: leave.length + corrections.length + loans.length,
+      hint: "List every pending leave request, loan application, and attendance correction at once.",
+    },
+    {
+      id: "leave",
+      label: "Leave",
+      count: leave.length,
+      hint: "Show only leave requests awaiting approval or rejection.",
+    },
+    {
+      id: "loans",
+      label: "Loans",
+      count: loans.length,
+      hint: "Filter to loan and advance requests that need a decision.",
+    },
+    {
+      id: "corrections",
+      label: "Attendance",
+      count: corrections.length,
+      hint: "Focus on kiosk attendance correction requests from employees.",
+    },
   ];
 
   return (
@@ -211,26 +232,34 @@ export default function InboxPage() {
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-xs text-hgh-muted">Scope:</span>
-              <button
-                type="button"
-                onClick={() => setScope("all")}
-                className={cn(
-                  "rounded-lg px-3 py-1 text-xs font-medium transition-colors",
-                  scope === "all" ? "bg-hgh-navy text-white" : "bg-hgh-offwhite text-hgh-muted hover:text-hgh-navy",
-                )}
-              >
-                All company
-              </button>
-              <button
-                type="button"
-                onClick={() => setScope("team")}
-                className={cn(
-                  "rounded-lg px-3 py-1 text-xs font-medium transition-colors",
-                  scope === "team" ? "bg-hgh-navy text-white" : "bg-hgh-offwhite text-hgh-muted hover:text-hgh-navy",
-                )}
-              >
-                My team
-              </button>
+              <HintTooltip content="Include pending items for everyone in this workspace you can administer.">
+                <button
+                  type="button"
+                  onClick={() => setScope("all")}
+                  className={cn(
+                    "rounded-lg px-3 py-1 text-xs font-medium transition-colors",
+                    scope === "all"
+                      ? "bg-hgh-navy text-white"
+                      : "bg-hgh-offwhite text-hgh-muted hover:text-hgh-navy",
+                  )}
+                >
+                  All company
+                </button>
+              </HintTooltip>
+              <HintTooltip content="Limit the inbox to people who report to you in HR so you can clear your direct team first.">
+                <button
+                  type="button"
+                  onClick={() => setScope("team")}
+                  className={cn(
+                    "rounded-lg px-3 py-1 text-xs font-medium transition-colors",
+                    scope === "team"
+                      ? "bg-hgh-navy text-white"
+                      : "bg-hgh-offwhite text-hgh-muted hover:text-hgh-navy",
+                  )}
+                >
+                  My team
+                </button>
+              </HintTooltip>
             </div>
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
               <Link href="/dashboard/leave" className="text-hgh-gold underline-offset-2 hover:underline">
@@ -251,20 +280,21 @@ export default function InboxPage() {
 
       <div className="flex flex-wrap gap-1 border-b border-hgh-border pb-2">
         {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setFilter(t.id)}
-            className={cn(
-              "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-              filter === t.id ? "bg-hgh-navy text-white" : "text-hgh-muted hover:bg-hgh-offwhite",
-            )}
-          >
-            {t.label}
-            <Badge variant="default" className="ml-2 tabular-nums">
-              {t.count}
-            </Badge>
-          </button>
+          <HintTooltip key={t.id} content={t.hint} side="bottom" contentClassName="max-w-[17rem]">
+            <button
+              type="button"
+              onClick={() => setFilter(t.id)}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                filter === t.id ? "bg-hgh-navy text-white" : "text-hgh-muted hover:bg-hgh-offwhite",
+              )}
+            >
+              {t.label}
+              <Badge variant="default" className="ml-2 tabular-nums">
+                {t.count}
+              </Badge>
+            </button>
+          </HintTooltip>
         ))}
       </div>
 

@@ -103,7 +103,12 @@ export async function gateCompanyBilling(dbUser: User, companyId: string): Promi
   }
   const row = await prisma.company.findUnique({
     where: { id: companyId },
-    select: { subscriptionStatus: true, trialEndsAt: true, createdAt: true },
+    select: {
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      createdAt: true,
+      referralAccessUntil: true,
+    },
   });
   if (!row) return NextResponse.json({ error: "Company not found" }, { status: 404 });
   if (!companyHasFullAccess(row)) return subscriptionRequiredResponse();
@@ -114,7 +119,12 @@ export async function gateCompanyBilling(dbUser: User, companyId: string): Promi
 export async function gateCompanyBillingEmployee(companyId: string): Promise<NextResponse | null> {
   const row = await prisma.company.findUnique({
     where: { id: companyId },
-    select: { subscriptionStatus: true, trialEndsAt: true, createdAt: true },
+    select: {
+      subscriptionStatus: true,
+      trialEndsAt: true,
+      createdAt: true,
+      referralAccessUntil: true,
+    },
   });
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!companyHasFullAccess(row)) return subscriptionRequiredResponse();

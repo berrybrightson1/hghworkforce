@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArrowLeft, Building2, UserPlus } from "lucide-react";
 import { useToast } from "@/components/toast/useToast";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 
 type Mode = "choose" | "create" | "join";
 
@@ -12,6 +13,8 @@ export function OnboardingForm() {
   const { toast } = useToast();
   const [mode, setMode] = useState<Mode>("choose");
   const [companyName, setCompanyName] = useState("");
+  const [referralCode, setReferralCode] = useState("");
+  const [referralError, setReferralError] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -20,11 +23,16 @@ export function OnboardingForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setReferralError(null);
     setSubmitting(true);
 
     const body =
       mode === "create"
-        ? { action: "create_company", companyName }
+        ? {
+            action: "create_company",
+            companyName,
+            referralCode: referralCode.trim() || undefined,
+          }
         : {
             action: "join_company",
             inviteCode: inviteCode.trim().toUpperCase().replace(/\s+/g, ""),
@@ -40,6 +48,10 @@ export function OnboardingForm() {
     setSubmitting(false);
 
     if (!res.ok) {
+      if (data.field === "referralCode" && typeof data.error === "string") {
+        setReferralError(data.error);
+        return;
+      }
       toast.error(data.error ?? "Something went wrong");
       return;
     }
@@ -56,59 +68,68 @@ export function OnboardingForm() {
   if (mode === "choose") {
     return (
       <div className="space-y-4">
-        <button
-          type="button"
-          onClick={() => setMode("create")}
-          className="group flex w-full items-center gap-4 rounded-xl border border-hgh-border bg-white p-5 text-left transition-all hover:border-hgh-gold/40 hover:shadow-md"
-        >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-hgh-navy transition-colors group-hover:bg-hgh-gold">
-            <Building2
-              className="h-6 w-6 text-hgh-gold transition-colors group-hover:text-hgh-navy"
-              strokeWidth={2}
-              aria-hidden
-            />
-          </div>
-          <div>
-            <p className="font-semibold text-hgh-navy">Create a company</p>
-            <p className="mt-0.5 text-sm text-hgh-muted">
-              Set up a new company workspace and start managing payroll
-            </p>
-          </div>
-        </button>
+        <HintTooltip content="Start a new workspace with you as company admin. You will set up payroll, employees, and the office kiosk next.">
+          <button
+            type="button"
+            onClick={() => setMode("create")}
+            className="group flex w-full items-center gap-4 rounded-xl border border-hgh-border bg-white p-5 text-left transition-all hover:border-hgh-gold/40 hover:shadow-md"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-hgh-navy transition-colors group-hover:bg-hgh-gold">
+              <Building2
+                className="h-6 w-6 text-hgh-gold transition-colors group-hover:text-hgh-navy"
+                strokeWidth={2}
+                aria-hidden
+              />
+            </div>
+            <div>
+              <p className="font-semibold text-hgh-navy">Create a company</p>
+              <p className="mt-0.5 text-sm text-hgh-muted">
+                Set up a new company workspace and start managing payroll
+              </p>
+            </div>
+          </button>
+        </HintTooltip>
 
-        <button
-          type="button"
-          onClick={() => setMode("join")}
-          className="group flex w-full items-center gap-4 rounded-xl border border-hgh-border bg-white p-5 text-left transition-all hover:border-hgh-gold/40 hover:shadow-md"
-        >
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-hgh-navy transition-colors group-hover:bg-hgh-gold">
-            <UserPlus
-              className="h-6 w-6 text-hgh-gold transition-colors group-hover:text-hgh-navy"
-              strokeWidth={2}
-              aria-hidden
-            />
-          </div>
-          <div>
-            <p className="font-semibold text-hgh-navy">Join with invite code</p>
-            <p className="mt-0.5 text-sm text-hgh-muted">
-              Enter an invite code from your company administrator
-            </p>
-          </div>
-        </button>
+        <HintTooltip content="Use the invitation code HR emailed you. This links your login to an existing company and role.">
+          <button
+            type="button"
+            onClick={() => setMode("join")}
+            className="group flex w-full items-center gap-4 rounded-xl border border-hgh-border bg-white p-5 text-left transition-all hover:border-hgh-gold/40 hover:shadow-md"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-hgh-navy transition-colors group-hover:bg-hgh-gold">
+              <UserPlus
+                className="h-6 w-6 text-hgh-gold transition-colors group-hover:text-hgh-navy"
+                strokeWidth={2}
+                aria-hidden
+              />
+            </div>
+            <div>
+              <p className="font-semibold text-hgh-navy">Join with invite code</p>
+              <p className="mt-0.5 text-sm text-hgh-muted">
+                Enter an invite code from your company administrator
+              </p>
+            </div>
+          </button>
+        </HintTooltip>
       </div>
     );
   }
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => setMode("choose")}
-        className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-hgh-muted transition-colors hover:text-hgh-navy"
-      >
-        <ArrowLeft className="h-[18px] w-[18px]" aria-hidden />
-        Back
-      </button>
+      <HintTooltip content="Return to choose between creating a new company or joining with an invite.">
+        <button
+          type="button"
+          onClick={() => {
+            setMode("choose");
+            setReferralError(null);
+          }}
+          className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-hgh-muted transition-colors hover:text-hgh-navy"
+        >
+          <ArrowLeft className="h-[18px] w-[18px]" aria-hidden />
+          Back
+        </button>
+      </HintTooltip>
 
       <div className="rounded-xl border border-hgh-border bg-white p-6">
         <div className="mb-5 flex items-center gap-3">
@@ -133,30 +154,49 @@ export function OnboardingForm() {
 
         <form onSubmit={handleSubmit}>
           {mode === "create" ? (
-            <div>
-              <label
-                htmlFor="companyName"
-                className="mb-1.5 block text-sm font-medium text-hgh-slate"
-              >
-                Company name
-              </label>
-              <input
-                id="companyName"
-                type="text"
-                placeholder="e.g. Hobort Shipping & Logistics"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className={inputClass}
-                required
-                minLength={2}
-              />
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="companyName" className="mb-1.5 block text-sm font-medium text-hgh-slate">
+                  Company name
+                </label>
+                <input
+                  id="companyName"
+                  type="text"
+                  placeholder="e.g. Hobort Shipping & Logistics"
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  className={inputClass}
+                  required
+                  minLength={2}
+                />
+              </div>
+              <div>
+                <label htmlFor="referralCode" className="mb-1.5 block text-sm font-medium text-hgh-slate">
+                  Referral code <span className="font-normal text-hgh-muted">(optional)</span>
+                </label>
+                <input
+                  id="referralCode"
+                  type="text"
+                  placeholder="e.g. HGH-ABC123"
+                  value={referralCode}
+                  onChange={(e) => {
+                    setReferralCode(e.target.value.toUpperCase());
+                    setReferralError(null);
+                  }}
+                  className={inputClass}
+                  autoComplete="off"
+                />
+                <p className="mt-1.5 text-xs text-hgh-muted">
+                  Have a referral code? Enter it to help your contact earn a free month.
+                </p>
+                {referralError ? (
+                  <p className="mt-1.5 text-xs text-hgh-danger">{referralError}</p>
+                ) : null}
+              </div>
             </div>
           ) : (
             <div>
-              <label
-                htmlFor="inviteCode"
-                className="mb-1.5 block text-sm font-medium text-hgh-slate"
-              >
+              <label htmlFor="inviteCode" className="mb-1.5 block text-sm font-medium text-hgh-slate">
                 Invite code
               </label>
               <input
@@ -171,22 +211,30 @@ export function OnboardingForm() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-hgh-gold font-semibold text-hgh-navy transition-all hover:bg-hgh-gold/90 focus:outline-none focus:ring-2 focus:ring-hgh-gold focus:ring-offset-2 disabled:opacity-60"
+          <HintTooltip
+            content={
+              mode === "create"
+                ? "Creates the company and attaches your account as admin. Add a referral code before continuing if someone invited you."
+                : "Accepts your invitation and opens the correct company workspace with the role HR assigned."
+            }
           >
-            {submitting ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-hgh-navy/30 border-t-hgh-navy" />
-                {mode === "create" ? "Creating..." : "Joining..."}
-              </>
-            ) : mode === "create" ? (
-              "Create company"
-            ) : (
-              "Join company"
-            )}
-          </button>
+            <button
+              type="submit"
+              disabled={submitting}
+              className="mt-5 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-hgh-gold font-semibold text-hgh-navy transition-all hover:bg-hgh-gold/90 focus:outline-none focus:ring-2 focus:ring-hgh-gold focus:ring-offset-2 disabled:opacity-60"
+            >
+              {submitting ? (
+                <>
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-hgh-navy/30 border-t-hgh-navy" />
+                  {mode === "create" ? "Creating..." : "Joining..."}
+                </>
+              ) : mode === "create" ? (
+                "Create company"
+              ) : (
+                "Join company"
+              )}
+            </button>
+          </HintTooltip>
         </form>
       </div>
     </div>

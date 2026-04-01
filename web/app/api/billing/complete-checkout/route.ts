@@ -1,8 +1,10 @@
+import { addDays } from "date-fns";
 import { NextRequest, NextResponse } from "next/server";
 import { SubscriptionStatus } from "@prisma/client";
 import { canAccessCompany, canManageBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 import { getStripe } from "@/lib/stripe-server";
+import { normalizeReferralCodeInput } from "@/lib/referral-code";
 
 /**
  * POST /api/billing/complete-checkout
@@ -51,9 +53,83 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await prisma.company.update({
-      where: { id: companyId },
-      data: { subscriptionStatus: SubscriptionStatus.ACTIVE },
+    await prisma.$transaction(async (tx) => {
+      await tx.company.update({
+        where: { id: companyId },
+        data: { subscriptionStatus: SubscriptionStatus.ACTIVE },
+      });
+
+      const referee = await tx.user.findUnique({
+        where: { id: auth.dbUser.id },
+        select: {
+          id: true,
+          name: true,
+          pendingReferralCode: true,
+          companyId: true,
+        },
+      });
+
+      if (!referee?.pendingReferralCode || referee.companyId !== companyId) {
+        return;
+      }
+
+      const code = normalizeReferralCodeInput(referee.pendingReferralCode);
+      const referrer = await tx.user.findFirst({
+        where: { referralCode: code },
+        select: { id: true, companyId: true },
+      });
+
+      if (!referrer?.companyId || referrer.id === referee.id) {
+        await tx.user.update({
+          where: { id: referee.id },
+          data: { pendingReferralCode: null },
+        });
+        return;
+      }
+
+      const existing = await tx.referralReward.findUnique({
+        where: { refereeId: referee.id },
+      });
+      if (existing) {
+        await tx.user.update({
+          where: { id: referee.id },
+          data: { pendingReferralCode: null },
+        });
+        return;
+      }
+
+      const refCompany = await tx.company.findUnique({
+        where: { id: referrer.companyId },
+        select: { referralAccessUntil: true },
+      });
+
+      const anchorMs =
+        refCompany?.referralAccessUntil && refCompany.referralAccessUntil.getTime() > Date.now()
+          ? refCompany.referralAccessUntil.getTime()
+          : Date.now();
+      const referralAccessUntil = addDays(new Date(anchorMs), 30);
+
+      await tx.company.update({
+        where: { id: referrer.companyId },
+        data: { referralAccessUntil },
+      });
+
+      await tx.referralReward.create({
+        data: {
+          referrerId: referrer.id,
+          refereeId: referee.id,
+          refereeDisplayName: referee.name,
+          appliedToSubscription: true,
+        },
+      });
+
+      await tx.user.update({
+        where: { id: referee.id },
+        data: {
+          pendingReferralCode: null,
+          referredByUserId: referrer.id,
+        },
+      });
     });
 
     return NextResponse.json({ ok: true, companyId });

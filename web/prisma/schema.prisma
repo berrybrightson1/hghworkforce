@@ -130,6 +130,9 @@ model Company {
   /// DEFAULT | MINIMAL | STRIPED
   payslipThemeVariant     String @default("DEFAULT")
 
+  /// Referral reward: extends full product access for this company (stackable days).
+  referralAccessUntil DateTime?
+
   /// Overtime pay = sum(overtime hours in period) × implied hourly rate × multiplier
   overtimeHourlyMultiplier           Decimal @default(1.5) @db.Decimal(5, 2)
   standardHoursPerMonth              Decimal @default(173) @db.Decimal(6, 2)
@@ -158,6 +161,15 @@ model User {
   authUserId String   @unique
   email      String   @unique
   name       String
+  /// Optional given name for greetings (also derived from name on signup).
+  firstName  String?
+  lastName   String?
+  /// Unique shareable code e.g. HGH-ABC123
+  referralCode        String? @unique
+  /// Set when subscription completes after onboarding with a valid referral code.
+  referredByUserId    String?
+  /// Raw referral code collected at company creation (pending until first paid checkout).
+  pendingReferralCode String?
   role       UserRole
   isActive   Boolean  @default(true)
   companyId  String?
@@ -166,6 +178,8 @@ model User {
 
   company                        Company?                      @relation(fields: [companyId], references: [id])
   employee                       Employee?
+  referredBy                     User?                         @relation("UserReferrals", fields: [referredByUserId], references: [id])
+  referees                       User[]                        @relation("UserReferrals")
   /// Employees who report to this dashboard user (leave/inbox "my team").
   managedEmployees               Employee[]                    @relation("EmployeeManager")
   auditLogs                      AuditLog[]
@@ -176,9 +190,37 @@ model User {
   payQueriesAnswered             PayQuery[]                      @relation("PayQueryResponder")
   profileChangeReviews           ProfileChangeRequest[]          @relation("ProfileChangeReviewer")
   anonymousFeedbackReviewed      AnonymousFeedback[]             @relation("AnonymousFeedbackReviewer")
+  referralsGiven                 ReferralReward[]                @relation("UserReferralRewardsGiven")
+  referralsReceived              ReferralReward[]                @relation("UserReferralRewardsReceived")
 
   @@index([authUserId])
   @@index([companyId, role])
+  @@index([referredByUserId])
+}
+
+model TrialDevice {
+  id          String    @id @default(cuid())
+  fingerprint String    @unique
+  emailsUsed  String[]
+  blockedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ReferralReward {
+  id                    String   @id @default(cuid())
+  referrerId            String
+  refereeId             String
+  refereeDisplayName    String?
+  awardedAt             DateTime @default(now())
+  appliedToSubscription Boolean  @default(false)
+  toastShownAt          DateTime?
+  referrer              User     @relation("UserReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee               User     @relation("UserReferralRewardsReceived", fields: [refereeId], references: [id], onDelete: Cascade)
+
+  @@unique([refereeId])
+  @@index([referrerId])
+  @@index([referrerId, toastShownAt])
 }
 
 model Employee {

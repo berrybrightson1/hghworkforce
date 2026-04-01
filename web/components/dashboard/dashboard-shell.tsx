@@ -38,6 +38,8 @@ import type { UserRole } from "@prisma/client";
 import React, { useMemo } from "react";
 import { Breadcrumbs } from "@/components/dashboard/breadcrumbs";
 import { TrialBillingBanner } from "@/components/dashboard/trial-billing-banner";
+import { ReferralToastListener } from "@/components/dashboard/referral-toast-listener";
+import { HintTooltip } from "@/components/ui/hint-tooltip";
 import {
   Tooltip,
   TooltipContent,
@@ -608,16 +610,22 @@ export function DashboardShell({
         <header className="sticky top-0 z-40 shrink-0 border-b border-hgh-border bg-white/95 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-white/85 md:px-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2">
-              <button
-                type="button"
-                className="mt-0.5 shrink-0 rounded-lg border border-hgh-border bg-hgh-offwhite p-2 text-hgh-navy hover:bg-hgh-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40 md:hidden"
-                aria-controls="dashboard-mobile-drawer"
-                aria-haspopup="dialog"
-                aria-label="Open navigation menu"
-                onClick={() => setMobileNavOpen(true)}
+              <HintTooltip
+                content="Open the sidebar menu to jump to another section on small screens."
+                side="bottom"
+                contentClassName="max-w-[16rem]"
               >
-                <Menu size={20} />
-              </button>
+                <button
+                  type="button"
+                  className="mt-0.5 shrink-0 rounded-lg border border-hgh-border bg-hgh-offwhite p-2 text-hgh-navy hover:bg-hgh-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40 md:hidden"
+                  aria-controls="dashboard-mobile-drawer"
+                  aria-haspopup="dialog"
+                  aria-label="Open navigation menu"
+                  onClick={() => setMobileNavOpen(true)}
+                >
+                  <Menu size={20} />
+                </button>
+              </HintTooltip>
               <div className="min-w-0 flex-1">
                 <div className="max-w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
                   <Breadcrumbs />
@@ -626,12 +634,15 @@ export function DashboardShell({
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-              <span
-                className="max-w-[min(160px,45vw)] truncate rounded-md bg-hgh-gold/10 px-2.5 py-1 text-xs font-medium text-hgh-gold sm:max-w-none"
-                title={userRole.replace("_", " ")}
+              <HintTooltip
+                content="Your permission level in this workspace. Admins configure payroll, attendance, and access; HR-focused roles manage people workflows."
+                side="bottom"
+                contentClassName="max-w-[18rem]"
               >
-                {userRole.replace("_", " ")}
-              </span>
+                <span className="max-w-[min(160px,45vw)] truncate rounded-md bg-hgh-gold/10 px-2.5 py-1 text-xs font-medium text-hgh-gold sm:max-w-none cursor-help">
+                  {userRole.replace("_", " ")}
+                </span>
+              </HintTooltip>
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-medium text-hgh-navy">{userDisplayName}</p>
                 <p className="max-w-[200px] truncate text-xs text-hgh-muted">{userEmail}</p>
@@ -640,6 +651,7 @@ export function DashboardShell({
           </div>
         </header>
         <main className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-4 md:p-8">
+          <ReferralToastListener />
           <TrialBillingBanner userRole={userRole} />
           {children}
         </main>

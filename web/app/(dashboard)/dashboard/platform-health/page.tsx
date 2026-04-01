@@ -59,6 +59,7 @@ export default async function PlatformHealthPage() {
         name: true,
         subscriptionStatus: true,
         trialEndsAt: true,
+        referralAccessUntil: true,
         createdAt: true,
         _count: { select: { employees: true } },
       },
@@ -70,6 +71,7 @@ export default async function PlatformHealthPage() {
     name: c.name,
     subscriptionStatus: c.subscriptionStatus,
     trialEndsAtIso: c.trialEndsAt ? c.trialEndsAt.toISOString() : null,
+    referralAccessUntilIso: c.referralAccessUntil ? c.referralAccessUntil.toISOString() : null,
     createdAtIso: c.createdAt.toISOString(),
     employeeCount: c._count.employees,
   }));

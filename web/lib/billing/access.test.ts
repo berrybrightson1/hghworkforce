@@ -73,5 +73,16 @@ describe("billing/access", () => {
       const c = makeCompany({ trialEndsAt: past, subscriptionStatus: "ACTIVE" });
       expect(companyHasFullAccess(c)).toBe(true);
     });
+
+    it("grants access during referralAccessUntil even after trial expires", () => {
+      const past = new Date(Date.now() - 86_400_000);
+      const future = new Date(Date.now() + 86_400_000 * 10);
+      const c = makeCompany({
+        trialEndsAt: past,
+        subscriptionStatus: "NONE",
+        referralAccessUntil: future,
+      });
+      expect(companyHasFullAccess(c)).toBe(true);
+    });
   });
 });

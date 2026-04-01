@@ -24,7 +24,7 @@ import { PayrollForecast } from "@/components/dashboard/payroll-forecast";
 import { CostRevenueCompact } from "@/components/dashboard/cost-revenue-compact";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
 
-type MeData = { name: string; role: string; email: string };
+type MeData = { name: string; role: string; email: string; greetingName: string };
 
 export default function DashboardPage() {
   const { companies, selected } = useCompany();
@@ -106,7 +106,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Morning Briefing — canManage() roles only */}
-      {isManager && me && <MorningBriefing userName={me.name} userEmail={me.email} />}
+      {isManager && me && <MorningBriefing greetingName={me.greetingName} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
