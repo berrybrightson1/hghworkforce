@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  canManageCheckinSecurity,
+  canHrDashboard,
   gateCompanyBilling,
   gateBillingForEmployeeSelf,
   requireDbUser,
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   const billing = await gateCompanyBilling(auth.dbUser, companyId);
   if (billing) return billing;
 
-  if (!canManageCheckinSecurity(auth.dbUser.role)) {
+  if (!canHrDashboard(auth.dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
         requestedByUserId = auth.dbUser.id;
-      } else if (!canManageCheckinSecurity(auth.dbUser.role)) {
+      } else if (!canHrDashboard(auth.dbUser.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       } else {
         requestedByUserId = auth.dbUser.id;

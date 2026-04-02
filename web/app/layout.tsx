@@ -17,14 +17,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HGH Payroll",
+  title: {
+    default: "HGH WorkForce",
+    template: "%s | HGH WorkForce",
+  },
   description: `Payroll and attendance for Ghana — PAYE, SSNIT, payslips, and employee self-service. ${TRIAL_DAYS}-day full-access trial per workspace, then subscribe.`,
   icons: {
     icon: "/hgh-logo.svg",
   },
   appleWebApp: {
     capable: true,
-    title: "HGH Payroll",
+    title: "HGH WorkForce",
     statusBarStyle: "default",
   },
 };

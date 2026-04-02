@@ -20,10 +20,15 @@ export function AuthLayout({
   children,
   heading,
   subheading,
+  backHref = "/",
+  backLabel = "Back to home",
 }: {
   children: React.ReactNode;
   heading: string;
   subheading: string;
+  /** Primary nav link above the form (default: home). */
+  backHref?: string;
+  backLabel?: string;
 }) {
   return (
     <div className="flex min-h-screen">
@@ -71,11 +76,11 @@ export function AuthLayout({
         <div className="w-full max-w-md">
           {/* Back to home + mobile logo */}
           <Link
-            href="/"
+            href={backHref}
             className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-hgh-muted transition-colors hover:text-hgh-navy"
           >
             <ArrowLeft className="h-[18px] w-[18px]" aria-hidden />
-            Back to home
+            {backLabel}
           </Link>
 
           <div className="mb-8 flex items-center gap-3 lg:hidden">

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { Rocket } from "lucide-react";
 import { ensureAppUser } from "@/lib/ensure-app-user";
@@ -37,7 +38,7 @@ export default async function OnboardingPage() {
             <Rocket className="h-7 w-7 text-hgh-navy" strokeWidth={2} aria-hidden />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-hgh-navy">
-            Welcome to HGH Payroll
+            Welcome to HGH WorkForce
           </h1>
           <p className="mt-2 text-sm text-hgh-muted">
             Hi {displayName}! Create your first company to start a {TRIAL_DAYS}-day full-access trial; subscribe later
@@ -45,7 +46,9 @@ export default async function OnboardingPage() {
           </p>
         </div>
 
-        <OnboardingForm />
+        <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-hgh-border/30" />}>
+          <OnboardingForm />
+        </Suspense>
       </div>
     </div>
   );

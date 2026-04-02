@@ -59,9 +59,27 @@ async function resolveProtectedPortalRoute(
 
 function safeNextPath(raw: string | null): string {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
-  if (raw.startsWith("/dashboard") || raw.startsWith("/portal") || raw === "/onboarding")
+  const pathOnly = raw.split("?")[0] ?? "";
+  if (
+    pathOnly.startsWith("/dashboard") ||
+    pathOnly.startsWith("/portal") ||
+    pathOnly === "/onboarding" ||
+    pathOnly.startsWith("/update-password")
+  ) {
     return raw;
+  }
   return "/dashboard";
+}
+
+/** Apply pathname + query from a validated internal next string (e.g. /onboarding?ref=). */
+function redirectToSafeNext(base: URL, rawNext: string | null): URL {
+  const safe = safeNextPath(rawNext);
+  const parsed = new URL(safe, base.origin);
+  const url = new URL(base.href);
+  url.pathname = parsed.pathname;
+  url.search = parsed.search;
+  url.hash = "";
+  return url;
 }
 
 function clearSupabaseCookiesFromRequest(request: NextRequest, response: NextResponse) {
@@ -134,7 +152,8 @@ export async function updateSession(request: NextRequest) {
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/sign-in";
-    url.searchParams.set("next", path);
+    const nextDest = `${path}${request.nextUrl.search}`;
+    url.searchParams.set("next", nextDest);
     const redirect = NextResponse.redirect(url);
     if (authSessionInvalid) clearSupabaseCookiesFromRequest(request, redirect);
     return redirect;
@@ -145,14 +164,11 @@ export async function updateSession(request: NextRequest) {
     clearSupabaseCookiesFromRequest(request, supabaseResponse);
   }
 
-  // Logged in + auth page -> redirect to dashboard
+  // Logged in + auth page -> redirect to dashboard (or ?next= path + query)
   if (user && isAuthPage) {
     const nextRaw = request.nextUrl.searchParams.get("next");
-    const target = safeNextPath(nextRaw);
-    const url = request.nextUrl.clone();
-    url.pathname = target;
-    url.search = "";
-    return NextResponse.redirect(url);
+    const dest = redirectToSafeNext(request.nextUrl, nextRaw);
+    return NextResponse.redirect(dest);
   }
 
   // Role-based routing (Prisma-backed; layouts still enforce as backup)

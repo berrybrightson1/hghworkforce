@@ -2,13 +2,14 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { AuthSubmitSpinner } from "@/components/auth/auth-submit-spinner";
 import { useToast } from "@/components/toast/useToast";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
+import { newPasswordValueSchema } from "@/lib/auth-password-policy";
 import { DISPOSABLE_EMAIL_USER_MESSAGE } from "@/lib/disposable-email-copy";
 import { computeDeviceFingerprint } from "@/lib/device-fingerprint";
 import { createClient } from "@/lib/supabase/client";
@@ -17,11 +18,7 @@ const schema = z
   .object({
     fullName: z.string().min(2, "Full name is required"),
     email: z.string().email("Enter a valid email"),
-    password: z
-      .string()
-      .min(8, "Password must be at least 8 characters")
-      .regex(/[A-Z]/, "Include at least one uppercase letter")
-      .regex(/[0-9]/, "Include at least one number"),
+    password: newPasswordValueSchema,
     confirmPassword: z.string().min(1, "Confirm your password"),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -80,6 +77,7 @@ function EyeOffIcon({ className }: { className?: string }) {
 
 export function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -194,7 +192,13 @@ export function SignUpForm() {
 
       setSubmitting(false);
       toast.success("Account created. Welcome to HGH WorkForce.");
-      router.push("/sign-in");
+      const ref = searchParams.get("ref")?.trim();
+      if (ref && ref.length > 0) {
+        const nextOnboarding = `/onboarding?ref=${encodeURIComponent(ref.toUpperCase().replace(/\s+/g, ""))}`;
+        router.push(`/sign-in?next=${encodeURIComponent(nextOnboarding)}`);
+      } else {
+        router.push("/sign-in");
+      }
     } catch {
       setSubmitting(false);
       toast.error("Something went wrong. Try again.");

@@ -121,7 +121,7 @@ export const ReportDocument = ({ data }: { data: ReportData }) => {
         </View>
 
         <Text style={styles.footer}>
-          Generated on {new Date().toLocaleString()} &bull; HGH Payroll
+          Generated on {new Date().toLocaleString()} &bull; HGH WorkForce
         </Text>
       </Page>
     </Document>

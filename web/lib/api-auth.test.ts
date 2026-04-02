@@ -7,9 +7,12 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: vi.fn() }));
 import type { User } from "@prisma/client";
 import {
   canAccessCompany,
+  canAdminCompany,
+  canHrDashboard,
   canManagePayroll,
   canApprovePayroll,
   canManageBilling,
+  canViewBillingSummary,
   canManageLeave,
   canManageCheckinSecurity,
 } from "./api-auth";
@@ -57,6 +60,28 @@ describe("canAccessCompany", () => {
 });
 
 describe("role-based permission helpers", () => {
+  describe("canAdminCompany", () => {
+    it.each([
+      ["SUPER_ADMIN", true],
+      ["COMPANY_ADMIN", true],
+      ["HR", false],
+      ["EMPLOYEE", false],
+    ] as const)("%s → %s", (role, expected) => {
+      expect(canAdminCompany(role)).toBe(expected);
+    });
+  });
+
+  describe("canHrDashboard", () => {
+    it.each([
+      ["SUPER_ADMIN", true],
+      ["COMPANY_ADMIN", true],
+      ["HR", true],
+      ["EMPLOYEE", false],
+    ] as const)("%s → %s", (role, expected) => {
+      expect(canHrDashboard(role)).toBe(expected);
+    });
+  });
+
   describe("canManagePayroll", () => {
     it.each([
       ["SUPER_ADMIN", true],
@@ -101,11 +126,22 @@ describe("role-based permission helpers", () => {
     });
   });
 
-  describe("canManageCheckinSecurity", () => {
+  describe("canViewBillingSummary", () => {
     it.each([
       ["SUPER_ADMIN", true],
       ["COMPANY_ADMIN", true],
       ["HR", true],
+      ["EMPLOYEE", false],
+    ] as const)("%s → %s", (role, expected) => {
+      expect(canViewBillingSummary(role)).toBe(expected);
+    });
+  });
+
+  describe("canManageCheckinSecurity", () => {
+    it.each([
+      ["SUPER_ADMIN", true],
+      ["COMPANY_ADMIN", true],
+      ["HR", false],
       ["EMPLOYEE", false],
     ] as const)("%s → %s", (role, expected) => {
       expect(canManageCheckinSecurity(role)).toBe(expected);

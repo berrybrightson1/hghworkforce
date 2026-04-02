@@ -423,60 +423,66 @@ export default function PayrunDetailPage() {
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <HintTooltip content="Record that salaries for this approved run have been paid (internal tracking).">
-                  <Button
-                    size="sm"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      patchMarkPaid(
-                        "mark-paid",
-                        { action: "mark-paid" },
-                        {
-                          onOk: () => toast.success("Payrun marked as paid"),
-                          errMsg: "Failed to mark as paid",
-                        },
-                      )
-                    }
-                  >
-                    {busy === "mark-paid" ? "…" : "Mark as Paid"}
-                  </Button>
-                </HintTooltip>
-                <div className="flex items-center gap-1">
-                  <DatePickerField
-                    value={payDate}
-                    onChange={setPayDate}
-                    placeholder="Pay date"
-                    disabled={busy !== null}
-                    className="min-w-0"
-                    triggerClassName="h-8 max-w-[11rem] text-xs"
-                  />
-                  <HintTooltip content="Save the intended salary payment date (shown on this pay run card).">
+              {canApprove ? (
+                <div className="flex flex-wrap gap-2">
+                  <HintTooltip content="Record that salaries for this approved run have been paid (internal tracking).">
                     <Button
                       size="sm"
-                      variant="secondary"
-                      disabled={busy !== null || !payDate}
+                      disabled={busy !== null}
                       onClick={() =>
                         patchMarkPaid(
-                          "set-pay-date",
-                          { action: "set-pay-date", scheduledPayDate: payDate },
+                          "mark-paid",
+                          { action: "mark-paid" },
                           {
-                            onOk: () => {
-                              toast.info(
-                                `Payment date set for ${new Date(payDate).toLocaleDateString()}`,
-                              );
-                              setPayDate("");
-                            },
-                            errMsg: "Failed to set date",
+                            onOk: () => toast.success("Payrun marked as paid"),
+                            errMsg: "Failed to mark as paid",
                           },
                         )
                       }
                     >
-                      {busy === "set-pay-date" ? "…" : "Set Date"}
+                      {busy === "mark-paid" ? "…" : "Mark as Paid"}
                     </Button>
                   </HintTooltip>
+                  <div className="flex items-center gap-1">
+                    <DatePickerField
+                      value={payDate}
+                      onChange={setPayDate}
+                      placeholder="Pay date"
+                      disabled={busy !== null}
+                      className="min-w-0"
+                      triggerClassName="h-8 max-w-[11rem] text-xs"
+                    />
+                    <HintTooltip content="Save the intended salary payment date (shown on this pay run card).">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={busy !== null || !payDate}
+                        onClick={() =>
+                          patchMarkPaid(
+                            "set-pay-date",
+                            { action: "set-pay-date", scheduledPayDate: payDate },
+                            {
+                              onOk: () => {
+                                toast.info(
+                                  `Payment date set for ${new Date(payDate).toLocaleDateString()}`,
+                                );
+                                setPayDate("");
+                              },
+                              errMsg: "Failed to set date",
+                            },
+                          )
+                        }
+                      >
+                        {busy === "set-pay-date" ? "…" : "Set Date"}
+                      </Button>
+                    </HintTooltip>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <p className="text-xs text-hgh-muted">
+                  Only a company administrator can mark this run paid or set the payment date.
+                </p>
+              )}
             </>
           )}
         </div>

@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "HGH Payroll & Workforce",
-    short_name: "HGH",
+    name: "HGH WorkForce",
+    short_name: "WorkForce",
     description: "Payroll, attendance, and employee self-service for Ghana teams.",
     start_url: "/",
     display: "standalone",

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { UserRole } from "@prisma/client";
 import {
   canAccessCompany,
-  canManageBilling,
+  canViewBillingSummary,
   requireDbUser,
   requireEmployeeSelf,
 } from "@/lib/api-auth";
@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * GET /api/billing/summary?companyId=
- * Trial + subscription state (company admin / super admin only).
+ * Trial + subscription state (company admin, super admin, or HR read-only).
  */
 export async function GET(req: NextRequest) {
   const companyId = req.nextUrl.searchParams.get("companyId");
@@ -53,6 +53,8 @@ export async function GET(req: NextRequest) {
     const locked = !fullAccess;
     const subscribed = isSubscriptionActive(company);
     const trialEndsAt = effectiveTrialEndsAt(company);
+    const trialCountdownActive =
+      tenantHasAccess && Date.now() < trialEndsAt.getTime() && !subscribed;
 
     return NextResponse.json({
       companyId: company.id,
@@ -64,10 +66,7 @@ export async function GET(req: NextRequest) {
       fullAccess,
       locked,
       superAdminExempt,
-      msRemaining:
-        !superAdminExempt && tenantHasAccess && Date.now() < trialEndsAt.getTime() && !subscribed
-          ? msUntilTrialEnd(company)
-          : 0,
+      msRemaining: trialCountdownActive ? msUntilTrialEnd(company) : 0,
       paymentProviderConfigured: isPaymentProviderConfigured(),
     });
   }
@@ -78,7 +77,7 @@ export async function GET(req: NextRequest) {
   if (!canAccessCompany(auth.dbUser, companyId)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  if (!canManageBilling(auth.dbUser.role)) {
+  if (!canViewBillingSummary(auth.dbUser.role)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -103,10 +102,9 @@ export async function GET(req: NextRequest) {
   const tenantHasAccess = companyHasFullAccess(company);
   const fullAccess = superAdminExempt || tenantHasAccess;
   const locked = !fullAccess;
-  const msRemaining =
-    !superAdminExempt && tenantHasAccess && Date.now() < trialEndsAt.getTime() && !subscribed
-      ? msUntilTrialEnd(company)
-      : 0;
+  const trialCountdownActive =
+    tenantHasAccess && Date.now() < trialEndsAt.getTime() && !subscribed;
+  const msRemaining = trialCountdownActive ? msUntilTrialEnd(company) : 0;
 
   return NextResponse.json({
     companyId: company.id,

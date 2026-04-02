@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireDbUser, canManage, gateCompanyBilling } from "@/lib/api-auth";
+import { requireDbUser, canAdminCompany, gateCompanyBilling } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
@@ -10,7 +10,7 @@ export async function PATCH(
   if (!auth.ok) return auth.response;
   const { dbUser } = auth;
 
-  if (!canManage(dbUser.role)) {
+  if (!canAdminCompany(dbUser.role)) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

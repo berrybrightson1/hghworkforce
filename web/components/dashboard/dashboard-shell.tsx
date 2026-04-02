@@ -29,10 +29,15 @@ import {
   Settings,
   Inbox,
   Briefcase,
+  Info,
   type LucideIcon,
 } from "lucide-react";
 import { SidebarAccountMenu } from "@/components/dashboard/sidebar-account-menu";
+import { SidebarTrialUsageCard } from "@/components/dashboard/sidebar-trial-usage-card";
+import { NotificationPanel } from "@/components/dashboard/notification-panel";
+import { VerifiedIcon, VerifiedHeaderBadge } from "@/components/dashboard/verified-badge";
 import { useCompany } from "@/components/company-context";
+import { useApi } from "@/lib/swr";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
 import React, { useMemo } from "react";
@@ -65,7 +70,7 @@ type NavGroup = {
 
 const navigation: NavGroup[] = [
   {
-    label: "Main",
+    label: "Home",
     items: [
       { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
       {
@@ -146,7 +151,7 @@ const navigation: NavGroup[] = [
         href: "/dashboard/reports/cost-vs-revenue",
         label: "Cost vs Revenue",
         icon: BarChart3,
-        roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
+        roles: ["SUPER_ADMIN", "COMPANY_ADMIN"],
       },
     ],
   },
@@ -224,6 +229,11 @@ const SIDEBAR_NAV_HINTS: Partial<Record<string, SidebarNavHint>> = {
     body: "Record departures, last working days, reasons, and clearance steps so offboarding and final pay stay organised.",
     learnHref: "/dashboard/help",
   },
+  "/dashboard/workplace": {
+    palette: "teal",
+    body: "Hub for workplace HR tools: public holidays, lateness policies and warning letters, notices and pay queries, probation and contract dates on employee records, and optional celebration highlights.",
+    learnHref: "/dashboard/help",
+  },
   "/dashboard/attendance/live": {
     palette: "emerald",
     body: "Watch who is clocked in right now from kiosk punches—useful for reception or HR when you need a live picture of today's attendance.",
@@ -291,6 +301,24 @@ const SIDEBAR_NAV_HINTS: Partial<Record<string, SidebarNavHint>> = {
   },
 };
 
+/** Same rich tooltip treatment as nav links — distinct palette for workspace / company context. */
+const WORKSPACE_SIDEBAR_HINT: SidebarNavHint = {
+  palette: "sky",
+  title: "Workspace",
+  body: "The company you have selected right now is your workspace. Employees, payroll, attendance, billing, and reports all follow this choice. Use the switcher below to change company without signing out.",
+  learnHref: "/dashboard/help",
+};
+
+function navItemIsActive(item: NavItem, pathname: string): boolean {
+  return (
+    pathname === item.href ||
+    (item.href !== "/dashboard" &&
+      item.href !== "/dashboard/attendance" &&
+      item.href !== "/dashboard/reports" &&
+      pathname.startsWith(item.href))
+  );
+}
+
 const SidebarItem = React.memo(
   ({
     item,
@@ -304,12 +332,7 @@ const SidebarItem = React.memo(
     showNavHints?: boolean;
   }) => {
     const Icon = item.icon;
-    const active =
-      pathname === item.href ||
-      (item.href !== "/dashboard" &&
-        item.href !== "/dashboard/attendance" &&
-        item.href !== "/dashboard/reports" &&
-        pathname.startsWith(item.href));
+    const active = navItemIsActive(item, pathname);
 
     const hint = SIDEBAR_NAV_HINTS[item.href];
     const link = (
@@ -351,7 +374,61 @@ const SidebarItem = React.memo(
 );
 SidebarItem.displayName = "SidebarItem";
 
-function SidebarNav({
+function CollapsibleNavSection({
+  label,
+  items,
+  pathname,
+  expanded,
+  onToggle,
+  onNavigate,
+  showNavHints,
+}: {
+  label: string;
+  items: NavItem[];
+  pathname: string;
+  expanded: boolean;
+  onToggle: () => void;
+  onNavigate?: () => void;
+  showNavHints?: boolean;
+}) {
+  const hasActive = items.some((item) => navItemIsActive(item, pathname));
+
+  return (
+    <div className="rounded-lg">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          "flex w-full min-h-10 items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold tracking-wide transition-colors outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40",
+          hasActive ? "text-hgh-gold" : "text-white/55 hover:bg-white/5 hover:text-white/85",
+        )}
+        aria-expanded={expanded ? "true" : "false"}
+      >
+        <span>{label}</span>
+        <ChevronDown
+          size={16}
+          className={cn("shrink-0 opacity-70 transition-transform duration-200", expanded && "rotate-180")}
+          aria-hidden
+        />
+      </button>
+      {expanded ? (
+        <div className="ml-2 mt-0.5 space-y-0.5 border-l border-white/10 pl-2">
+          {items.map((item) => (
+            <SidebarItem
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              showNavHints={showNavHints}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SidebarCollapsibleNav({
   groups,
   pathname,
   onNavigate,
@@ -362,27 +439,58 @@ function SidebarNav({
   onNavigate?: () => void;
   showNavHints?: boolean;
 }) {
+  const activeGroupLabel = useMemo(() => {
+    const g = groups.find((gr) => gr.items.some((item) => navItemIsActive(item, pathname)));
+    return g?.label ?? null;
+  }, [groups, pathname]);
+
+  const [openLabel, setOpenLabel] = useState<string | null>(activeGroupLabel);
+
+  useEffect(() => {
+    setOpenLabel(activeGroupLabel);
+  }, [activeGroupLabel]);
+
+  const toggleSection = (label: string) => {
+    setOpenLabel((prev) => (prev === label ? null : label));
+  };
+
   return (
-    <nav className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-2 py-4">
+    <nav
+      className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain px-2 py-3"
+      aria-label="Dashboard sections"
+    >
       {groups.map((group) => (
-        <div key={group.label} className="space-y-1">
-          <p className="px-3 text-[10px] font-bold uppercase tracking-widest text-white/40">
-            {group.label}
-          </p>
-          <div className="space-y-0.5">
-            {group.items.map((item) => (
-              <SidebarItem
-                key={item.href}
-                item={item}
-                pathname={pathname}
-                onNavigate={onNavigate}
-                showNavHints={showNavHints}
-              />
-            ))}
-          </div>
-        </div>
+        <CollapsibleNavSection
+          key={group.label}
+          label={group.label}
+          items={group.items}
+          pathname={pathname}
+          expanded={openLabel === group.label}
+          onToggle={() => toggleSection(group.label)}
+          onNavigate={onNavigate}
+          showNavHints={showNavHints}
+        />
       ))}
     </nav>
+  );
+}
+
+function SidebarFooterNav({ onNavigate }: { onNavigate?: () => void }) {
+  const row =
+    "flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-white/75 transition-colors hover:bg-white/5 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40";
+  return (
+    <div className="shrink-0 space-y-0.5 border-t border-white/10 px-2 pb-1 pt-2">
+      <HintTooltip
+        content="Workspace preferences: taxes, kiosk, webhooks, and more."
+        side="right"
+        contentClassName="max-w-[16rem]"
+      >
+        <Link href="/dashboard/settings" className={row} onClick={() => onNavigate?.()}>
+          <Settings size={18} className="shrink-0 text-white/70" aria-hidden />
+          Settings
+        </Link>
+      </HintTooltip>
+    </div>
   );
 }
 
@@ -395,35 +503,34 @@ function getVisibleNavigation(role: UserRole): NavGroup[] {
     .filter((group) => group.items.length > 0);
 }
 
-function pageTitle(pathname: string, groups: NavGroup[]): string {
-  if (pathname.startsWith("/dashboard/settings")) {
-    const parts = pathname.split("/").filter(Boolean);
-    const leaf = parts[parts.length - 1];
-    const map: Record<string, string> = {
-      settings: "Settings",
-      taxes: "PAYE brackets",
-      "office-kiosk": "Office kiosk",
-      "checkin-security": "Check-in security",
-      ssnit: "SSNIT rates",
-      audit: "Audit log",
-      roles: "Roles & access",
-      "tier2-pension": "Tier 2 pension",
-      webhooks: "Webhooks",
-      account: "Account security",
-      team: "Team",
-    };
-    if (leaf && map[leaf]) return map[leaf];
-    return "Settings";
-  }
-  for (const group of groups) {
-    const match = group.items.find(
-      (n) =>
-        pathname === n.href ||
-        (n.href !== "/dashboard" && pathname.startsWith(n.href)),
-    );
-    if (match) return match.label;
-  }
-  return "Dashboard";
+function WorkspaceLabelWithHint() {
+  return (
+    <div className="flex items-center gap-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/50">Workspace</p>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            className="inline-flex rounded-md p-0.5 text-white/40 outline-none transition hover:bg-white/10 hover:text-hgh-gold focus-visible:ring-2 focus-visible:ring-hgh-gold/40"
+            aria-label="What is a workspace?"
+          >
+            <Info className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent
+          side="right"
+          align="start"
+          sideOffset={8}
+          className={cn(
+            "max-w-[min(20rem,calc(100vw-2rem))] p-0",
+            sidebarNavTooltipSurfaceClassForPalette(WORKSPACE_SIDEBAR_HINT.palette),
+          )}
+        >
+          <SidebarNavHintContent navLabel="Workspace" hint={WORKSPACE_SIDEBAR_HINT} />
+        </TooltipContent>
+      </Tooltip>
+    </div>
+  );
 }
 
 function CompanySwitcher() {
@@ -452,6 +559,7 @@ function CompanySwitcher() {
           <span className="truncate">
             {loading ? "Loading..." : selected?.name ?? "Select company"}
           </span>
+          <VerifiedIcon subscriptionStatus={selected?.subscriptionStatus} />
         </span>
         <ChevronDown
           size={14}
@@ -483,6 +591,7 @@ function CompanySwitcher() {
                   <span className="w-[14px]" />
                 )}
                 <span className="min-w-0 truncate">{c.name}</span>
+                <VerifiedIcon subscriptionStatus={c.subscriptionStatus} className="text-hgh-gold/80" />
                 <span className="ml-auto shrink-0 text-xs text-white/40">
                   {c._count?.employees ?? 0}
                 </span>
@@ -502,8 +611,29 @@ function SidebarBrandingBlock() {
         HGH WorkForce
       </p>
       <div className="mt-3">
+        <WorkspaceLabelWithHint />
+      </div>
+      <div className="mt-2">
         <CompanySwitcher />
       </div>
+    </div>
+  );
+}
+
+function HeaderVerifiedBadge() {
+  const { selected } = useCompany();
+  return <VerifiedHeaderBadge subscriptionStatus={selected?.subscriptionStatus} />;
+}
+
+/** Reactive header user info — updates when profile is changed without a full page reload. */
+function HeaderUserInfo({ fallbackName, fallbackEmail }: { fallbackName: string; fallbackEmail: string }) {
+  const { data: me } = useApi<{ name: string; email: string }>("/api/me");
+  const displayName = me?.name || fallbackName;
+  const email = me?.email || fallbackEmail;
+  return (
+    <div className="text-right">
+      <p className="text-sm font-medium text-hgh-navy">{displayName}</p>
+      <p className="max-w-[200px] truncate text-xs text-hgh-muted">{email}</p>
     </div>
   );
 }
@@ -521,7 +651,6 @@ export function DashboardShell({
 }) {
   const pathname = usePathname();
   const groups = useMemo(() => getVisibleNavigation(userRole), [userRole]);
-  const title = useMemo(() => pageTitle(pathname, groups), [pathname, groups]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
@@ -568,7 +697,7 @@ export function DashboardShell({
           id="dashboard-mobile-drawer"
           aria-label="Dashboard navigation"
           className={cn(
-            "absolute inset-y-0 left-0 flex w-[min(17.5rem,calc(100vw-1.5rem))] max-w-sm flex-col border-r border-hgh-border bg-hgh-navy text-white shadow-xl transition-transform duration-200 ease-out",
+            "absolute inset-y-0 left-0 flex w-[min(17.5rem,calc(100vw-1.5rem))] max-w-sm min-w-0 flex-col overflow-x-hidden overflow-y-hidden border-r border-hgh-border bg-hgh-navy text-white shadow-xl transition-transform duration-200 ease-out",
             mobileNavOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
@@ -586,22 +715,29 @@ export function DashboardShell({
             </button>
           </div>
           <div className="shrink-0 border-b border-white/10 px-4 py-3">
+            <div className="mb-2">
+              <WorkspaceLabelWithHint />
+            </div>
             <CompanySwitcher />
           </div>
-          <SidebarNav
+          <SidebarCollapsibleNav
             groups={groups}
             pathname={pathname}
             onNavigate={() => setMobileNavOpen(false)}
             showNavHints={false}
           />
+          <SidebarTrialUsageCard userRole={userRole} onNavigate={() => setMobileNavOpen(false)} />
+          <SidebarFooterNav onNavigate={() => setMobileNavOpen(false)} />
           <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
         </aside>
       </div>
 
       {/* Desktop sidebar */}
-      <aside className="hidden h-full w-64 shrink-0 flex-col border-r border-hgh-border bg-hgh-navy text-white md:flex">
+      <aside className="hidden h-full w-64 min-w-0 shrink-0 flex-col overflow-x-hidden overflow-y-hidden border-r border-hgh-border bg-hgh-navy text-white md:flex">
         <SidebarBrandingBlock />
-        <SidebarNav groups={groups} pathname={pathname} showNavHints />
+        <SidebarCollapsibleNav groups={groups} pathname={pathname} showNavHints />
+        <SidebarTrialUsageCard userRole={userRole} />
+        <SidebarFooterNav />
         <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
       </aside>
 
@@ -609,7 +745,7 @@ export function DashboardShell({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 shrink-0 border-b border-hgh-border bg-white/95 px-4 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-white/85 md:px-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex min-w-0 items-start gap-2">
+            <div className="flex min-w-0 items-center gap-2">
               <HintTooltip
                 content="Open the sidebar menu to jump to another section on small screens."
                 side="bottom"
@@ -617,7 +753,7 @@ export function DashboardShell({
               >
                 <button
                   type="button"
-                  className="mt-0.5 shrink-0 rounded-lg border border-hgh-border bg-hgh-offwhite p-2 text-hgh-navy hover:bg-hgh-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40 md:hidden"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-hgh-border bg-hgh-offwhite text-hgh-navy hover:bg-hgh-border/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40 md:hidden"
                   aria-controls="dashboard-mobile-drawer"
                   aria-haspopup="dialog"
                   aria-label="Open navigation menu"
@@ -630,10 +766,10 @@ export function DashboardShell({
                 <div className="max-w-full overflow-x-auto [-webkit-overflow-scrolling:touch]">
                   <Breadcrumbs />
                 </div>
-                <p className="mt-1 truncate text-sm font-semibold text-hgh-navy md:hidden">{title}</p>
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+              <NotificationPanel userRole={userRole} />
               <HintTooltip
                 content="Your permission level in this workspace. Admins configure payroll, attendance, and access; HR-focused roles manage people workflows."
                 side="bottom"
@@ -643,9 +779,9 @@ export function DashboardShell({
                   {userRole.replace("_", " ")}
                 </span>
               </HintTooltip>
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium text-hgh-navy">{userDisplayName}</p>
-                <p className="max-w-[200px] truncate text-xs text-hgh-muted">{userEmail}</p>
+              <div className="hidden min-w-0 items-center gap-2 sm:flex">
+                <HeaderUserInfo fallbackName={userDisplayName} fallbackEmail={userEmail} />
+                <HeaderVerifiedBadge />
               </div>
             </div>
           </div>

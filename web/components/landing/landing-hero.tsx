@@ -123,7 +123,8 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-hgh-muted">
           Clock-ins, payslips, leave requests, loan tracking, and attendance corrections — all in one place, built for
-          Ghanaian teams. Staff access it on any device. You get three full days to explore everything, no card required.
+          Ghanaian teams. Staff access it on any device. You get {TRIAL_DAYS} full days to explore everything, no card
+          required.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-3">

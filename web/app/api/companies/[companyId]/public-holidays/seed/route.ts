@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canManage, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { canAdminCompany, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import {
   ghanaPublicHolidayTemplates,
   holidayDateUtc,
@@ -16,7 +16,7 @@ export async function POST(
   const { companyId } = await ctx.params;
   const billing = await gateCompanyBilling(auth.dbUser, companyId);
   if (billing) return billing;
-  if (!canManage(auth.dbUser.role)) {
+  if (!canAdminCompany(auth.dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

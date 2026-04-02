@@ -39,6 +39,11 @@ const faqData: Record<Category, { question: string; answer: string }[]> = {
       answer:
         "The dashboard and portal are mobile-friendly web apps. On many phones and tablets you can use your browser's Add to Home Screen option for an app-like shortcut (PWA). You still sign in securely through the same accounts as on desktop.",
     },
+    {
+      question: "How do sign-in and password reset work?",
+      answer:
+        "Use your work email and password to sign in. To change your password while signed in, go to Dashboard → Settings → Your account and use Change password (you’ll enter your current password, then your new one). If you forgot your password, use Forgot password on the sign-in screen: enter your account email, answer one short question about how many workspaces you see in the company switcher, and set a new password — no inbox link required for that step. Password rules match sign-up (at least 8 characters, one uppercase letter, one number).",
+    },
   ],
   Payroll: [
     {

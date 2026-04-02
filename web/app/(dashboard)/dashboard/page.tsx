@@ -58,6 +58,8 @@ export default function DashboardPage() {
   }>(selected ? `/api/dashboard/insights?companyId=${selected.id}` : null);
 
   const isManager = me && ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"].includes(me.role);
+  const isCompanyAdmin =
+    me && (me.role === "SUPER_ADMIN" || me.role === "COMPANY_ADMIN");
   const { data: celebrations } = useApi<{
     enabled: boolean;
     birthdays: { name: string; code: string; nextDate: string }[];
@@ -105,7 +107,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Morning Briefing — canManage() roles only */}
+      {/* Morning briefing + flip clock — HR and company admins (same people as manager dashboard tools). */}
       {isManager && me && <MorningBriefing greetingName={me.greetingName} />}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -191,11 +193,11 @@ export default function DashboardPage() {
           </Card>
         )}
 
-      {/* Payroll Forecast — canManage() roles only */}
-      {isManager && <PayrollForecast />}
+      {/* Payroll Forecast — company admins only */}
+      {isCompanyAdmin && <PayrollForecast />}
 
-      {/* Cost vs Revenue compact — canManage() roles only */}
-      {isManager && <CostRevenueCompact />}
+      {/* Cost vs Revenue compact — company admins only */}
+      {isCompanyAdmin && <CostRevenueCompact />}
 
       {selected && insights && (
         <Card>

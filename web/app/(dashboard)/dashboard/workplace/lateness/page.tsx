@@ -20,6 +20,9 @@ import {
 export default function WorkplaceLatenessPage() {
   const { selected } = useCompany();
   const { toast } = useToast();
+  const { data: me } = useApi<{ role: string }>("/api/me");
+  const canEditLatenessPolicy =
+    me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN";
   const polUrl = selected ? `/api/companies/${selected.id}/lateness-policy` : null;
   const recUrl = selected ? `/api/companies/${selected.id}/late-records` : null;
   const empUrl = selected ? `/api/employees?companyId=${selected.id}` : null;
@@ -61,6 +64,7 @@ export default function WorkplaceLatenessPage() {
                 type="number"
                 defaultValue={policy?.graceMinutes ?? 5}
                 id="pol-grace"
+                disabled={!canEditLatenessPolicy}
               />
             </div>
             <div>
@@ -69,6 +73,7 @@ export default function WorkplaceLatenessPage() {
                 type="number"
                 defaultValue={policy?.lateInstancesBeforeWarning ?? ""}
                 id="pol-warn"
+                disabled={!canEditLatenessPolicy}
               />
             </div>
           </div>
@@ -79,32 +84,40 @@ export default function WorkplaceLatenessPage() {
               className="mt-1 w-full rounded-lg border border-hgh-border px-3 py-2 text-sm"
               rows={4}
               defaultValue={policy?.warningLetterBodyTemplate ?? ""}
+              disabled={!canEditLatenessPolicy}
             />
           </div>
-          <Button
-            type="button"
-            size="sm"
-            onClick={async () => {
-              if (!selected) return;
-              const res = await fetch(`/api/companies/${selected.id}/lateness-policy`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  graceMinutes: Number((document.getElementById("pol-grace") as HTMLInputElement).value),
-                  lateInstancesBeforeWarning:
-                    Number((document.getElementById("pol-warn") as HTMLInputElement).value) || null,
-                  warningLetterBodyTemplate:
-                    (document.getElementById("pol-tpl") as HTMLTextAreaElement).value || null,
-                }),
-              });
-              if (res.ok) {
-                mutPol();
-                toast.success("Policy saved");
-              } else toast.error("Failed");
-            }}
-          >
-            Save policy
-          </Button>
+          {canEditLatenessPolicy ? (
+            <Button
+              type="button"
+              size="sm"
+              onClick={async () => {
+                if (!selected) return;
+                const res = await fetch(`/api/companies/${selected.id}/lateness-policy`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    graceMinutes: Number((document.getElementById("pol-grace") as HTMLInputElement).value),
+                    lateInstancesBeforeWarning:
+                      Number((document.getElementById("pol-warn") as HTMLInputElement).value) || null,
+                    warningLetterBodyTemplate:
+                      (document.getElementById("pol-tpl") as HTMLTextAreaElement).value || null,
+                  }),
+                });
+                if (res.ok) {
+                  mutPol();
+                  toast.success("Policy saved");
+                } else toast.error("Failed");
+              }}
+            >
+              Save policy
+            </Button>
+          ) : (
+            <p className="text-xs text-hgh-muted">
+              Only company administrators can change lateness policy. You can still record incidents and mark letters
+              below.
+            </p>
+          )}
         </CardContent>
       </Card>
 

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import {
   Shield,
   Calculator,
@@ -11,6 +12,9 @@ import {
   PiggyBank,
   Webhook,
   KeyRound,
+  UserCircle,
+  Mail,
+  Building2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,25 +61,103 @@ interface AuditEntry {
 const YEAR = new Date().getFullYear();
 
 export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
+  const pathname = usePathname();
+  const urlSearch = useSearchParams();
+  const changePasswordReturnTo = useMemo(() => {
+    const qs = urlSearch?.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }, [pathname, urlSearch]);
   const { selected } = useCompany();
   const { toast } = useToast();
-  const { data: me } = useApi<{
+  const { data: me, mutate: mutateMe } = useApi<{
+    id: string;
+    email: string;
+    name: string;
+    firstName?: string | null;
+    lastName?: string | null;
     role: string;
+    companyId?: string | null;
     referralCode?: string | null;
     referralCount?: number;
     referralMonthsEarned?: number;
   }>("/api/me");
+  const appPublicBase =
+    process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000";
+  const referralInviteUrl = me?.referralCode
+    ? `${appPublicBase}/sign-up?ref=${encodeURIComponent(me.referralCode)}`
+    : "";
   const isSuper = me?.role === "SUPER_ADMIN";
-  const canEditCheckin =
-    me?.role === "SUPER_ADMIN" ||
-    me?.role === "COMPANY_ADMIN" ||
-    me?.role === "HR";
+  const canEditCheckin = me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN";
   const [payeScope, setPayeScope] = useState<"company" | "global">("company");
   const [editOpen, setEditOpen] = useState(false);
   const [brackets, setBrackets] = useState<TaxBracketInput[]>(DEFAULT_MONTHLY_PAYE_BRACKETS);
   const [bracketSource, setBracketSource] = useState<"company" | "global" | "default">("default");
   const [bracketsLoading, setBracketsLoading] = useState(false);
   const [savingBrackets, setSavingBrackets] = useState(false);
+
+  /* ── Profile edit state ────────────────────────────────────────────────── */
+  const [profileFirstName, setProfileFirstName] = useState("");
+  const [profileLastName, setProfileLastName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileInited, setProfileInited] = useState(false);
+
+  // Seed form fields from API data once loaded
+  useEffect(() => {
+    if (!me || profileInited) return;
+    setProfileFirstName(me.firstName ?? me.name?.split(" ")[0] ?? "");
+    setProfileLastName(me.lastName ?? me.name?.split(" ").slice(1).join(" ") ?? "");
+    setProfileEmail(me.email ?? "");
+    setProfileInited(true);
+  }, [me, profileInited]);
+
+  // Track dirty state
+  useEffect(() => {
+    if (!me) return;
+    const origFirst = me.firstName ?? me.name?.split(" ")[0] ?? "";
+    const origLast = me.lastName ?? me.name?.split(" ").slice(1).join(" ") ?? "";
+    setProfileDirty(
+      profileFirstName.trim() !== origFirst ||
+      profileLastName.trim() !== origLast ||
+      profileEmail.trim() !== (me.email ?? ""),
+    );
+  }, [profileFirstName, profileLastName, profileEmail, me]);
+
+  async function handleSaveProfile() {
+    if (!profileDirty || profileSaving) return;
+    setProfileSaving(true);
+    try {
+      const payload: Record<string, string> = {};
+      if (profileFirstName.trim()) payload.firstName = profileFirstName.trim();
+      if (profileLastName.trim()) payload.lastName = profileLastName.trim();
+      if (profileEmail.trim() && profileEmail.trim() !== me?.email) {
+        payload.email = profileEmail.trim();
+      }
+      const res = await fetch("/api/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to save profile");
+        return;
+      }
+      if (data.emailChanged) {
+        toast.success("Profile saved. Check your new email for a verification link.");
+      } else {
+        toast.success("Profile updated");
+      }
+      // Refresh /api/me cache, then re-seed form from the fresh data
+      await mutateMe();
+      setProfileInited(false);
+    } catch {
+      toast.error("Failed to save profile");
+    } finally {
+      setProfileSaving(false);
+    }
+  }
 
   const checkinSettingsUrl =
     selected && canEditCheckin
@@ -266,9 +348,11 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
     }
   }
 
+  /** Match POST /api/tax-brackets: company saves are admin-only; global defaults are super-admin only. */
   const canEditPaye =
     !bracketsLoading &&
-    ((payeScope === "company" && !!selected) || (payeScope === "global" && isSuper));
+    ((payeScope === "company" && !!selected && canCompanyPayrollSettings) ||
+      (payeScope === "global" && isSuper));
 
   return (
     <>
@@ -536,8 +620,7 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
             </section>
             ) : (
               <p className="rounded-lg border border-zinc-200/80 bg-zinc-50 px-4 py-6 text-sm text-zinc-600">
-                Select a company in the sidebar. You need HR, Company Admin, or Super Admin access to
-                configure the office kiosk.
+                Select a company in the sidebar. Only Company Admin or Super Admin can configure the office kiosk.
               </p>
             )}
             </>
@@ -588,7 +671,7 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
               <p className="rounded-lg border border-zinc-200/80 bg-zinc-50 px-4 py-6 text-sm text-zinc-600">
                 {canEditCheckin && selected
                   ? "Loading check-in settings…"
-                  : "Select a company in the sidebar. You need HR, Company Admin, or Super Admin access."}
+                  : "Select a company in the sidebar. Only Company Admin or Super Admin can change check-in security."}
               </p>
             )}
             </>
@@ -1037,8 +1120,108 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
         <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400">
           Your account
         </p>
-        <h2 className="text-lg font-semibold text-zinc-900">Account security</h2>
-        <p className="mt-1 text-sm text-zinc-500">Password and authentication options.</p>
+        <h2 className="text-lg font-semibold text-zinc-900">Profile</h2>
+        <p className="mt-1 text-sm text-zinc-500">Manage your personal information and account details.</p>
+
+      {/* ── Profile card ─────────────────────────────────────────────────── */}
+      <Card className={cn("mt-4", settingsPanelClass)}>
+        <CardHeader className={cn("flex flex-row items-center gap-2", settingsPanelHeaderClass)}>
+          <UserCircle className="text-hgh-gold" size={20} aria-hidden />
+          <CardTitle className="text-base text-zinc-900">Personal information</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor="profile-first" className="mb-1.5 block text-xs font-medium text-hgh-slate">
+                First name
+              </label>
+              <Input
+                id="profile-first"
+                value={profileFirstName}
+                onChange={(e) => setProfileFirstName(e.target.value)}
+                placeholder="First name"
+              />
+            </div>
+            <div>
+              <label htmlFor="profile-last" className="mb-1.5 block text-xs font-medium text-hgh-slate">
+                Last name
+              </label>
+              <Input
+                id="profile-last"
+                value={profileLastName}
+                onChange={(e) => setProfileLastName(e.target.value)}
+                placeholder="Last name"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label htmlFor="profile-email" className="mb-1.5 block text-xs font-medium text-hgh-slate">
+              Email address
+            </label>
+            <div className="relative">
+              <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-hgh-muted" />
+              <Input
+                id="profile-email"
+                type="email"
+                value={profileEmail}
+                onChange={(e) => setProfileEmail(e.target.value)}
+                placeholder="you@company.com"
+                className="pl-9"
+              />
+            </div>
+            {profileEmail.trim() !== "" && profileEmail.trim() !== me?.email && (
+              <p className="mt-1.5 text-xs text-amber-600">
+                Changing your email will send a verification link to the new address.
+              </p>
+            )}
+          </div>
+
+          {/* Read-only fields */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-hgh-slate">Role</p>
+              <div className="flex h-10 items-center rounded-lg border border-hgh-border bg-hgh-offwhite/60 px-3">
+                <Badge variant="default" className="text-[11px]">
+                  {me?.role?.replace("_", " ") ?? "—"}
+                </Badge>
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-hgh-slate">Workspace</p>
+              <div className="flex h-10 items-center gap-2 rounded-lg border border-hgh-border bg-hgh-offwhite/60 px-3">
+                <Building2 size={14} className="shrink-0 text-hgh-muted" />
+                <span className="truncate text-sm text-hgh-navy">{selected?.name ?? "—"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-hgh-border/60 pt-4">
+            {profileDirty && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!me) return;
+                  setProfileFirstName(me.firstName ?? me.name?.split(" ")[0] ?? "");
+                  setProfileLastName(me.lastName ?? me.name?.split(" ").slice(1).join(" ") ?? "");
+                  setProfileEmail(me.email ?? "");
+                }}
+                className="text-xs font-medium text-hgh-muted hover:text-hgh-navy"
+              >
+                Discard
+              </button>
+            )}
+            <Button
+              onClick={() => void handleSaveProfile()}
+              disabled={!profileDirty || profileSaving}
+            >
+              {profileSaving ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Sign-in & password ───────────────────────────────────────────── */}
       <Card className={cn("mt-4", settingsPanelClass)}>
         <CardHeader className={cn("flex flex-row items-center gap-2", settingsPanelHeaderClass)}>
           <KeyRound className="text-hgh-gold" size={20} aria-hidden />
@@ -1050,23 +1233,44 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
             <span className="font-medium text-hgh-navy">Authentication → Providers</span> settings.
           </p>
           <Link
-            href="/update-password"
+            href={`/update-password?returnTo=${encodeURIComponent(changePasswordReturnTo)}`}
             className="inline-flex text-sm font-medium text-hgh-gold underline-offset-2 hover:underline"
           >
             Change password
           </Link>
         </CardContent>
       </Card>
-      <Card className={cn("mt-4", settingsPanelClass)}>
+      <Card id="referrals" className={cn("mt-4 scroll-mt-24", settingsPanelClass)}>
         <CardHeader className={cn("flex flex-row items-center gap-2", settingsPanelHeaderClass)}>
           <CardTitle className="text-base text-zinc-900">Referrals</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm text-hgh-muted">
           <p>
-            Share your code with another organisation owner. When they create a workspace with it and complete
-            subscription checkout, your company receives one extra month of full access (stackable).
+            Share your link or code with another organisation owner. When they create a workspace with it and
+            complete subscription checkout, your company receives one extra month of full access (stackable).
           </p>
+          {referralInviteUrl ? (
+            <div className="rounded-lg border border-hgh-border/80 bg-hgh-offwhite/50 px-3 py-2.5">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-hgh-muted">Invite link</p>
+              <div className="mt-1.5 flex flex-wrap items-start gap-2">
+                <p className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-hgh-navy">
+                  {referralInviteUrl}
+                </p>
+                <CopyIconButton
+                  text={referralInviteUrl}
+                  label="Copy invite link"
+                  hint="Full URL for new sign-ups; your referral code is added automatically."
+                  className="shrink-0"
+                />
+              </div>
+              <p className="mt-2 text-xs text-hgh-muted">
+                Opens sign-up with your code. They sign in afterward and land on onboarding with the code
+                pre-filled.
+              </p>
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-medium text-hgh-slate">Code</span>
             <span className="rounded-md bg-hgh-offwhite px-3 py-1.5 font-mono text-sm font-semibold text-hgh-navy">
               {me?.referralCode ?? "—"}
             </span>

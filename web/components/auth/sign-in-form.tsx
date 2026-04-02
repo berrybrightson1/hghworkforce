@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { AuthSubmitSpinner } from "@/components/auth/auth-submit-spinner";
@@ -66,7 +66,15 @@ function EyeOffIcon({ className }: { className?: string }) {
 
 function safeNextPath(raw: string | null): string {
   if (!raw || !raw.startsWith("/") || raw.startsWith("//")) return "/dashboard";
-  if (raw.startsWith("/dashboard") || raw.startsWith("/portal")) return raw;
+  const pathOnly = raw.split("?")[0] ?? "";
+  if (
+    pathOnly.startsWith("/dashboard") ||
+    pathOnly.startsWith("/portal") ||
+    pathOnly === "/onboarding" ||
+    pathOnly.startsWith("/update-password")
+  ) {
+    return raw;
+  }
   return "/dashboard";
 }
 
@@ -81,7 +89,13 @@ function isEmailNotConfirmedError(error: { message: string; code?: string; statu
 
 export function SignInForm() {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const forgotPasswordHref = useMemo(() => {
+    const qs = searchParams.toString();
+    const ret = qs ? `${pathname}?${qs}` : pathname;
+    return `/forgot-password?returnTo=${encodeURIComponent(ret)}`;
+  }, [pathname, searchParams]);
   const { toast } = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -170,7 +184,7 @@ export function SignInForm() {
               Password
             </label>
             <Link
-              href="/forgot-password"
+              href={forgotPasswordHref}
               className="text-xs font-medium text-hgh-gold transition-colors hover:text-hgh-gold/80"
             >
               Forgot password?

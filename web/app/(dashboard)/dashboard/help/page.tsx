@@ -124,7 +124,7 @@ const roadmapSteps: {
     moreLinks: [
       { href: "/dashboard", label: "Dashboard" },
       { href: "/dashboard/performance", label: "Performance" },
-      { href: "/dashboard/onboarding", label: "Onboarding templates" },
+      { href: "/dashboard/onboarding/templates", label: "Onboarding templates" },
       { href: "/dashboard/loans", label: "Loans" },
       { href: "/dashboard/billing", label: "Billing" },
       { href: "/dashboard/companies", label: "Companies" },
@@ -158,6 +158,11 @@ const sections = [
       {
         title: "Inviting HR and Admin users",
         content: "Navigate to the 'Users' page. Click 'Invite User', enter their email address and select a role (COMPANY_ADMIN or HR). They will receive an email with a link to join your organization."
+      },
+      {
+        title: "Referral invite link and code",
+        content:
+          "Open Settings → Account security → Referrals (or /dashboard/settings/account#referrals). Copy your invite link or code to share with another organisation owner. The link opens sign-up with your code; after they sign in, onboarding pre-fills it when they create a workspace. When they complete subscription checkout, your company earns stacked bonus months.",
       },
       {
         title: "Configuring tax brackets",

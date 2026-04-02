@@ -44,12 +44,18 @@ export default {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(-50%)" },
         },
+        /** Simple digit tick — 2D fade + tiny nudge (dashboard clock). */
+        "flip-digit": {
+          "0%": { opacity: "0.25", transform: "translateY(0.1em) scale(0.92)" },
+          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        },
       },
       animation: {
         "toast-in": "toast-in 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both",
         "toast-progress": "toast-progress 4s linear forwards",
         "in": "in 0.2s ease-out both",
         marquee: "marquee 42s linear infinite",
+        "flip-digit": "flip-digit 0.18s ease-out both",
       },
     },
   },

@@ -40,9 +40,9 @@ export default function OnboardingListPage() {
           <h2 className="text-xl font-semibold text-hgh-navy">Employee Onboarding</h2>
           <p className="text-sm text-hgh-muted">Track new hire onboarding progress.</p>
         </div>
-        <HintTooltip content="Build a reusable checklist (tasks HR assigns to new hires).">
-          <Link href="/dashboard/onboarding/templates/new">
-            <Button>Create Template</Button>
+        <HintTooltip content="Choose a starter checklist or build your own from the templates hub.">
+          <Link href="/dashboard/onboarding/templates">
+            <Button>Create template</Button>
           </Link>
         </HintTooltip>
       </div>
@@ -158,10 +158,10 @@ export default function OnboardingListPage() {
             <p className="text-sm font-medium text-hgh-navy">Onboarding Templates</p>
             <p className="text-xs text-hgh-muted">Manage reusable onboarding checklists.</p>
           </div>
-          <HintTooltip content="Create or adjust onboarding task templates for this company.">
-            <Link href="/dashboard/onboarding/templates/new">
+          <HintTooltip content="Ready-made starters and templates saved for this company.">
+            <Link href="/dashboard/onboarding/templates">
               <Button variant="secondary" size="sm">
-                Manage Templates
+                Manage templates
               </Button>
             </Link>
           </HintTooltip>

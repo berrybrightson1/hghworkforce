@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Building2, UserPlus } from "lucide-react";
 import { useToast } from "@/components/toast/useToast";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
@@ -10,6 +10,7 @@ type Mode = "choose" | "create" | "join";
 
 export function OnboardingForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [mode, setMode] = useState<Mode>("choose");
   const [companyName, setCompanyName] = useState("");
@@ -17,6 +18,14 @@ export function OnboardingForm() {
   const [referralError, setReferralError] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const refFromUrl = searchParams.get("ref");
+  useEffect(() => {
+    const ref = refFromUrl?.trim();
+    if (!ref) return;
+    setReferralCode(ref.toUpperCase().replace(/\s+/g, ""));
+    setMode("create");
+  }, [refFromUrl]);
 
   const inputClass =
     "flex h-11 w-full rounded-lg border border-hgh-border bg-white px-4 text-sm text-hgh-slate shadow-sm transition-colors placeholder:text-hgh-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold";

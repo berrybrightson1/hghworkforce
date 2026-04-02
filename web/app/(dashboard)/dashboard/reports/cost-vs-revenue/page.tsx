@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   AreaChart,
   Area,
@@ -44,6 +45,9 @@ function formatGHS(n: number): string {
 export default function CostVsRevenuePage() {
   const { selected } = useCompany();
   const { toast } = useToast();
+  const { data: me } = useApi<{ role: string }>("/api/me");
+  const isCompanyAdmin = me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN";
+
   const { data: revenue, mutate: mutateRevenue } = useApi<RevenueEntry[]>(
     selected ? `/api/revenue-entries?companyId=${selected.id}` : null,
   );
@@ -56,6 +60,21 @@ export default function CostVsRevenuePage() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [revenueInput, setRevenueInput] = useState("");
   const [saving, setSaving] = useState(false);
+
+  if (me && !isCompanyAdmin) {
+    return (
+      <div className="mx-auto max-w-lg space-y-4 rounded-xl border border-hgh-border bg-white p-8 text-center text-sm text-hgh-slate">
+        <p className="font-medium text-hgh-navy">Restricted to company administrators</p>
+        <p className="text-hgh-muted">
+          Revenue entries and cost-vs-revenue views are for billing owners only. HR can use payroll reports and
+          workplace tools without this page.
+        </p>
+        <Link href="/dashboard/reports" className="font-medium text-hgh-gold underline-offset-2 hover:underline">
+          Back to reports
+        </Link>
+      </div>
+    );
+  }
 
   const existingEntry = revenue?.find(
     (r) => r.month === selectedMonth && r.year === selectedYear,

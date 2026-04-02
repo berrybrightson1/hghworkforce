@@ -1,14 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { UserRole } from "@prisma/client";
 import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
-import { cn } from "@/lib/utils";
-import { TRIAL_DAYS } from "@/lib/billing/access";
 import { DismissibleCallout } from "@/components/ui/dismissible-callout";
 
 type BillingSummary = {
@@ -132,41 +129,6 @@ export function TrialBillingBanner({ userRole }: { userRole: UserRole }) {
 
   if (!summary.fullAccess) return null;
 
-  const end = new Date(summary.trialEndsAt);
-  const ms = summary.msRemaining;
-
-  return (
-    <DismissibleCallout
-      storageKey={`hgh-dismiss-trial-full-access-${selected?.id ?? "none"}`}
-      className={cn(
-        "mb-6 items-start rounded-xl border px-4 py-3 text-sm",
-        ms < 24 * 60 * 60 * 1000
-          ? "border-amber-500/35 bg-amber-50/90 text-amber-950"
-          : "border-hgh-border bg-white text-hgh-slate shadow-sm",
-      )}
-    >
-      <div className="flex flex-wrap items-start gap-2">
-        <Clock
-          className={cn("mt-0.5 h-5 w-5 shrink-0", ms < 24 * 60 * 60 * 1000 ? "text-amber-700" : "text-hgh-gold")}
-          aria-hidden
-        />
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-hgh-navy">Free trial ({TRIAL_DAYS} days) — full access</p>
-          <p className="mt-1 text-hgh-muted">
-            Workspace: <span className="font-medium text-hgh-slate">{summary.companyName}</span>. Trial ends{" "}
-            <time dateTime={end.toISOString()}>{end.toLocaleString()}</time>
-            {ms > 0 ? (
-              <>
-                {" "}
-                (~{formatRemaining(ms)} left).
-              </>
-            ) : null}{" "}
-            <Link href="/dashboard/billing" className="font-medium text-hgh-gold underline underline-offset-2">
-              Billing & subscribe
-            </Link>
-          </p>
-        </div>
-      </div>
-    </DismissibleCallout>
-  );
+  /* Active trial messaging lives in the sidebar trial card; keep only effects above. */
+  return null;
 }

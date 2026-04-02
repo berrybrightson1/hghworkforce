@@ -22,8 +22,7 @@ export function SettingsSubNav() {
   const { setPreviewSection } = useSettingsPreviewNav();
 
   const checkinSettingsUrl =
-    selected &&
-    (me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN" || me?.role === "HR")
+    selected && (me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN")
       ? `/api/companies/${selected.id}/checkin-settings`
       : null;
   const { data: checkinSettings } = useApi<unknown>(checkinSettingsUrl);
@@ -36,10 +35,7 @@ export function SettingsSubNav() {
       : null;
   const { data: payrollSettings } = useApi<{ tier2PensionEnabled: boolean }>(payrollSettingsUrl);
 
-  const canEditCheckin =
-    me?.role === "SUPER_ADMIN" ||
-    me?.role === "COMPANY_ADMIN" ||
-    me?.role === "HR";
+  const canEditCheckin = me?.role === "SUPER_ADMIN" || me?.role === "COMPANY_ADMIN";
 
   const items = useMemo(() => {
     const out: { href: string; label: string; section: SettingsSectionId; hint: string }[] = [
@@ -110,9 +106,9 @@ export function SettingsSubNav() {
     }
     out.push({
       href: `${BASE}/account`,
-      label: "Account security",
+      label: "Profile & account",
       section: "account",
-      hint: "Sign-in basics and password update for your user account.",
+      hint: "Edit your name, email, and password. View your role and workspace.",
     });
     return out;
   }, [

@@ -10,6 +10,7 @@ const badgeVariants = cva(
         success: "bg-hgh-success/15 text-hgh-success",
         danger: "bg-hgh-danger/15 text-hgh-danger",
         warning: "bg-hgh-gold-light text-hgh-navy",
+        verified: "bg-hgh-gold/15 text-hgh-gold",
       },
     },
     defaultVariants: {

@@ -1,13 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { Inbox, ThumbsDown, ThumbsUp } from "lucide-react";
+import {
+  Inbox,
+  ThumbsDown,
+  ThumbsUp,
+  CalendarDays,
+  Landmark,
+  Clock,
+  ArrowUpRight,
+  ChevronRight,
+} from "lucide-react";
 import { useCompany } from "@/components/company-context";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
@@ -54,6 +61,61 @@ type RejectTarget =
   | { kind: "correction"; id: string }
   | { kind: "loan"; id: string };
 
+const tabs: { id: Filter; label: string; hint: string }[] = [
+  {
+    id: "all",
+    label: "All",
+    hint: "Every pending leave request, loan application, and attendance correction.",
+  },
+  { id: "leave", label: "Leave", hint: "Leave requests awaiting approval or rejection." },
+  { id: "loans", label: "Loans", hint: "Loan and advance requests that need a decision." },
+  {
+    id: "corrections",
+    label: "Attendance",
+    hint: "Kiosk attendance correction requests from employees.",
+  },
+];
+
+function ItemSurface({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-hgh-border/50 bg-white px-4 py-4 shadow-[0_1px_2px_rgba(10,22,40,0.04)] transition-colors",
+        "hover:border-hgh-border hover:shadow-[0_4px_14px_rgba(10,22,40,0.06)]",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function TypeMarker({
+  icon: Icon,
+  tone,
+}: {
+  icon: typeof CalendarDays;
+  tone: "leave" | "loan" | "corr";
+}) {
+  const toneClass =
+    tone === "leave"
+      ? "bg-emerald-500/[0.08] text-emerald-800"
+      : tone === "loan"
+        ? "bg-hgh-gold/12 text-hgh-navy"
+        : "bg-sky-500/[0.1] text-sky-900";
+  return (
+    <div
+      className={cn(
+        "flex h-10 w-10 shrink-0 items-center justify-center rounded-lg",
+        toneClass,
+      )}
+      aria-hidden
+    >
+      <Icon className="h-[18px] w-[18px] opacity-90" strokeWidth={1.75} />
+    </div>
+  );
+}
+
 export default function InboxPage() {
   const { selected, loading } = useCompany();
   const { toast } = useToast();
@@ -81,6 +143,9 @@ export default function InboxPage() {
     if (filter === "loans") return { leave: [], corrections: [], loans };
     return { leave, corrections, loans };
   }, [filter, leave, corrections, loans]);
+
+  const counts = { leave: leave.length, corrections: corrections.length, loans: loans.length };
+  const totalPending = leave.length + corrections.length + loans.length;
 
   async function patchLeave(id: string, status: "APPROVED" | "REJECTED", rejectionNote?: string) {
     setActing(`leave-${id}`);
@@ -170,405 +235,464 @@ export default function InboxPage() {
     setRejectNote("");
   }
 
+  function tabCount(id: Filter): number {
+    if (id === "all") return totalPending;
+    if (id === "leave") return counts.leave;
+    if (id === "loans") return counts.loans;
+    return counts.corrections;
+  }
+
   if (loading || (selected && isLoading && !data)) {
     return (
-      <div className="space-y-4">
-        <div className="h-9 w-56 animate-pulse rounded bg-hgh-offwhite" />
-        <div className="h-48 animate-pulse rounded-xl border border-hgh-border bg-white" />
+      <div className="mx-auto max-w-4xl space-y-8">
+        <div className="h-8 w-40 animate-pulse rounded-md bg-hgh-border/40" />
+        <div className="h-14 animate-pulse rounded-2xl bg-hgh-border/25" />
+        <div className="h-64 animate-pulse rounded-2xl border border-hgh-border/30 bg-white/60" />
       </div>
     );
   }
 
   if (!selected) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Inbox</CardTitle>
-          <p className="text-sm font-normal text-hgh-muted">Select a company to load pending items.</p>
-        </CardHeader>
-      </Card>
+      <div className="mx-auto max-w-4xl rounded-2xl border border-hgh-border/60 bg-white px-8 py-12 text-center shadow-sm">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-hgh-offwhite text-hgh-muted">
+          <Inbox className="h-5 w-5" strokeWidth={1.5} aria-hidden />
+        </div>
+        <h2 className="mt-4 text-lg font-semibold text-hgh-navy">Inbox</h2>
+        <p className="mt-2 text-sm text-hgh-muted">Select a company to load pending approvals.</p>
+      </div>
     );
   }
 
-  const tabs: { id: Filter; label: string; count: number; hint: string }[] = [
-    {
-      id: "all",
-      label: "All",
-      count: leave.length + corrections.length + loans.length,
-      hint: "List every pending leave request, loan application, and attendance correction at once.",
-    },
-    {
-      id: "leave",
-      label: "Leave",
-      count: leave.length,
-      hint: "Show only leave requests awaiting approval or rejection.",
-    },
-    {
-      id: "loans",
-      label: "Loans",
-      count: loans.length,
-      hint: "Filter to loan and advance requests that need a decision.",
-    },
-    {
-      id: "corrections",
-      label: "Attendance",
-      count: corrections.length,
-      hint: "Focus on kiosk attendance correction requests from employees.",
-    },
-  ];
+  const scopeLabel = data?.scope === "team" ? "Direct reports only" : "Whole company";
+  const showEmpty =
+    filtered.leave.length === 0 && filtered.loans.length === 0 && filtered.corrections.length === 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-hgh-gold/15 text-hgh-gold">
-            <Inbox size={22} aria-hidden />
-          </div>
+    <div className="mx-auto max-w-4xl space-y-8 pb-10">
+      <header className="space-y-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-hgh-navy">Inbox</h2>
-            <p className="mt-1 text-sm text-hgh-muted">
-              Pending items for <span className="font-medium">{selected.name}</span>
-              {data?.scope === "team" ? " (your direct reports only)." : "."}
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-hgh-muted">
+              Approvals
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-hgh-muted">Scope:</span>
-              <HintTooltip content="Include pending items for everyone in this workspace you can administer.">
+            <h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-hgh-navy sm:text-[1.75rem]">
+              Inbox
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-hgh-muted">
+              <span className="text-hgh-slate">{selected.name}</span>
+              <span className="mx-1.5 text-hgh-border">·</span>
+              {scopeLabel}
+            </p>
+          </div>
+
+          <div className="flex shrink-0 flex-col items-stretch gap-3 sm:items-end">
+            <HintTooltip
+              content="Switch between everyone you administer and people who report to you."
+              side="left"
+              contentClassName="max-w-[16rem]"
+            >
+              <div
+                className="inline-flex rounded-full border border-hgh-border/80 bg-hgh-offwhite/80 p-1 shadow-inner"
+                role="group"
+                aria-label="Inbox scope"
+              >
                 <button
                   type="button"
                   onClick={() => setScope("all")}
                   className={cn(
-                    "rounded-lg px-3 py-1 text-xs font-medium transition-colors",
+                    "rounded-full px-4 py-1.5 text-xs font-medium transition-all",
                     scope === "all"
-                      ? "bg-hgh-navy text-white"
-                      : "bg-hgh-offwhite text-hgh-muted hover:text-hgh-navy",
+                      ? "bg-white text-hgh-navy shadow-sm ring-1 ring-hgh-border/50"
+                      : "text-hgh-muted hover:text-hgh-navy",
                   )}
                 >
                   All company
                 </button>
-              </HintTooltip>
-              <HintTooltip content="Limit the inbox to people who report to you in HR so you can clear your direct team first.">
                 <button
                   type="button"
                   onClick={() => setScope("team")}
                   className={cn(
-                    "rounded-lg px-3 py-1 text-xs font-medium transition-colors",
+                    "rounded-full px-4 py-1.5 text-xs font-medium transition-all",
                     scope === "team"
-                      ? "bg-hgh-navy text-white"
-                      : "bg-hgh-offwhite text-hgh-muted hover:text-hgh-navy",
+                      ? "bg-white text-hgh-navy shadow-sm ring-1 ring-hgh-border/50"
+                      : "text-hgh-muted hover:text-hgh-navy",
                   )}
                 >
                   My team
                 </button>
-              </HintTooltip>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs">
-              <Link href="/dashboard/leave" className="text-hgh-gold underline-offset-2 hover:underline">
-                Leave admin
+              </div>
+            </HintTooltip>
+
+            <nav className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-hgh-muted">
+              <Link
+                href="/dashboard/leave"
+                className="inline-flex items-center gap-0.5 font-medium text-hgh-slate transition hover:text-hgh-gold"
+              >
+                Leave <ChevronRight className="h-3 w-3 opacity-50" aria-hidden />
               </Link>
-              <span className="text-hgh-border">·</span>
-              <Link href="/dashboard/loans" className="text-hgh-gold underline-offset-2 hover:underline">
-                Loans admin
+              <span className="text-hgh-border/80">·</span>
+              <Link
+                href="/dashboard/loans"
+                className="inline-flex items-center gap-0.5 font-medium text-hgh-slate transition hover:text-hgh-gold"
+              >
+                Loans <ChevronRight className="h-3 w-3 opacity-50" aria-hidden />
               </Link>
-              <span className="text-hgh-border">·</span>
-              <Link href="/dashboard/attendance" className="text-hgh-gold underline-offset-2 hover:underline">
-                Attendance
+              <span className="text-hgh-border/80">·</span>
+              <Link
+                href="/dashboard/attendance"
+                className="inline-flex items-center gap-0.5 font-medium text-hgh-slate transition hover:text-hgh-gold"
+              >
+                Attendance <ChevronRight className="h-3 w-3 opacity-50" aria-hidden />
               </Link>
-            </div>
+            </nav>
           </div>
         </div>
-      </div>
 
-      <div className="flex flex-wrap gap-1 border-b border-hgh-border pb-2">
-        {tabs.map((t) => (
-          <HintTooltip key={t.id} content={t.hint} side="bottom" contentClassName="max-w-[17rem]">
-            <button
-              type="button"
-              onClick={() => setFilter(t.id)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                filter === t.id ? "bg-hgh-navy text-white" : "text-hgh-muted hover:bg-hgh-offwhite",
-              )}
-            >
-              {t.label}
-              <Badge variant="default" className="ml-2 tabular-nums">
-                {t.count}
-              </Badge>
-            </button>
-          </HintTooltip>
-        ))}
-      </div>
+        <div className="border-b border-hgh-border/70">
+          <div className="flex gap-0 overflow-x-auto pb-px [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {tabs.map((t) => {
+              const c = tabCount(t.id);
+              const active = filter === t.id;
+              return (
+                <HintTooltip key={t.id} content={t.hint} side="bottom" contentClassName="max-w-[17rem]">
+                  <button
+                    type="button"
+                    onClick={() => setFilter(t.id)}
+                    className={cn(
+                      "relative shrink-0 px-4 py-3 text-sm font-medium transition-colors",
+                      active ? "text-hgh-navy" : "text-hgh-muted hover:text-hgh-slate",
+                    )}
+                  >
+                    <span>{t.label}</span>
+                    <span
+                      className={cn(
+                        "ml-2 tabular-nums text-xs",
+                        active ? "text-hgh-gold" : "text-hgh-muted/80",
+                      )}
+                    >
+                      {c}
+                    </span>
+                    {active ? (
+                      <span
+                        className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-hgh-gold"
+                        aria-hidden
+                      />
+                    ) : null}
+                  </button>
+                </HintTooltip>
+              );
+            })}
+          </div>
+        </div>
+      </header>
 
       {loanApprove ? (
-        <Card className="border-hgh-gold/30">
-          <CardHeader>
-            <CardTitle className="text-base">Approve loan — adjust terms if needed</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-hgh-muted">
-              Principal and monthly repayment apply to the active loan after approval. Employee:{" "}
-              {employeeDisplayName(loanApprove.employee)}.
-            </p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-hgh-slate" htmlFor="inbox-loan-amt">
-                  Amount (GHS)
-                </label>
-                <input
-                  id="inbox-loan-amt"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={loanApproveAmount}
-                  onChange={(e) => setLoanApproveAmount(e.target.value)}
-                  className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm tabular-nums"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-hgh-slate" htmlFor="inbox-loan-mo">
-                  Monthly repayment (GHS)
-                </label>
-                <input
-                  id="inbox-loan-mo"
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={loanApproveMonthly}
-                  onChange={(e) => setLoanApproveMonthly(e.target.value)}
-                  className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm tabular-nums"
-                />
-              </div>
+        <section
+          className="rounded-2xl border border-hgh-gold/25 bg-gradient-to-b from-white to-hgh-offwhite/40 p-6 shadow-[0_8px_30px_rgba(10,22,40,0.06)] ring-1 ring-hgh-border/40"
+          aria-labelledby="loan-approve-title"
+        >
+          <h2 id="loan-approve-title" className="text-base font-semibold text-hgh-navy">
+            Approve loan
+          </h2>
+          <p className="mt-1 text-sm text-hgh-muted">
+            Adjust principal and monthly repayment if needed.{" "}
+            <span className="text-hgh-slate">{employeeDisplayName(loanApprove.employee)}</span>
+          </p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-hgh-slate" htmlFor="inbox-loan-amt">
+                Amount (GHS)
+              </label>
+              <input
+                id="inbox-loan-amt"
+                type="number"
+                min={0}
+                step={0.01}
+                value={loanApproveAmount}
+                onChange={(e) => setLoanApproveAmount(e.target.value)}
+                className="w-full rounded-lg border border-hgh-border/80 bg-white px-3 py-2.5 text-sm tabular-nums shadow-sm outline-none transition focus:border-hgh-gold/50 focus:ring-2 focus:ring-hgh-gold/20"
+              />
             </div>
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setLoanApprove(null)}>
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={acting !== null}
-                onClick={() => {
-                  const amt = Number(loanApproveAmount);
-                  const mo = Number(loanApproveMonthly);
-                  if (!Number.isFinite(amt) || amt <= 0 || !Number.isFinite(mo) || mo <= 0) {
-                    toast.error("Enter positive amount and monthly repayment.");
-                    return;
-                  }
-                  void (async () => {
-                    const ok = await patchLoan(loanApprove.id, "ACTIVE", {
-                      amount: amt,
-                      monthlyRepayment: mo,
-                    });
-                    if (ok) setLoanApprove(null);
-                  })();
-                }}
-              >
-                Approve loan
-              </Button>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-hgh-slate" htmlFor="inbox-loan-mo">
+                Monthly repayment (GHS)
+              </label>
+              <input
+                id="inbox-loan-mo"
+                type="number"
+                min={0}
+                step={0.01}
+                value={loanApproveMonthly}
+                onChange={(e) => setLoanApproveMonthly(e.target.value)}
+                className="w-full rounded-lg border border-hgh-border/80 bg-white px-3 py-2.5 text-sm tabular-nums shadow-sm outline-none transition focus:border-hgh-gold/50 focus:ring-2 focus:ring-hgh-gold/20"
+              />
             </div>
-          </CardContent>
-        </Card>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setLoanApprove(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={acting !== null}
+              onClick={() => {
+                const amt = Number(loanApproveAmount);
+                const mo = Number(loanApproveMonthly);
+                if (!Number.isFinite(amt) || amt <= 0 || !Number.isFinite(mo) || mo <= 0) {
+                  toast.error("Enter positive amount and monthly repayment.");
+                  return;
+                }
+                void (async () => {
+                  const ok = await patchLoan(loanApprove.id, "ACTIVE", {
+                    amount: amt,
+                    monthlyRepayment: mo,
+                  });
+                  if (ok) setLoanApprove(null);
+                })();
+              }}
+            >
+              Approve loan
+            </Button>
+          </div>
+        </section>
       ) : null}
 
       {rejectTarget ? (
-        <Card className="border-hgh-gold/30">
-          <CardHeader>
-            <CardTitle className="text-base">Reject — add a note (optional)</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <textarea
-              value={rejectNote}
-              onChange={(e) => setRejectNote(e.target.value)}
-              rows={3}
-              className="w-full rounded-lg border border-hgh-border px-3 py-2 text-sm"
-              placeholder="Reason shown to the employee (optional)"
-            />
-            <div className="flex gap-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setRejectTarget(null)}>
-                Cancel
-              </Button>
-              <Button type="button" size="sm" variant="danger" onClick={() => void confirmReject()}>
-                Confirm reject
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <section
+          className="rounded-2xl border border-hgh-border/70 bg-white p-6 shadow-[0_8px_30px_rgba(10,22,40,0.05)]"
+          aria-labelledby="reject-title"
+        >
+          <h2 id="reject-title" className="text-base font-semibold text-hgh-navy">
+            Reject request
+          </h2>
+          <p className="mt-1 text-sm text-hgh-muted">Optional note for the employee.</p>
+          <textarea
+            value={rejectNote}
+            onChange={(e) => setRejectNote(e.target.value)}
+            rows={3}
+            className="mt-4 w-full rounded-lg border border-hgh-border/80 bg-hgh-offwhite/30 px-3 py-2.5 text-sm outline-none transition focus:border-hgh-border focus:bg-white focus:ring-2 focus:ring-hgh-navy/10"
+            placeholder="Reason (optional)"
+          />
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={() => setRejectTarget(null)}>
+              Cancel
+            </Button>
+            <Button type="button" size="sm" variant="danger" onClick={() => void confirmReject()}>
+              Confirm reject
+            </Button>
+          </div>
+        </section>
       ) : null}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Leave requests</CardTitle>
-          <Badge variant="warning">{filtered.leave.length}</Badge>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {filtered.leave.length === 0 ? (
-            <p className="text-sm text-hgh-muted">No pending leave in this filter.</p>
-          ) : (
-            <ul className="divide-y divide-hgh-border">
-              {filtered.leave.map((r) => (
-                <li
-                  key={r.id}
-                  className="flex flex-col gap-3 py-4 first:pt-0 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-hgh-navy">
-                      {r.type} · {r.days} day(s)
-                    </p>
-                    <p className="text-xs text-hgh-muted">
-                      {new Date(r.startDate).toLocaleDateString()} –{" "}
-                      {new Date(r.endDate).toLocaleDateString()}
-                    </p>
-                    <p className="mt-1 text-sm text-hgh-slate">
-                      {employeeDisplayName(r.employee)} ·{" "}
-                      <Link
-                        href={`/dashboard/employees/${r.employee.id}`}
-                        className="text-hgh-gold underline-offset-2 hover:underline"
-                      >
-                        Employee
-                      </Link>
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={acting !== null}
-                      onClick={() => setRejectTarget({ kind: "leave", id: r.id })}
-                    >
-                      <ThumbsDown size={14} className="mr-1" />
-                      Reject
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={acting !== null}
-                      onClick={() => void patchLeave(r.id, "APPROVED")}
-                    >
-                      <ThumbsUp size={14} className="mr-1" />
-                      Approve
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <section
+        className="overflow-hidden rounded-2xl border border-hgh-border/60 bg-white shadow-[0_1px_3px_rgba(10,22,40,0.04)]"
+        aria-label="Pending items"
+      >
+        {showEmpty ? (
+          <div className="flex flex-col items-center px-6 py-16 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-hgh-offwhite text-hgh-muted">
+              <Inbox className="h-6 w-6" strokeWidth={1.25} aria-hidden />
+            </div>
+            <p className="mt-5 text-sm font-medium text-hgh-navy">You&apos;re all caught up</p>
+            <p className="mt-1.5 max-w-sm text-sm text-hgh-muted">
+              No pending items for this view. New requests will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-hgh-border/50">
+            {filtered.leave.length > 0 ? (
+              <div className="px-4 py-5 sm:px-6">
+                <h3 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-hgh-muted">
+                  Leave · {filtered.leave.length}
+                </h3>
+                <ul className="space-y-3">
+                  {filtered.leave.map((r) => (
+                    <li key={r.id}>
+                      <ItemSurface>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 gap-3">
+                            <TypeMarker icon={CalendarDays} tone="leave" />
+                            <div className="min-w-0">
+                              <p className="font-medium text-hgh-navy">
+                                {r.type}{" "}
+                                <span className="font-normal text-hgh-muted">
+                                  · {r.days} day{r.days === 1 ? "" : "s"}
+                                </span>
+                              </p>
+                              <p className="mt-0.5 text-xs text-hgh-muted">
+                                {new Date(r.startDate).toLocaleDateString()} –{" "}
+                                {new Date(r.endDate).toLocaleDateString()}
+                              </p>
+                              <p className="mt-2 text-sm text-hgh-slate">
+                                {employeeDisplayName(r.employee)}
+                                <Link
+                                  href={`/dashboard/employees/${r.employee.id}`}
+                                  className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-medium text-hgh-gold hover:underline"
+                                >
+                                  Profile <ArrowUpRight className="h-3 w-3" aria-hidden />
+                                </Link>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-2 sm:justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={acting !== null}
+                              onClick={() => setRejectTarget({ kind: "leave", id: r.id })}
+                              className="border-hgh-border/80"
+                            >
+                              <ThumbsDown size={14} className="mr-1" />
+                              Reject
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={acting !== null}
+                              onClick={() => void patchLeave(r.id, "APPROVED")}
+                            >
+                              <ThumbsUp size={14} className="mr-1" />
+                              Approve
+                            </Button>
+                          </div>
+                        </div>
+                      </ItemSurface>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Loan / advance requests</CardTitle>
-          <Badge variant="warning">{filtered.loans.length}</Badge>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {filtered.loans.length === 0 ? (
-            <p className="text-sm text-hgh-muted">No pending loan requests in this filter.</p>
-          ) : (
-            <ul className="divide-y divide-hgh-border">
-              {filtered.loans.map((loan) => (
-                <li
-                  key={loan.id}
-                  className="flex flex-col gap-3 py-4 first:pt-0 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="font-medium text-hgh-navy">{loan.type}</p>
-                    <p className="text-sm tabular-nums text-hgh-slate">
-                      GHS {Number(loan.amount).toLocaleString("en-GH", { minimumFractionDigits: 2 })} · Repay GHS{" "}
-                      {Number(loan.monthlyRepayment).toLocaleString("en-GH", { minimumFractionDigits: 2 })}/mo
-                    </p>
-                    {loan.note ? <p className="mt-1 text-xs text-hgh-muted">{loan.note}</p> : null}
-                    <p className="mt-1 text-sm text-hgh-slate">
-                      {employeeDisplayName(loan.employee)} ·{" "}
-                      <Link
-                        href={`/dashboard/employees/${loan.employee.id}`}
-                        className="text-hgh-gold underline-offset-2 hover:underline"
-                      >
-                        Employee
-                      </Link>
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={acting !== null}
-                      onClick={() => setRejectTarget({ kind: "loan", id: loan.id })}
-                    >
-                      Decline
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={acting !== null || loanApprove !== null}
-                      onClick={() => {
-                        setLoanApprove(loan);
-                        setLoanApproveAmount(String(Number(loan.amount)));
-                        setLoanApproveMonthly(String(Number(loan.monthlyRepayment)));
-                      }}
-                    >
-                      Approve…
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+            {filtered.loans.length > 0 ? (
+              <div className="px-4 py-5 sm:px-6">
+                <h3 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-hgh-muted">
+                  Loans · {filtered.loans.length}
+                </h3>
+                <ul className="space-y-3">
+                  {filtered.loans.map((loan) => (
+                    <li key={loan.id}>
+                      <ItemSurface>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex min-w-0 gap-3">
+                            <TypeMarker icon={Landmark} tone="loan" />
+                            <div className="min-w-0">
+                              <p className="font-medium text-hgh-navy">{loan.type}</p>
+                              <p className="mt-1 text-sm tabular-nums text-hgh-slate">
+                                GHS{" "}
+                                {Number(loan.amount).toLocaleString("en-GH", {
+                                  minimumFractionDigits: 2,
+                                })}{" "}
+                                <span className="font-normal text-hgh-muted">·</span> GHS{" "}
+                                {Number(loan.monthlyRepayment).toLocaleString("en-GH", {
+                                  minimumFractionDigits: 2,
+                                })}
+                                /mo
+                              </p>
+                              {loan.note ? (
+                                <p className="mt-2 text-xs leading-relaxed text-hgh-muted">{loan.note}</p>
+                              ) : null}
+                              <p className="mt-2 text-sm text-hgh-slate">
+                                {employeeDisplayName(loan.employee)}
+                                <Link
+                                  href={`/dashboard/employees/${loan.employee.id}`}
+                                  className="ml-1.5 inline-flex items-center gap-0.5 text-xs font-medium text-hgh-gold hover:underline"
+                                >
+                                  Profile <ArrowUpRight className="h-3 w-3" aria-hidden />
+                                </Link>
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-2 sm:justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={acting !== null}
+                              onClick={() => setRejectTarget({ kind: "loan", id: loan.id })}
+                              className="border-hgh-border/80"
+                            >
+                              Decline
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={acting !== null || loanApprove !== null}
+                              onClick={() => {
+                                setLoanApprove(loan);
+                                setLoanApproveAmount(String(Number(loan.amount)));
+                                setLoanApproveMonthly(String(Number(loan.monthlyRepayment)));
+                              }}
+                            >
+                              Approve…
+                            </Button>
+                          </div>
+                        </div>
+                      </ItemSurface>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">Attendance corrections</CardTitle>
-          <Badge variant="warning">{filtered.corrections.length}</Badge>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {filtered.corrections.length === 0 ? (
-            <p className="text-sm text-hgh-muted">No pending corrections in this filter.</p>
-          ) : (
-            <ul className="divide-y divide-hgh-border">
-              {filtered.corrections.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex flex-col gap-3 py-4 first:pt-0 md:flex-row md:items-start md:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm text-hgh-slate">{c.reason}</p>
-                    <p className="mt-1 text-xs text-hgh-muted">
-                      {employeeDisplayName(c.employee)} · Submitted {new Date(c.createdAt).toLocaleString()}
-                    </p>
-                    <p className="mt-1 text-xs text-hgh-muted">
-                      Current clock-in: {new Date(c.checkIn.clockIn).toLocaleString()}
-                      {c.checkIn.clockOut
-                        ? ` · Out: ${new Date(c.checkIn.clockOut).toLocaleString()}`
-                        : ""}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      disabled={acting !== null}
-                      onClick={() => setRejectTarget({ kind: "correction", id: c.id })}
-                    >
-                      Reject
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={acting !== null}
-                      onClick={() => void patchCorrection(c.id, "APPROVED")}
-                    >
-                      Approve
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+            {filtered.corrections.length > 0 ? (
+              <div className="px-4 py-5 sm:px-6">
+                <h3 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-hgh-muted">
+                  Attendance · {filtered.corrections.length}
+                </h3>
+                <ul className="space-y-3">
+                  {filtered.corrections.map((c) => (
+                    <li key={c.id}>
+                      <ItemSurface>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="flex min-w-0 gap-3">
+                            <TypeMarker icon={Clock} tone="corr" />
+                            <div className="min-w-0">
+                              <p className="text-sm leading-relaxed text-hgh-navy">{c.reason}</p>
+                              <p className="mt-2 text-xs text-hgh-muted">
+                                {employeeDisplayName(c.employee)} · Submitted{" "}
+                                {new Date(c.createdAt).toLocaleString()}
+                              </p>
+                              <p className="mt-1 text-xs text-hgh-muted/90">
+                                Clock-in: {new Date(c.checkIn.clockIn).toLocaleString()}
+                                {c.checkIn.clockOut
+                                  ? ` · Out: ${new Date(c.checkIn.clockOut).toLocaleString()}`
+                                  : ""}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-2 sm:pt-0.5 sm:justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              disabled={acting !== null}
+                              onClick={() => setRejectTarget({ kind: "correction", id: c.id })}
+                              className="border-hgh-border/80"
+                            >
+                              Reject
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={acting !== null}
+                              onClick={() => void patchCorrection(c.id, "APPROVED")}
+                            >
+                              Approve
+                            </Button>
+                          </div>
+                        </div>
+                      </ItemSurface>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        )}
+      </section>
     </div>
   );
 }

@@ -32,16 +32,31 @@ export async function requireDbUser(): Promise<AuthResult> {
 }
 
 /**
- * Central permission helper: SUPER_ADMIN, COMPANY_ADMIN, and (optional) HR
- * can access all HR-level / management features.
+ * Tenant owners: billing, user administration, kiosk/security config, revenue,
+ * and other actions that should not be delegated to HR-only users.
  */
-export function canManage(role: UserRole): boolean {
-  return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN" || role === "HR";
+export function canAdminCompany(role: UserRole): boolean {
+  return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
 }
 
-/** Kept as alias for backward-compat — identical to canManage(). */
+/**
+ * HR plus tenant admins: people operations (leave, draft payroll prep, inbox, workplace records, etc.).
+ */
+export function canHrDashboard(role: UserRole): boolean {
+  return canAdminCompany(role) || role === "HR";
+}
+
+/**
+ * Alias for {@link canHrDashboard}. Prefer canHrDashboard or canAdminCompany in new code
+ * so intent is explicit at each call site.
+ */
+export function canManage(role: UserRole): boolean {
+  return canHrDashboard(role);
+}
+
+/** Draft payroll, bank export, loans, shifts — HR and admins. */
 export function canManagePayroll(role: UserRole): boolean {
-  return canManage(role);
+  return canHrDashboard(role);
 }
 
 export function canApprovePayroll(role: UserRole): boolean {
@@ -49,17 +64,22 @@ export function canApprovePayroll(role: UserRole): boolean {
 }
 
 export function canManageLeave(role: UserRole): boolean {
-  return canManage(role);
+  return canHrDashboard(role);
 }
 
-/** Check-in security, attendance config (not payrun approval). */
+/** Office kiosk settings, enterprise check-in flags — admins only (not HR). */
 export function canManageCheckinSecurity(role: UserRole): boolean {
-  return canManage(role);
+  return canAdminCompany(role);
 }
 
 /** Billing and subscription management (dashboard + APIs). */
 export function canManageBilling(role: UserRole): boolean {
   return role === "SUPER_ADMIN" || role === "COMPANY_ADMIN";
+}
+
+/** Read trial/subscription summary (e.g. GET /api/billing/summary). Same scope as dashboard HR ops. */
+export function canViewBillingSummary(role: UserRole): boolean {
+  return canHrDashboard(role);
 }
 
 /** HR restrictions: cannot approve payruns, manage billing, invite users, or change company settings. */

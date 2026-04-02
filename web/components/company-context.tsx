@@ -6,6 +6,7 @@ interface Company {
   id: string;
   name: string;
   isActive: boolean;
+  subscriptionStatus?: string;
   _count?: { employees: number };
 }
 

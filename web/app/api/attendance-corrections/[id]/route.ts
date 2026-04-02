@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PortalNotificationType, Prisma } from "@prisma/client";
-import { canManageCheckinSecurity, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { canHrDashboard, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { notifyEmployeeInApp } from "@/lib/notify";
 import { prisma } from "@/lib/prisma";
 
@@ -10,7 +10,7 @@ export async function PATCH(
 ) {
   const auth = await requireDbUser();
   if (!auth.ok) return auth.response;
-  if (!canManageCheckinSecurity(auth.dbUser.role)) {
+  if (!canHrDashboard(auth.dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

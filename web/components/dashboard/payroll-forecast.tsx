@@ -42,10 +42,10 @@ export function PayrollForecast() {
 
   return (
     <>
-      <div className="rounded-2xl border border-teal-400/25 bg-gradient-to-br from-slate-950 via-[#0f1729] to-emerald-950/25 p-5 shadow-lg shadow-black/25 lg:p-6">
+      <div className="rounded-2xl border border-hgh-gold/30 bg-hgh-navy p-5 shadow-md shadow-hgh-navy/20 lg:p-6">
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:items-center lg:gap-0">
           <div className="min-w-0 lg:border-r lg:border-white/10 lg:pr-6">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-teal-200/85">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-hgh-gold/90">
               Payroll Forecast &mdash; {data.month}
             </p>
             <p className="mt-1 w-full max-w-none break-words text-3xl font-bold tabular-nums tracking-tight text-white sm:text-4xl">
@@ -75,10 +75,10 @@ export function PayrollForecast() {
                     </>
                   ) : (
                     <>
-                      <AlertTriangle size={18} className="shrink-0 text-teal-300" />
+                      <AlertTriangle size={18} className="shrink-0 text-amber-300" />
                       <Link
                         href={`/dashboard/payroll/${data.lastPayrun.id}`}
-                        className="min-w-0 text-teal-300 underline underline-offset-2 hover:text-teal-200"
+                        className="min-w-0 text-amber-200 underline underline-offset-2 hover:text-amber-100"
                       >
                         {new Date(data.lastPayrun.periodEnd).toLocaleDateString("en-GH", { month: "long" })} salaries not marked as paid
                       </Link>
@@ -91,7 +91,7 @@ export function PayrollForecast() {
             <button
               type="button"
               onClick={() => setShowBreakdown(!showBreakdown)}
-              className="w-fit text-left text-xs font-medium text-teal-200 underline underline-offset-2 hover:text-teal-100"
+              className="w-fit text-left text-xs font-medium text-hgh-gold/90 underline underline-offset-2 hover:text-hgh-gold"
             >
               {showBreakdown ? "Hide breakdown" : "View breakdown"}
             </button>

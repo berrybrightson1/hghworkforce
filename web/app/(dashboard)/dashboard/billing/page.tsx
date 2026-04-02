@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { CreditCard, Sparkles } from "lucide-react";
+import { CreditCard, ShieldCheck, Sparkles } from "lucide-react";
 import { useCompany } from "@/components/company-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -180,6 +180,20 @@ export default function BillingPage() {
           Workspace: <span className="font-medium text-hgh-slate">{selected.name}</span>
         </p>
       </div>
+
+      {summary?.subscribed && !summary?.superAdminExempt && (
+        <div className="flex items-center gap-3 rounded-xl border border-hgh-gold/30 bg-gradient-to-r from-hgh-gold/10 via-hgh-gold/5 to-transparent px-5 py-4">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-hgh-gold/15">
+            <ShieldCheck className="h-5 w-5 text-hgh-gold" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-hgh-navy">Verified Subscriber</p>
+            <p className="mt-0.5 text-xs text-hgh-muted">
+              This workspace has full product access with an active subscription.
+            </p>
+          </div>
+        </div>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-start gap-3 space-y-0">

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canManage, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { canAdminCompany, canHrDashboard, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
@@ -11,7 +11,7 @@ export async function GET(
   const { companyId } = await ctx.params;
   const billing = await gateCompanyBilling(auth.dbUser, companyId);
   if (billing) return billing;
-  if (!canManage(auth.dbUser.role)) {
+  if (!canHrDashboard(auth.dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -35,7 +35,7 @@ export async function PATCH(
   const { companyId } = await ctx.params;
   const billing = await gateCompanyBilling(auth.dbUser, companyId);
   if (billing) return billing;
-  if (!canManage(auth.dbUser.role)) {
+  if (!canAdminCompany(auth.dbUser.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

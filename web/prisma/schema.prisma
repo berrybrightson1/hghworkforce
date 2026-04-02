@@ -1,9 +1,3 @@
-// HGH Payroll — PostgreSQL on Supabase (pooled DATABASE_URL + DIRECT_URL for migrations)
-// See: https://supabase.com/docs/guides/database/connecting-to-postgres
-//
-// DATABASE_URL (Transaction pooler / port 6543) MUST include ?pgbouncer=true (or &pgbouncer=true).
-// Without it, Postgres can error: 42P05 "prepared statement \"sN\" already exists" on Vercel/PgBouncer.
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,6 +6,936 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+}
+
+model Company {
+  id                                String                        @id @default(cuid())
+  name                              String
+  logoUrl                           String?
+  registrationNumber                String?
+  address                           String?
+  isActive                          Boolean                       @default(true)
+  createdAt                         DateTime                      @default(now())
+  updatedAt                         DateTime                      @updatedAt
+  /// ACTIVE = paid subscriber (full access). Other values: access until trialEndsAt (or createdAt + trial window if trialEndsAt is null).
+  subscriptionStatus                SubscriptionStatus            @default(NONE)
+  /// Enterprise check-in (audit sessions)
+  checkinEnterpriseEnabled          Boolean                       @default(false)
+  /// Office kiosk: local HH:mm in kioskTimezone (null = no open/close restriction)
+  kioskOfficeOpensAt                String?
+  kioskOfficeClosesAt               String?
+  /// After this local time, new clock-in blocked; cron marks absent (shift employees)
+  kioskCutoffTime                   String?
+  /// IANA timezone e.g. Africa/Accra
+  kioskTimezone                     String                        @default("Africa/Accra")
+  /// Local YYYY-MM-DD when kiosk absence cron last ran (idempotency)
+  kioskLastAbsentRunDate            String?
+  /// Ghana Tier 2 occupational pension (optional); % of basic salary — employee deduction + employer cost on pay run lines
+  tier2PensionEnabled               Boolean                       @default(false)
+  tier2EmployeePercent              Decimal                       @default(5) @db.Decimal(5, 2)
+  tier2EmployerPercent              Decimal                       @default(5) @db.Decimal(5, 2)
+  /// End of the free trial (all features). If null, the app treats the trial end as createdAt + 3 days (see TRIAL_DAYS in billing/access.ts).
+  trialEndsAt                       DateTime?
+  /// Dashboard: upcoming birthdays / anniversaries widget
+  showBirthdaysOnDashboard          Boolean                       @default(true)
+  birthdayLookaheadDays             Int                           @default(30)
+  /// Payslip PDF branding (react-pdf)
+  payslipPrimaryHex                 String                        @default("#0f172a")
+  payslipAccentHex                  String                        @default("#b45309")
+  /// DEFAULT | MINIMAL | STRIPED
+  payslipThemeVariant               String                        @default("DEFAULT")
+  /// Overtime pay = sum(overtime hours in period) × implied hourly rate × multiplier
+  overtimeHourlyMultiplier          Decimal                       @default(1.5) @db.Decimal(5, 2)
+  standardHoursPerMonth             Decimal                       @default(173) @db.Decimal(6, 2)
+  includeAttendanceOvertimeInPayrun Boolean                       @default(true)
+  /// Referral reward: extends full product access for this company (stackable days).
+  referralAccessUntil               DateTime?
+  attendanceCorrections             AttendanceCorrectionRequest[]
+  checkinSessions                   CheckinSession[]
+  webhooks                          CompanyWebhook[]
+  companyNotices                    CompanyNotice[]
+  employees                         Employee[]
+  lateRecords                       LateRecord[]
+  payQueries                        PayQuery[]
+  profileChangeRequests             ProfileChangeRequest[]
+  invitations                       Invitation[]
+  kioskChallenges                   KioskChallenge[]
+  kioskDayAbsences                  KioskDayAbsence[]
+  leaveEntitlements                 LeaveEntitlement[]
+  payruns                           Payrun[]
+  pinResetRequests                  PinResetRequest[]
+  publicHolidays                    PublicHoliday[]
+  taxBrackets                       TaxBracket[]
+  users                             User[]
+
+  @@index([isActive])
+}
+
+model User {
+  id                            String                        @id @default(cuid())
+  /// Supabase Auth user id (`auth.users.id`)
+  authUserId                    String                        @unique
+  email                         String                        @unique
+  name                          String
+  role                          UserRole
+  isActive                      Boolean                       @default(true)
+  companyId                     String?
+  createdAt                     DateTime                      @default(now())
+  updatedAt                     DateTime                      @updatedAt
+  /// Optional given name for greetings (also derived from name on signup).
+  firstName                     String?
+  lastName                      String?
+  /// Unique shareable code e.g. HGH-ABC123
+  referralCode                  String?
+  /// Set when subscription completes after onboarding with a valid referral code.
+  referredByUserId              String?
+  /// Raw referral code collected at company creation (pending until first paid checkout).
+  pendingReferralCode           String?
+  attendanceCorrectionRequestsSubmitted AttendanceCorrectionRequest[] @relation("CorrectionRequestedBy")
+  attendanceCorrectionsReviewed         AttendanceCorrectionRequest[] @relation("CorrectionReviewedBy")
+  auditLogs                     AuditLog[]
+  managedEmployees              Employee[]                    @relation("EmployeeManager")
+  employee                      Employee?
+  invitations                   Invitation[]
+  referralsReceived             ReferralReward?               @relation("UserReferralRewardsReceived")
+  referralsGiven                ReferralReward[]              @relation("UserReferralRewardsGiven")
+  anonymousFeedbacksReviewed    AnonymousFeedback[]           @relation("AnonymousFeedbackReviewedBy")
+  companyNoticesAuthored        CompanyNotice[]               @relation("CompanyNoticeCreatedBy")
+  payQueryResponses             PayQuery[]                    @relation("PayQueryRespondedBy")
+  profileChangeDecisions        ProfileChangeRequest[]        @relation("ProfileChangeReviewer")
+  company                       Company?                      @relation(fields: [companyId], references: [id])
+  referredBy                    User?                         @relation("UserReferrals", fields: [referredByUserId], references: [id])
+  referees                      User[]                        @relation("UserReferrals")
+
+  @@index([authUserId])
+  @@index([companyId, role])
+  @@index([referredByUserId])
+}
+
+model TrialDevice {
+  id          String    @id @default(cuid())
+  fingerprint String    @unique
+  emailsUsed  String[]
+  blockedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ReferralReward {
+  id                    String    @id @default(cuid())
+  referrerId            String
+  refereeId             String    @unique
+  refereeDisplayName    String?
+  awardedAt             DateTime  @default(now())
+  appliedToSubscription Boolean   @default(false)
+  toastShownAt          DateTime?
+  referee               User      @relation("UserReferralRewardsReceived", fields: [refereeId], references: [id], onDelete: Cascade)
+  referrer              User      @relation("UserReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
+
+  @@index([referrerId])
+  @@index([referrerId, toastShownAt])
+}
+
+model Employee {
+  id                           String                        @id @default(cuid())
+  employeeCode                 String                        @unique
+  userId                       String?                       @unique
+  companyId                    String
+  department                   String
+  jobTitle                     String
+  employmentType               EmploymentType                @default(FULL_TIME)
+  startDate                    DateTime
+  status                       EmployeeStatus                @default(ACTIVE)
+  basicSalary                  Decimal                       @db.Decimal(12, 2)
+  ssnitEncrypted               String?
+  tinEncrypted                 String?
+  bankNameEncrypted            String?
+  bankAccountEncrypted         String?
+  bankBranchEncrypted          String?
+  nokName                      String?
+  nokPhone                     String?
+  nokRelationship              String?
+  createdAt                    DateTime                      @default(now())
+  updatedAt                    DateTime                      @updatedAt
+  deletedAt                    DateTime?
+  /// Display name on the HR record (independent of linked User.name when invited)
+  name                         String?
+  /// When the device was first bound
+  deviceBoundAt                DateTime?
+  /// When the device binding was last reset by HR/admin
+  deviceResetAt                DateTime?
+  /// User ID of the admin who last reset the device binding
+  deviceResetBy                String?
+  /// SHA-256 hash of the device token bound to this employee for kiosk check-in
+  kioskDeviceTokenHash         String?
+  /// MTN_MOMO | TELECEL_CASH | AT_MONEY — Ghana mobile money salary rail (optional).
+  momoProvider                 String?
+  momoMsisdnEncrypted          String?
+  /// Employee self-service (PIN auth, separate from Supabase)
+  portalPin                    String?
+  temporaryPin                 String?
+  pinChangedAt                 DateTime?
+  portalLastLoginAt            DateTime?
+  portalEnabled                Boolean                       @default(true)
+  portalFailedAttempts         Int                           @default(0)
+  portalLockedUntil            DateTime?
+  managedByUserId              String?
+  dateOfBirth                  DateTime?
+  probationEndDate             DateTime?
+  contractType                 String?
+  contractStartDate            DateTime?
+  contractEndDate              DateTime?
+  attendanceCorrectionRequests AttendanceCorrectionRequest[]
+  checkIns                     CheckIn[]
+  checkinSessions              CheckinSession[]
+  company                      Company                       @relation(fields: [companyId], references: [id])
+  managedBy                    User?                         @relation("EmployeeManager", fields: [managedByUserId], references: [id])
+  user                         User?                         @relation(fields: [userId], references: [id])
+  documents                    EmployeeDocument[]
+  employeeOnboardings          EmployeeOnboarding[]
+  onboardingTasks              EmployeeOnboardingTask[]
+  exitRecords                  ExitRecord[]
+  kioskChallenges              KioskChallenge[]
+  kioskDayAbsences             KioskDayAbsence[]
+  leaveRequests                LeaveRequest[]
+  loans                        Loan[]
+  payrunLines                  PayrunLine[]
+  payslips                     Payslip[]
+  performanceReviews           PerformanceReview[]
+  pinResetRequests             PinResetRequest[]
+  portalNotifications          PortalNotification[]
+  salaryComponents             SalaryComponent[]
+  shiftAssignments             ShiftAssignment[]
+  lateRecords                  LateRecord[]
+  noticeReceipts               NoticeReceipt[]
+  payQueries                   PayQuery[]
+  profileChangeRequests        ProfileChangeRequest[]
+
+  @@index([companyId, status])
+  @@index([employeeCode])
+  @@index([kioskDeviceTokenHash])
+}
+
+model PortalNotification {
+  id         String                 @id @default(cuid())
+  employeeId String
+  tenantId   String
+  type       PortalNotificationType
+  title      String
+  message    String
+  linkUrl    String?
+  isRead     Boolean                @default(false)
+  createdAt  DateTime               @default(now())
+  employee   Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, isRead])
+  @@index([tenantId, createdAt])
+}
+
+model PinResetRequest {
+  id           String                @id @default(cuid())
+  employeeId   String
+  companyId    String
+  status       PinResetRequestStatus @default(PENDING)
+  otpHash      String?
+  otpExpiresAt DateTime?
+  createdAt    DateTime              @default(now())
+  resolvedAt   DateTime?
+  adminNote    String?
+  company      Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+model EmployeeDocument {
+  id         String   @id @default(cuid())
+  employeeId String
+  name       String
+  fileUrl    String
+  fileType   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  employee   Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+}
+
+model SalaryComponent {
+  id          String              @id @default(cuid())
+  employeeId  String
+  type        SalaryComponentType
+  name        String
+  amount      Decimal             @db.Decimal(12, 2)
+  isRecurring Boolean             @default(true)
+  startDate   DateTime            @default(now())
+  endDate     DateTime?
+  note        String?
+  createdAt   DateTime            @default(now())
+  employee    Employee            @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, type])
+}
+
+model Payrun {
+  id               String       @id @default(cuid())
+  companyId        String
+  periodStart      DateTime
+  periodEnd        DateTime
+  status           PayrunStatus @default(DRAFT)
+  note             String?
+  createdById      String
+  submittedById    String?
+  approvedById     String?
+  rejectedById     String?
+  rejectionNote    String?
+  approvedAt       DateTime?
+  lockedAt         DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  approvalNote     String?
+  /// Payment tracking (Section 6)
+  isPaid           Boolean      @default(false)
+  paidAt           DateTime?
+  scheduledPayDate DateTime?
+  markedPaidBy     String?
+  company          Company      @relation(fields: [companyId], references: [id])
+  lines            PayrunLine[]
+
+  @@index([companyId, status])
+  @@index([periodStart, periodEnd])
+}
+
+model PayrunLine {
+  id              String   @id @default(cuid())
+  payrunId        String
+  employeeId      String
+  grossPay        Decimal  @db.Decimal(12, 2)
+  ssnitEmployee   Decimal  @db.Decimal(12, 2)
+  ssnitEmployer   Decimal  @db.Decimal(12, 2)
+  taxablePay      Decimal  @db.Decimal(12, 2)
+  payeTax         Decimal  @db.Decimal(12, 2)
+  provident       Decimal  @default(0) @db.Decimal(12, 2)
+  loanDeductions  Decimal  @default(0) @db.Decimal(12, 2)
+  otherDeductions Decimal  @default(0) @db.Decimal(12, 2)
+  totalDeductions Decimal  @db.Decimal(12, 2)
+  netPay          Decimal  @db.Decimal(12, 2)
+  isOverridden    Boolean  @default(false)
+  overrideNote    String?
+  salarySnapshot  Json
+  tier2Employee   Decimal  @default(0) @db.Decimal(12, 2)
+  tier2Employer   Decimal  @default(0) @db.Decimal(12, 2)
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  payrun          Payrun   @relation(fields: [payrunId], references: [id])
+  payslip         Payslip?
+
+  @@unique([payrunId, employeeId])
+  @@index([payrunId])
+}
+
+model Payslip {
+  id            String     @id @default(cuid())
+  payrunLineId  String     @unique
+  employeeId    String
+  pdfUrl        String
+  emailedAt     DateTime?
+  downloadCount Int        @default(0)
+  createdAt     DateTime   @default(now())
+  employee      Employee   @relation(fields: [employeeId], references: [id])
+  payrunLine    PayrunLine @relation(fields: [payrunLineId], references: [id])
+
+  @@index([employeeId])
+}
+
+model LeaveEntitlement {
+  id                 String    @id @default(cuid())
+  companyId          String
+  leaveType          LeaveType
+  /// Base annual (or period) entitlement in days
+  days               Int
+  isActive           Boolean   @default(true)
+  /// Optional: extra days accrued per calendar month employed (from startDate), added to entitled cap
+  monthlyAccrualRate Decimal?  @db.Decimal(5, 2)
+  /// Optional: ceiling on total entitled (base + accrual); null = no cap
+  maxBalanceDays     Int?
+  company            Company   @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, leaveType])
+}
+
+model LeaveRequest {
+  id            String      @id @default(cuid())
+  employeeId    String
+  type          LeaveType
+  startDate     DateTime
+  endDate       DateTime
+  days          Int
+  status        LeaveStatus @default(PENDING)
+  note          String?
+  approvedById  String?
+  approvedAt    DateTime?
+  rejectionNote String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  approvalNote  String?
+  employee      Employee    @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, status])
+  @@index([startDate, endDate])
+}
+
+model Loan {
+  id               String     @id @default(cuid())
+  employeeId       String
+  type             LoanType
+  amount           Decimal    @db.Decimal(12, 2)
+  balance          Decimal    @db.Decimal(12, 2)
+  monthlyRepayment Decimal    @db.Decimal(12, 2)
+  disbursedAt      DateTime
+  status           LoanStatus @default(ACTIVE)
+  note             String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  employee         Employee   @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, status])
+}
+
+model TaxBracket {
+  id        String   @id @default(cuid())
+  companyId String?
+  year      Int
+  minAmount Decimal  @db.Decimal(12, 2)
+  maxAmount Decimal? @db.Decimal(12, 2)
+  rate      Decimal  @db.Decimal(5, 2)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  company   Company? @relation(fields: [companyId], references: [id])
+
+  @@index([year, isActive])
+}
+
+model CheckIn {
+  id                 String                        @id @default(cuid())
+  employeeId         String
+  companyId          String
+  clockIn            DateTime                      @default(now())
+  clockOut           DateTime?
+  status             CheckInStatus                 @default(CLOCKED_IN)
+  /// Total hours worked (computed on clock-out)
+  hoursWorked        Decimal?                      @db.Decimal(6, 2)
+  /// Overtime hours beyond scheduled shift (computed on clock-out)
+  overtimeHours      Decimal?                      @db.Decimal(6, 2)
+  /// Minutes late relative to shift start
+  lateMinutes        Int?
+  /// Minutes early departure relative to shift end
+  earlyDepartMinutes Int?
+  note               String?
+  /// If linked to a shift assignment
+  shiftAssignmentId  String?
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  /// Enterprise check-in session (audit trail)
+  checkinSessionId   String?
+  correctionRequests AttendanceCorrectionRequest[]
+  checkinSession     CheckinSession?               @relation(fields: [checkinSessionId], references: [id])
+  employee           Employee                      @relation(fields: [employeeId], references: [id])
+  shiftAssignment    ShiftAssignment?              @relation(fields: [shiftAssignmentId], references: [id])
+
+  @@index([employeeId, clockIn])
+  @@index([companyId, clockIn])
+  @@index([companyId, status])
+  @@index([checkinSessionId])
+}
+
+model CheckinSession {
+  id         String         @id @default(cuid())
+  employeeId String
+  companyId  String
+  clientIp   String?
+  userAgent  String?
+  endedAt    DateTime?
+  createdAt  DateTime       @default(now())
+  checkIns   CheckIn[]
+  events     CheckinEvent[]
+  company    Company        @relation(fields: [companyId], references: [id])
+  employee   Employee       @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId, createdAt])
+  @@index([companyId, createdAt])
+}
+
+model CheckinEvent {
+  id        String                  @id @default(cuid())
+  sessionId String
+  type      CheckinSessionEventType
+  metadata  Json?
+  createdAt DateTime                @default(now())
+  session   CheckinSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
+
+/// Local calendar day in company kioskTimezone; absence if no check-in by cutoff.
+model KioskDayAbsence {
+  id         String   @id @default(cuid())
+  companyId  String
+  employeeId String
+  /// Local date YYYY-MM-DD for company timezone
+  localDate  String
+  reason     String   @default("MISSING_CHECKIN")
+  createdAt  DateTime @default(now())
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, employeeId, localDate])
+  @@index([companyId, localDate])
+}
+
+model Shift {
+  id           String            @id @default(cuid())
+  companyId    String
+  /// e.g. "Morning", "Afternoon", "Night"
+  name         String
+  /// HH:mm format, e.g. "08:00"
+  startTime    String
+  /// HH:mm format, e.g. "17:00"
+  endTime      String
+  breakMinutes Int               @default(60)
+  status       ShiftStatus       @default(ACTIVE)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  assignments  ShiftAssignment[]
+
+  @@index([companyId, status])
+}
+
+model ShiftAssignment {
+  id         String    @id @default(cuid())
+  shiftId    String
+  employeeId String
+  /// Effective date range for this assignment
+  startDate  DateTime
+  endDate    DateTime?
+  createdAt  DateTime  @default(now())
+  checkIns   CheckIn[]
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  shift      Shift     @relation(fields: [shiftId], references: [id])
+
+  @@index([employeeId, startDate])
+  @@index([shiftId])
+}
+
+model Invitation {
+  id        String           @id @default(cuid())
+  email     String
+  role      UserRole
+  companyId String
+  code      String           @unique
+  status    InvitationStatus @default(PENDING)
+  invitedBy String
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+  company   Company          @relation(fields: [companyId], references: [id])
+  inviter   User             @relation(fields: [invitedBy], references: [id])
+
+  @@index([email, status])
+  @@index([code])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String
+  action      String
+  entityType  String
+  entityId    String
+  beforeState Json?
+  afterState  Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  actor       User     @relation(fields: [actorId], references: [id])
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+/// Outbound integration (e.g. Zapier / internal tools) — fired when a pay run is approved
+model CompanyWebhook {
+  id             String   @id @default(cuid())
+  companyId      String
+  url            String
+  /// Shared secret for HMAC-SHA256 of raw JSON body (`X-HGH-Signature: sha256=<hex>`)
+  secret         String
+  payrunApproved Boolean  @default(true)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+}
+
+/// Staff checklist on employee profile (onboarding / probation tasks)
+model EmployeeOnboardingTask {
+  id          String    @id @default(cuid())
+  employeeId  String
+  title       String
+  description String?
+  sortOrder   Int       @default(0)
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+/// Employee requests a fix to a check-in record; HR/admin approves and times update
+model AttendanceCorrectionRequest {
+  id                String                     @id @default(cuid())
+  checkInId         String
+  employeeId        String
+  companyId         String
+  /// Null when submitted from employee PIN portal (no linked User).
+  requestedByUserId String?
+  reason            String
+  proposedClockIn   DateTime?
+  proposedClockOut  DateTime?
+  status            AttendanceCorrectionStatus @default(PENDING)
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime                   @default(now())
+  checkIn           CheckIn                    @relation(fields: [checkInId], references: [id], onDelete: Cascade)
+  company           Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee          Employee                   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  requestedBy       User?                      @relation("CorrectionRequestedBy", fields: [requestedByUserId], references: [id])
+  reviewedBy        User?                      @relation("CorrectionReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+model OnboardingTemplate {
+  id          String                   @id @default(cuid())
+  tenantId    String
+  companyId   String
+  name        String
+  isDefault   Boolean                  @default(false)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  onboardings EmployeeOnboarding[]
+  tasks       OnboardingTemplateTask[]
+
+  @@index([companyId])
+}
+
+model OnboardingTemplateTask {
+  id           String             @id @default(cuid())
+  templateId   String
+  title        String
+  description  String?
+  dueAfterDays Int
+  isRequired   Boolean            @default(true)
+  order        Int                @default(0)
+  template     OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model EmployeeOnboarding {
+  id          String                    @id @default(cuid())
+  employeeId  String
+  tenantId    String
+  companyId   String
+  templateId  String
+  startDate   DateTime
+  completedAt DateTime?
+  status      OnboardingStatus          @default(PENDING)
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  employee    Employee                  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  template    OnboardingTemplate        @relation(fields: [templateId], references: [id])
+  tasks       OnboardingChecklistItem[]
+
+  @@index([companyId])
+  @@index([employeeId])
+}
+
+model OnboardingChecklistItem {
+  id             String               @id @default(cuid())
+  onboardingId   String
+  templateTaskId String?
+  title          String
+  dueDate        DateTime
+  isRequired     Boolean              @default(true)
+  status         OnboardingTaskStatus @default(PENDING)
+  completedAt    DateTime?
+  completedBy    String?
+  waivedBy       String?
+  waivedNote     String?
+  onboarding     EmployeeOnboarding   @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+
+  @@index([onboardingId])
+}
+
+model PerformanceCycle {
+  id          String                 @id @default(cuid())
+  tenantId    String
+  companyId   String
+  name        String
+  periodStart DateTime
+  periodEnd   DateTime
+  status      PerformanceCycleStatus @default(DRAFT)
+  createdAt   DateTime               @default(now())
+  reviews     PerformanceReview[]
+
+  @@index([companyId, status])
+}
+
+model PerformanceReview {
+  id             String                  @id @default(cuid())
+  cycleId        String
+  employeeId     String
+  reviewerId     String?
+  status         PerformanceReviewStatus @default(PENDING)
+  selfRating     Float?
+  managerRating  Float?
+  finalRating    Float?
+  selfComment    String?
+  managerComment String?
+  submittedAt    DateTime?
+  completedAt    DateTime?
+  goals          PerformanceGoal[]
+  cycle          PerformanceCycle        @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  employee       Employee                @relation(fields: [employeeId], references: [id])
+
+  @@index([cycleId])
+  @@index([employeeId])
+}
+
+model PerformanceGoal {
+  id           String            @id @default(cuid())
+  reviewId     String
+  title        String
+  description  String?
+  selfScore    Int?
+  managerScore Int?
+  weight       Int
+  review       PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId])
+}
+
+model ExitRecord {
+  id                String              @id @default(cuid())
+  employeeId        String
+  tenantId          String
+  companyId         String
+  exitType          ExitType
+  noticeDate        DateTime
+  lastWorkingDay    DateTime
+  exitInterviewDate DateTime?
+  reason            String?
+  status            ExitStatus          @default(INITIATED)
+  finalPayrunId     String?
+  createdBy         String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  clearanceItems    ExitClearanceItem[]
+  employee          Employee            @relation(fields: [employeeId], references: [id])
+
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+model ExitClearanceItem {
+  id           String                  @id @default(cuid())
+  exitRecordId String
+  department   ExitClearanceDepartment
+  item         String
+  assignedTo   String?
+  status       ExitClearanceStatus     @default(PENDING)
+  clearedAt    DateTime?
+  clearedBy    String?
+  note         String?
+  exitRecord   ExitRecord              @relation(fields: [exitRecordId], references: [id], onDelete: Cascade)
+
+  @@index([exitRecordId])
+}
+
+model KioskChallenge {
+  id             String   @id @default(cuid())
+  companyId      String
+  employeeId     String
+  /// 6-digit verification code shown on the employee's phone
+  code           String
+  /// Whether the device verification step passed
+  deviceVerified Boolean  @default(false)
+  /// Whether this challenge has been consumed (code entered on kiosk)
+  consumed       Boolean  @default(false)
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+  company        Company  @relation(fields: [companyId], references: [id])
+  employee       Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([expiresAt])
+}
+
+model RevenueEntry {
+  id            String   @id @default(cuid())
+  tenantId      String
+  companyId     String
+  month         Int
+  year          Int
+  revenueAmount Decimal  @db.Decimal(14, 2)
+  note          String?
+  enteredBy     String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([companyId, month, year])
+  @@index([companyId])
+}
+
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  companyId String
+  date      DateTime
+  name      String
+  createdAt DateTime @default(now())
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+  @@index([companyId])
+}
+
+model LatenessPolicy {
+  id                         String  @id @default(cuid())
+  companyId                  String  @unique
+  graceMinutes               Int     @default(5)
+  lateInstancesBeforeWarning Int?
+  warningLetterBodyTemplate  String?
+}
+
+model LateRecord {
+  id                  String    @id @default(cuid())
+  companyId           String
+  employeeId          String
+  checkInId           String?
+  date                DateTime
+  minutesLate         Int
+  warningLetterSentAt DateTime?
+  notes               String?
+  createdAt           DateTime  @default(now())
+  company             Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee            Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, date])
+  @@index([employeeId])
+}
+
+model PayQuery {
+  id            String         @id @default(cuid())
+  companyId     String
+  employeeId    String
+  subject       String
+  body          String
+  status        PayQueryStatus @default(OPEN)
+  responseBody  String?
+  respondedById String?
+  respondedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee      Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  respondedBy   User?          @relation("PayQueryRespondedBy", fields: [respondedById], references: [id])
+
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+model AnonymousFeedback {
+  id           String                  @id @default(cuid())
+  companyId    String
+  message      String
+  category     String?
+  status       AnonymousFeedbackStatus @default(NEW)
+  reviewedById String?
+  reviewedAt   DateTime?
+  internalNote String?
+  createdAt    DateTime                @default(now())
+  reviewedBy   User?                   @relation("AnonymousFeedbackReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([companyId, status])
+}
+
+model ProfileChangeRequest {
+  id           String                     @id @default(cuid())
+  companyId    String
+  employeeId   String
+  changesJson  Json
+  employeeNote String?
+  status       ProfileChangeRequestStatus @default(PENDING)
+  reviewerNote String?
+  decidedById  String?
+  decidedAt    DateTime?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  company      Company                    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     Employee                   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  decidedBy    User?                      @relation("ProfileChangeReviewer", fields: [decidedById], references: [id])
+
+  @@index([companyId, status])
+  @@index([employeeId])
+}
+
+model CompanyNotice {
+  id          String              @id @default(cuid())
+  companyId   String
+  title       String
+  body        String
+  status      CompanyNoticeStatus @default(PUBLISHED)
+  publishedAt DateTime            @default(now())
+  expiresAt   DateTime?
+  createdById String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  company     Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy   User                @relation("CompanyNoticeCreatedBy", fields: [createdById], references: [id])
+  receipts    NoticeReceipt[]
+
+  @@index([companyId, publishedAt])
+}
+
+model NoticeReceipt {
+  id         String        @id @default(cuid())
+  noticeId   String
+  employeeId String
+  readAt     DateTime      @default(now())
+  notice     CompanyNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  employee   Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([noticeId, employeeId])
+  @@index([employeeId])
+}
+
+model AdminNotification {
+  id            String                @id @default(cuid())
+  companyId     String
+  type          AdminNotificationType
+  actorName     String?
+  title         String
+  message       String
+  linkUrl       String?
+  /// IDs of users who have read this notification (PostgreSQL array)
+  readByUserIds String[]              @default([])
+  createdAt     DateTime              @default(now())
+
+  @@index([companyId, createdAt(sort: Desc)])
 }
 
 enum UserRole {
@@ -67,10 +991,10 @@ enum LoanType {
 }
 
 enum LoanStatus {
-  PENDING
   ACTIVE
   COMPLETED
   CANCELLED
+  PENDING
 }
 
 enum SubscriptionStatus {
@@ -79,232 +1003,6 @@ enum SubscriptionStatus {
   TRIAL
   PAST_DUE
   CANCELED
-}
-
-model Company {
-  id                 String             @id @default(cuid())
-  name               String
-  logoUrl            String?
-  registrationNumber String?
-  address            String?
-  isActive           Boolean            @default(true)
-  /// ACTIVE = paid subscriber (full access). Other values: access until trialEndsAt (or createdAt + trial window if trialEndsAt is null).
-  subscriptionStatus SubscriptionStatus @default(NONE)
-  /// End of the free trial (all features). If null, the app treats the trial end as createdAt + 3 days (see TRIAL_DAYS in billing/access.ts).
-  trialEndsAt        DateTime?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-
-  users             User[]
-  employees         Employee[]
-  payruns           Payrun[]
-  taxBrackets       TaxBracket[]
-  leaveEntitlements LeaveEntitlement[]
-  invitations       Invitation[]
-
-  /// Enterprise check-in (audit sessions)
-  checkinEnterpriseEnabled Boolean @default(false)
-
-  /// Office kiosk: local HH:mm in kioskTimezone (null = no open/close restriction)
-  kioskOfficeOpensAt     String?
-  kioskOfficeClosesAt    String?
-  /// After this local time, new clock-in blocked; cron marks absent (shift employees)
-  kioskCutoffTime        String?
-  /// IANA timezone e.g. Africa/Accra
-  kioskTimezone          String  @default("Africa/Accra")
-  /// Local YYYY-MM-DD when kiosk absence cron last ran (idempotency)
-  kioskLastAbsentRunDate String?
-
-  /// Ghana Tier 2 occupational pension (optional); % of basic salary — employee deduction + employer cost on pay run lines
-  tier2PensionEnabled  Boolean @default(false)
-  tier2EmployeePercent Decimal @default(5) @db.Decimal(5, 2)
-  tier2EmployerPercent Decimal @default(5) @db.Decimal(5, 2)
-
-  /// Dashboard: upcoming birthdays / anniversaries widget
-  showBirthdaysOnDashboard Boolean @default(true)
-  birthdayLookaheadDays    Int       @default(30)
-
-  /// Payslip PDF branding (react-pdf)
-  payslipPrimaryHex       String @default("#0f172a")
-  payslipAccentHex        String @default("#b45309")
-  /// DEFAULT | MINIMAL | STRIPED
-  payslipThemeVariant     String @default("DEFAULT")
-
-  /// Referral reward: extends full product access for this company (stackable days).
-  referralAccessUntil DateTime?
-
-  /// Overtime pay = sum(overtime hours in period) × implied hourly rate × multiplier
-  overtimeHourlyMultiplier           Decimal @default(1.5) @db.Decimal(5, 2)
-  standardHoursPerMonth              Decimal @default(173) @db.Decimal(6, 2)
-  includeAttendanceOvertimeInPayrun  Boolean @default(true)
-
-  kioskDayAbsences      KioskDayAbsence[]
-  checkinSessions       CheckinSession[]
-  kioskChallenges       KioskChallenge[]
-  webhooks              CompanyWebhook[]
-  attendanceCorrections AttendanceCorrectionRequest[]
-  pinResetRequests      PinResetRequest[]
-  publicHolidays        PublicHoliday[]
-  latenessPolicy        LatenessPolicy?
-  lateRecords           LateRecord[]
-  payQueries            PayQuery[]
-  anonymousFeedbacks    AnonymousFeedback[]
-  companyNotices        CompanyNotice[]
-  profileChangeRequests ProfileChangeRequest[]
-
-  @@index([isActive])
-}
-
-model User {
-  id         String   @id @default(cuid())
-  /// Supabase Auth user id (`auth.users.id`)
-  authUserId String   @unique
-  email      String   @unique
-  name       String
-  /// Optional given name for greetings (also derived from name on signup).
-  firstName  String?
-  lastName   String?
-  /// Unique shareable code e.g. HGH-ABC123
-  referralCode        String? @unique
-  /// Set when subscription completes after onboarding with a valid referral code.
-  referredByUserId    String?
-  /// Raw referral code collected at company creation (pending until first paid checkout).
-  pendingReferralCode String?
-  role       UserRole
-  isActive   Boolean  @default(true)
-  companyId  String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  company                        Company?                      @relation(fields: [companyId], references: [id])
-  employee                       Employee?
-  referredBy                     User?                         @relation("UserReferrals", fields: [referredByUserId], references: [id])
-  referees                       User[]                        @relation("UserReferrals")
-  /// Employees who report to this dashboard user (leave/inbox "my team").
-  managedEmployees               Employee[]                    @relation("EmployeeManager")
-  auditLogs                      AuditLog[]
-  invitations                    Invitation[]
-  attendanceCorrectionsRequested AttendanceCorrectionRequest[] @relation("CorrectionRequestedBy")
-  attendanceCorrectionsReviewed  AttendanceCorrectionRequest[] @relation("CorrectionReviewedBy")
-  companyNoticesAuthored         CompanyNotice[]                 @relation("NoticeAuthor")
-  payQueriesAnswered             PayQuery[]                      @relation("PayQueryResponder")
-  profileChangeReviews           ProfileChangeRequest[]          @relation("ProfileChangeReviewer")
-  anonymousFeedbackReviewed      AnonymousFeedback[]             @relation("AnonymousFeedbackReviewer")
-  referralsGiven                 ReferralReward[]                @relation("UserReferralRewardsGiven")
-  referralsReceived              ReferralReward[]                @relation("UserReferralRewardsReceived")
-
-  @@index([authUserId])
-  @@index([companyId, role])
-  @@index([referredByUserId])
-}
-
-model TrialDevice {
-  id          String    @id @default(cuid())
-  fingerprint String    @unique
-  emailsUsed  String[]
-  blockedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-}
-
-model ReferralReward {
-  id                    String   @id @default(cuid())
-  referrerId            String
-  refereeId             String
-  refereeDisplayName    String?
-  awardedAt             DateTime @default(now())
-  appliedToSubscription Boolean  @default(false)
-  toastShownAt          DateTime?
-  referrer              User     @relation("UserReferralRewardsGiven", fields: [referrerId], references: [id], onDelete: Cascade)
-  referee               User     @relation("UserReferralRewardsReceived", fields: [refereeId], references: [id], onDelete: Cascade)
-
-  @@unique([refereeId])
-  @@index([referrerId])
-  @@index([referrerId, toastShownAt])
-}
-
-model Employee {
-  id                   String         @id @default(cuid())
-  employeeCode         String         @unique
-  /// Display name on the HR record (independent of linked User.name when invited)
-  name                 String?
-  userId               String?        @unique
-  companyId            String
-  department           String
-  jobTitle             String
-  employmentType       EmploymentType @default(FULL_TIME)
-  startDate            DateTime
-  status               EmployeeStatus @default(ACTIVE)
-  basicSalary          Decimal        @db.Decimal(12, 2)
-  ssnitEncrypted       String?
-  tinEncrypted         String?
-  bankNameEncrypted    String?
-  bankAccountEncrypted String?
-  bankBranchEncrypted  String?
-  /// MTN_MOMO | TELECEL_CASH | AT_MONEY — Ghana mobile money salary rail (optional).
-  momoProvider         String?
-  momoMsisdnEncrypted  String?
-  nokName              String?
-  nokPhone             String?
-  nokRelationship      String?
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  deletedAt            DateTime?
-
-  /// SHA-256 hash of the device token bound to this employee for kiosk check-in
-  kioskDeviceTokenHash String?
-  /// When the device was first bound
-  deviceBoundAt        DateTime?
-  /// When the device binding was last reset by HR/admin
-  deviceResetAt        DateTime?
-  /// User ID of the admin who last reset the device binding
-  deviceResetBy        String?
-
-  /// Employee self-service (PIN auth, separate from Supabase)
-  portalPin            String?
-  temporaryPin         String?
-  pinChangedAt         DateTime?
-  portalLastLoginAt    DateTime?
-  portalEnabled        Boolean   @default(true)
-  portalFailedAttempts Int       @default(0)
-  portalLockedUntil    DateTime?
-
-  dateOfBirth       DateTime?
-  probationEndDate  DateTime?
-  contractType      String?
-  contractStartDate DateTime?
-  contractEndDate   DateTime?
-
-  company                      Company                       @relation(fields: [companyId], references: [id])
-  user                         User?                         @relation(fields: [userId], references: [id])
-  managedByUserId              String?
-  managedBy                    User?                         @relation("EmployeeManager", fields: [managedByUserId], references: [id])
-  salaryComponents             SalaryComponent[]
-  payrunLines                  PayrunLine[]
-  payslips                     Payslip[]
-  leaveRequests                LeaveRequest[]
-  loans                        Loan[]
-  checkIns                     CheckIn[]
-  shiftAssignments             ShiftAssignment[]
-  documents                    EmployeeDocument[]
-  checkinSessions              CheckinSession[]
-  kioskChallenges              KioskChallenge[]
-  kioskDayAbsences             KioskDayAbsence[]
-  onboardingTasks              EmployeeOnboardingTask[]
-  attendanceCorrectionRequests AttendanceCorrectionRequest[]
-  employeeOnboardings          EmployeeOnboarding[]
-  performanceReviews           PerformanceReview[]
-  exitRecords                  ExitRecord[]
-  portalNotifications          PortalNotification[]
-  pinResetRequests             PinResetRequest[]
-  payQueries                   PayQuery[]
-  profileChangeRequests       ProfileChangeRequest[]
-  lateRecords                  LateRecord[]
-  noticeReceipts               NoticeReceipt[]
-
-  @@index([companyId, status])
-  @@index([employeeCode])
-  @@index([kioskDeviceTokenHash])
 }
 
 enum PortalNotificationType {
@@ -320,27 +1018,10 @@ enum PortalNotificationType {
   PERFORMANCE_REVIEW_OPEN
   DOCUMENT_REQUIRED
   PIN_RESET
+  GENERAL
   COMPANY_NOTICE
   PAY_QUERY_UPDATE
   PROFILE_REQUEST_DECIDED
-  GENERAL
-}
-
-model PortalNotification {
-  id         String                 @id @default(cuid())
-  employeeId String
-  tenantId   String
-  type       PortalNotificationType
-  title      String
-  message    String
-  linkUrl    String?
-  isRead     Boolean                @default(false)
-  createdAt  DateTime               @default(now())
-
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  @@index([employeeId, isRead])
-  @@index([tenantId, createdAt])
 }
 
 enum PinResetRequestStatus {
@@ -348,202 +1029,6 @@ enum PinResetRequestStatus {
   RESOLVED
   CANCELLED
 }
-
-model PinResetRequest {
-  id         String                @id @default(cuid())
-  employeeId String
-  companyId  String
-  status     PinResetRequestStatus @default(PENDING)
-  otpHash    String?
-  otpExpiresAt DateTime?
-  createdAt  DateTime              @default(now())
-  resolvedAt DateTime?
-  adminNote  String?
-
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId, status])
-  @@index([employeeId])
-}
-
-model EmployeeDocument {
-  id         String   @id @default(cuid())
-  employeeId String
-  name       String
-  fileUrl    String
-  fileType   String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  employee Employee @relation(fields: [employeeId], references: [id])
-
-  @@index([employeeId])
-}
-
-model SalaryComponent {
-  id          String              @id @default(cuid())
-  employeeId  String
-  type        SalaryComponentType
-  name        String
-  amount      Decimal             @db.Decimal(12, 2)
-  isRecurring Boolean             @default(true)
-  startDate   DateTime            @default(now())
-  endDate     DateTime?
-  note        String?
-  createdAt   DateTime            @default(now())
-
-  employee Employee @relation(fields: [employeeId], references: [id])
-
-  @@index([employeeId, type])
-}
-
-model Payrun {
-  id               String       @id @default(cuid())
-  companyId        String
-  periodStart      DateTime
-  periodEnd        DateTime
-  status           PayrunStatus @default(DRAFT)
-  note             String?
-  createdById      String
-  submittedById    String?
-  approvedById     String?
-  rejectedById     String?
-  rejectionNote    String?
-  approvalNote     String?
-  approvedAt       DateTime?
-  lockedAt         DateTime?
-  /// Payment tracking (Section 6)
-  isPaid           Boolean      @default(false)
-  paidAt           DateTime?
-  scheduledPayDate DateTime?
-  markedPaidBy     String?
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
-
-  company Company      @relation(fields: [companyId], references: [id])
-  lines   PayrunLine[]
-
-  @@index([companyId, status])
-  @@index([periodStart, periodEnd])
-}
-
-model PayrunLine {
-  id              String  @id @default(cuid())
-  payrunId        String
-  employeeId      String
-  grossPay        Decimal @db.Decimal(12, 2)
-  ssnitEmployee   Decimal @db.Decimal(12, 2)
-  ssnitEmployer   Decimal @db.Decimal(12, 2)
-  taxablePay      Decimal @db.Decimal(12, 2)
-  payeTax         Decimal @db.Decimal(12, 2)
-  provident       Decimal @default(0) @db.Decimal(12, 2)
-  loanDeductions  Decimal @default(0) @db.Decimal(12, 2)
-  otherDeductions Decimal @default(0) @db.Decimal(12, 2)
-  tier2Employee   Decimal @default(0) @db.Decimal(12, 2)
-  tier2Employer   Decimal @default(0) @db.Decimal(12, 2)
-  totalDeductions Decimal @db.Decimal(12, 2)
-  netPay          Decimal @db.Decimal(12, 2)
-  isOverridden    Boolean @default(false)
-  overrideNote    String?
-  salarySnapshot  Json
-
-  payrun   Payrun   @relation(fields: [payrunId], references: [id])
-  employee Employee @relation(fields: [employeeId], references: [id])
-  payslip  Payslip?
-
-  @@unique([payrunId, employeeId])
-  @@index([payrunId])
-}
-
-model Payslip {
-  id            String    @id @default(cuid())
-  payrunLineId  String    @unique
-  employeeId    String
-  pdfUrl        String
-  emailedAt     DateTime?
-  downloadCount Int       @default(0)
-  createdAt     DateTime  @default(now())
-
-  payrunLine PayrunLine @relation(fields: [payrunLineId], references: [id])
-  employee   Employee   @relation(fields: [employeeId], references: [id])
-
-  @@index([employeeId])
-}
-
-model LeaveEntitlement {
-  id                 String    @id @default(cuid())
-  companyId          String
-  leaveType          LeaveType
-  /// Base annual (or period) entitlement in days
-  days               Int
-  isActive           Boolean   @default(true)
-  /// Optional: extra days accrued per calendar month employed (from startDate), added to entitled cap
-  monthlyAccrualRate Decimal?  @db.Decimal(5, 2)
-  /// Optional: ceiling on total entitled (base + accrual); null = no cap
-  maxBalanceDays     Int?
-
-  company Company @relation(fields: [companyId], references: [id])
-
-  @@unique([companyId, leaveType])
-}
-
-model LeaveRequest {
-  id            String      @id @default(cuid())
-  employeeId    String
-  type          LeaveType
-  startDate     DateTime
-  endDate       DateTime
-  days          Int
-  status        LeaveStatus @default(PENDING)
-  note          String?
-  approvedById  String?
-  approvedAt    DateTime?
-  rejectionNote String?
-  approvalNote  String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  employee Employee @relation(fields: [employeeId], references: [id])
-
-  @@index([employeeId, status])
-  @@index([startDate, endDate])
-}
-
-model Loan {
-  id               String     @id @default(cuid())
-  employeeId       String
-  type             LoanType
-  amount           Decimal    @db.Decimal(12, 2)
-  balance          Decimal    @db.Decimal(12, 2)
-  monthlyRepayment Decimal    @db.Decimal(12, 2)
-  disbursedAt      DateTime
-  status           LoanStatus @default(ACTIVE)
-  note             String?
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
-
-  employee Employee @relation(fields: [employeeId], references: [id])
-
-  @@index([employeeId, status])
-}
-
-model TaxBracket {
-  id        String   @id @default(cuid())
-  companyId String?
-  year      Int
-  minAmount Decimal  @db.Decimal(12, 2)
-  maxAmount Decimal? @db.Decimal(12, 2)
-  rate      Decimal  @db.Decimal(5, 2)
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-
-  company Company? @relation(fields: [companyId], references: [id])
-
-  @@index([year, isActive])
-}
-
-// ─── Check-in & Shift Enums ─────────────────────────────────────────────────
 
 enum CheckInStatus {
   CLOCKED_IN
@@ -564,123 +1049,6 @@ enum ShiftStatus {
   INACTIVE
 }
 
-// ─── Check-in & Shift Models ────────────────────────────────────────────────
-
-model CheckIn {
-  id                 String        @id @default(cuid())
-  employeeId         String
-  companyId          String
-  clockIn            DateTime      @default(now())
-  clockOut           DateTime?
-  status             CheckInStatus @default(CLOCKED_IN)
-  /// Total hours worked (computed on clock-out)
-  hoursWorked        Decimal?      @db.Decimal(6, 2)
-  /// Overtime hours beyond scheduled shift (computed on clock-out)
-  overtimeHours      Decimal?      @db.Decimal(6, 2)
-  /// Minutes late relative to shift start
-  lateMinutes        Int?
-  /// Minutes early departure relative to shift end
-  earlyDepartMinutes Int?
-  note               String?
-  /// If linked to a shift assignment
-  shiftAssignmentId  String?
-  /// Enterprise check-in session (audit trail)
-  checkinSessionId   String?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-
-  employee           Employee                      @relation(fields: [employeeId], references: [id])
-  shiftAssignment    ShiftAssignment?              @relation(fields: [shiftAssignmentId], references: [id])
-  checkinSession     CheckinSession?               @relation(fields: [checkinSessionId], references: [id])
-  correctionRequests AttendanceCorrectionRequest[]
-  lateRecords        LateRecord[]
-
-  @@index([employeeId, clockIn])
-  @@index([companyId, clockIn])
-  @@index([companyId, status])
-  @@index([checkinSessionId])
-}
-
-model CheckinSession {
-  id         String    @id @default(cuid())
-  employeeId String
-  companyId  String
-  clientIp   String?
-  userAgent  String?
-  endedAt    DateTime?
-  createdAt  DateTime  @default(now())
-
-  employee Employee       @relation(fields: [employeeId], references: [id])
-  company  Company        @relation(fields: [companyId], references: [id])
-  events   CheckinEvent[]
-  checkIns CheckIn[]
-
-  @@index([employeeId, createdAt])
-  @@index([companyId, createdAt])
-}
-
-model CheckinEvent {
-  id        String                  @id @default(cuid())
-  sessionId String
-  type      CheckinSessionEventType
-  metadata  Json?
-  createdAt DateTime                @default(now())
-
-  session CheckinSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId, createdAt])
-}
-
-/// Local calendar day in company kioskTimezone; absence if no check-in by cutoff.
-model KioskDayAbsence {
-  id         String   @id @default(cuid())
-  companyId  String
-  employeeId String
-  /// Local date YYYY-MM-DD for company timezone
-  localDate  String
-  reason     String   @default("MISSING_CHECKIN")
-  createdAt  DateTime @default(now())
-
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  @@unique([companyId, employeeId, localDate])
-  @@index([companyId, localDate])
-}
-
-model Shift {
-  id           String      @id @default(cuid())
-  companyId    String
-  name         String /// e.g. "Morning", "Afternoon", "Night"
-  startTime    String /// HH:mm format, e.g. "08:00"
-  endTime      String /// HH:mm format, e.g. "17:00"
-  breakMinutes Int         @default(60)
-  status       ShiftStatus @default(ACTIVE)
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-
-  assignments ShiftAssignment[]
-
-  @@index([companyId, status])
-}
-
-model ShiftAssignment {
-  id         String    @id @default(cuid())
-  shiftId    String
-  employeeId String
-  /// Effective date range for this assignment
-  startDate  DateTime
-  endDate    DateTime?
-  createdAt  DateTime  @default(now())
-
-  shift    Shift     @relation(fields: [shiftId], references: [id])
-  employee Employee  @relation(fields: [employeeId], references: [id])
-  checkIns CheckIn[]
-
-  @@index([employeeId, startDate])
-  @@index([shiftId])
-}
-
 enum InvitationStatus {
   PENDING
   ACCEPTED
@@ -688,108 +1056,11 @@ enum InvitationStatus {
   EXPIRED
 }
 
-model Invitation {
-  id        String           @id @default(cuid())
-  email     String
-  role      UserRole
-  companyId String
-  code      String           @unique
-  status    InvitationStatus @default(PENDING)
-  invitedBy String
-  expiresAt DateTime
-  createdAt DateTime         @default(now())
-
-  company Company @relation(fields: [companyId], references: [id])
-  inviter User    @relation(fields: [invitedBy], references: [id])
-
-  @@index([email, status])
-  @@index([code])
-}
-
-model AuditLog {
-  id          String   @id @default(cuid())
-  actorId     String
-  action      String
-  entityType  String
-  entityId    String
-  beforeState Json?
-  afterState  Json?
-  ipAddress   String?
-  createdAt   DateTime @default(now())
-
-  actor User @relation(fields: [actorId], references: [id])
-
-  @@index([actorId])
-  @@index([entityType, entityId])
-  @@index([createdAt])
-}
-
 enum AttendanceCorrectionStatus {
   PENDING
   APPROVED
   REJECTED
 }
-
-/// Outbound integration (e.g. Zapier / internal tools) — fired when a pay run is approved
-model CompanyWebhook {
-  id             String   @id @default(cuid())
-  companyId      String
-  url            String
-  /// Shared secret for HMAC-SHA256 of raw JSON body (`X-HGH-Signature: sha256=<hex>`)
-  secret         String
-  payrunApproved Boolean  @default(true)
-  isActive       Boolean  @default(true)
-  createdAt      DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@index([companyId])
-}
-
-/// Staff checklist on employee profile (onboarding / probation tasks)
-model EmployeeOnboardingTask {
-  id          String    @id @default(cuid())
-  employeeId  String
-  title       String
-  description String?
-  sortOrder   Int       @default(0)
-  completed   Boolean   @default(false)
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  @@index([employeeId])
-}
-
-/// Employee requests a fix to a check-in record; HR/admin approves and times update
-model AttendanceCorrectionRequest {
-  id                String                     @id @default(cuid())
-  checkInId         String
-  employeeId        String
-  companyId         String
-  /// Null when submitted from employee PIN portal (no linked User).
-  requestedByUserId String?
-  reason            String
-  proposedClockIn   DateTime?
-  proposedClockOut  DateTime?
-  status            AttendanceCorrectionStatus @default(PENDING)
-  reviewedById      String?
-  reviewedAt        DateTime?
-  reviewNote        String?
-  createdAt         DateTime                   @default(now())
-
-  checkIn     CheckIn  @relation(fields: [checkInId], references: [id], onDelete: Cascade)
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  requestedBy User?    @relation("CorrectionRequestedBy", fields: [requestedByUserId], references: [id])
-  reviewedBy  User?    @relation("CorrectionReviewedBy", fields: [reviewedById], references: [id])
-
-  @@index([companyId, status])
-  @@index([employeeId])
-}
-
-// ─── Onboarding Tracker (Section 2) ──────────────────────────────────────────
 
 enum OnboardingStatus {
   PENDING
@@ -805,75 +1076,6 @@ enum OnboardingTaskStatus {
   WAIVED
 }
 
-model OnboardingTemplate {
-  id        String   @id @default(cuid())
-  tenantId  String
-  companyId String
-  name      String
-  isDefault Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tasks       OnboardingTemplateTask[]
-  onboardings EmployeeOnboarding[]
-
-  @@index([companyId])
-}
-
-model OnboardingTemplateTask {
-  id           String  @id @default(cuid())
-  templateId   String
-  title        String
-  description  String?
-  dueAfterDays Int
-  isRequired   Boolean @default(true)
-  order        Int     @default(0)
-
-  template OnboardingTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  @@index([templateId])
-}
-
-model EmployeeOnboarding {
-  id          String           @id @default(cuid())
-  employeeId  String
-  tenantId    String
-  companyId   String
-  templateId  String
-  startDate   DateTime
-  completedAt DateTime?
-  status      OnboardingStatus @default(PENDING)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  employee Employee                  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  template OnboardingTemplate        @relation(fields: [templateId], references: [id])
-  tasks    OnboardingChecklistItem[]
-
-  @@index([companyId])
-  @@index([employeeId])
-}
-
-model OnboardingChecklistItem {
-  id             String               @id @default(cuid())
-  onboardingId   String
-  templateTaskId String?
-  title          String
-  dueDate        DateTime
-  isRequired     Boolean              @default(true)
-  status         OnboardingTaskStatus @default(PENDING)
-  completedAt    DateTime?
-  completedBy    String?
-  waivedBy       String?
-  waivedNote     String?
-
-  onboarding EmployeeOnboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
-
-  @@index([onboardingId])
-}
-
-// ─── Performance Management (Section 3) ──────────────────────────────────────
-
 enum PerformanceCycleStatus {
   DRAFT
   ACTIVE
@@ -886,59 +1088,6 @@ enum PerformanceReviewStatus {
   MANAGER_REVIEWED
   COMPLETED
 }
-
-model PerformanceCycle {
-  id          String                 @id @default(cuid())
-  tenantId    String
-  companyId   String
-  name        String
-  periodStart DateTime
-  periodEnd   DateTime
-  status      PerformanceCycleStatus @default(DRAFT)
-  createdAt   DateTime               @default(now())
-
-  reviews PerformanceReview[]
-
-  @@index([companyId, status])
-}
-
-model PerformanceReview {
-  id             String                  @id @default(cuid())
-  cycleId        String
-  employeeId     String
-  reviewerId     String?
-  status         PerformanceReviewStatus @default(PENDING)
-  selfRating     Float?
-  managerRating  Float?
-  finalRating    Float?
-  selfComment    String?
-  managerComment String?
-  submittedAt    DateTime?
-  completedAt    DateTime?
-
-  cycle    PerformanceCycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
-  employee Employee          @relation(fields: [employeeId], references: [id])
-  goals    PerformanceGoal[]
-
-  @@index([cycleId])
-  @@index([employeeId])
-}
-
-model PerformanceGoal {
-  id           String  @id @default(cuid())
-  reviewId     String
-  title        String
-  description  String?
-  selfScore    Int?
-  managerScore Int?
-  weight       Int
-
-  review PerformanceReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-
-  @@index([reviewId])
-}
-
-// ─── Exit Management (Section 5) ─────────────────────────────────────────────
 
 enum ExitType {
   RESIGNATION
@@ -971,88 +1120,6 @@ enum ExitClearanceStatus {
   WAIVED
 }
 
-model ExitRecord {
-  id                String     @id @default(cuid())
-  employeeId        String
-  tenantId          String
-  companyId         String
-  exitType          ExitType
-  noticeDate        DateTime
-  lastWorkingDay    DateTime
-  exitInterviewDate DateTime?
-  reason            String?
-  status            ExitStatus @default(INITIATED)
-  finalPayrunId     String?
-  createdBy         String
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
-
-  employee       Employee            @relation(fields: [employeeId], references: [id])
-  clearanceItems ExitClearanceItem[]
-
-  @@index([companyId, status])
-  @@index([employeeId])
-}
-
-model ExitClearanceItem {
-  id           String                  @id @default(cuid())
-  exitRecordId String
-  department   ExitClearanceDepartment
-  item         String
-  assignedTo   String?
-  status       ExitClearanceStatus     @default(PENDING)
-  clearedAt    DateTime?
-  clearedBy    String?
-  note         String?
-
-  exitRecord ExitRecord @relation(fields: [exitRecordId], references: [id], onDelete: Cascade)
-
-  @@index([exitRecordId])
-}
-
-// ─── Kiosk QR Challenge-Response ─────────────────────────────────────────────
-
-model KioskChallenge {
-  id             String   @id @default(cuid())
-  companyId      String
-  employeeId     String
-  /// 6-digit verification code shown on the employee's phone
-  code           String
-  /// Whether the device verification step passed
-  deviceVerified Boolean  @default(false)
-  /// Whether this challenge has been consumed (code entered on kiosk)
-  consumed       Boolean  @default(false)
-  expiresAt      DateTime
-  createdAt      DateTime @default(now())
-
-  company  Company  @relation(fields: [companyId], references: [id])
-  employee Employee @relation(fields: [employeeId], references: [id])
-
-  @@index([companyId])
-  @@index([employeeId])
-  @@index([expiresAt])
-}
-
-// ─── Revenue Tracker (Section 8) ─────────────────────────────────────────────
-
-model RevenueEntry {
-  id            String   @id @default(cuid())
-  tenantId      String
-  companyId     String
-  month         Int
-  year          Int
-  revenueAmount Decimal  @db.Decimal(14, 2)
-  note          String?
-  enteredBy     String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@unique([companyId, month, year])
-  @@index([companyId])
-}
-
-// ─── Workplace / HR extensions (roadmap Feature 1–12) ────────────────────────
-
 enum PayQueryStatus {
   OPEN
   IN_PROGRESS
@@ -1077,135 +1144,13 @@ enum CompanyNoticeStatus {
   ARCHIVED
 }
 
-model PublicHoliday {
-  id        String   @id @default(cuid())
-  companyId String
-  date      DateTime
-  name      String
-  createdAt DateTime @default(now())
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-
-  @@unique([companyId, date])
-  @@index([companyId])
-}
-
-model LatenessPolicy {
-  id                         String  @id @default(cuid())
-  companyId                  String  @unique
-  graceMinutes               Int     @default(5)
-  lateInstancesBeforeWarning Int?
-  warningLetterBodyTemplate  String? @db.Text
-
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-}
-
-model LateRecord {
-  id                  String    @id @default(cuid())
-  companyId           String
-  employeeId          String
-  checkInId           String?
-  date                DateTime
-  minutesLate         Int
-  warningLetterSentAt DateTime?
-  notes               String?
-  createdAt           DateTime  @default(now())
-
-  company  Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  checkIn  CheckIn? @relation(fields: [checkInId], references: [id], onDelete: SetNull)
-
-  @@index([companyId, date])
-  @@index([employeeId])
-}
-
-model PayQuery {
-  id            String         @id @default(cuid())
-  companyId     String
-  employeeId    String
-  subject       String
-  body          String         @db.Text
-  status        PayQueryStatus @default(OPEN)
-  responseBody  String?        @db.Text
-  respondedById String?
-  respondedAt   DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  respondedBy User?    @relation("PayQueryResponder", fields: [respondedById], references: [id])
-
-  @@index([companyId, status])
-  @@index([employeeId])
-}
-
-model AnonymousFeedback {
-  id           String                  @id @default(cuid())
-  companyId    String
-  message      String                  @db.Text
-  category     String?
-  status       AnonymousFeedbackStatus @default(NEW)
-  reviewedById String?
-  reviewedAt   DateTime?
-  internalNote String?                 @db.Text
-  createdAt    DateTime                @default(now())
-
-  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  reviewedBy User?   @relation("AnonymousFeedbackReviewer", fields: [reviewedById], references: [id])
-
-  @@index([companyId, status])
-}
-
-model ProfileChangeRequest {
-  id           String                     @id @default(cuid())
-  companyId    String
-  employeeId   String
-  changesJson  Json
-  employeeNote String?
-  status       ProfileChangeRequestStatus @default(PENDING)
-  reviewerNote String?
-  decidedById  String?
-  decidedAt    DateTime?
-  createdAt    DateTime                   @default(now())
-  updatedAt    DateTime                   @updatedAt
-
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  decidedBy User?    @relation("ProfileChangeReviewer", fields: [decidedById], references: [id])
-
-  @@index([companyId, status])
-  @@index([employeeId])
-}
-
-model CompanyNotice {
-  id          String              @id @default(cuid())
-  companyId   String
-  title       String
-  body        String              @db.Text
-  status      CompanyNoticeStatus @default(PUBLISHED)
-  publishedAt DateTime            @default(now())
-  expiresAt   DateTime?
-  createdById String
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-
-  company   Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  createdBy User            @relation("NoticeAuthor", fields: [createdById], references: [id])
-  receipts  NoticeReceipt[]
-
-  @@index([companyId, publishedAt])
-}
-
-model NoticeReceipt {
-  id         String   @id @default(cuid())
-  noticeId   String
-  employeeId String
-  readAt     DateTime @default(now())
-
-  notice   CompanyNotice @relation(fields: [noticeId], references: [id], onDelete: Cascade)
-  employee Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-
-  @@unique([noticeId, employeeId])
-  @@index([employeeId])
+enum AdminNotificationType {
+  LEAVE_REQUEST
+  ATTENDANCE_CORRECTION
+  LOAN_REQUEST
+  PAY_RUN_COMPLETED
+  EMPLOYEE_JOINED
+  ONBOARDING_UPDATE
+  BILLING_ALERT
+  SYSTEM_NOTICE
 }
