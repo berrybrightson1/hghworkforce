@@ -6,6 +6,7 @@ import {
   requireDbUser,
   requireEmployeeSelf,
 } from "@/lib/api-auth";
+import { notifyAdmins } from "@/lib/admin-notifications";
 import { prisma } from "@/lib/prisma";
 
 /** GET ?companyId= — pending + recent correction requests */
@@ -113,17 +114,33 @@ export async function POST(req: NextRequest) {
     const proposedClockIn = body.proposedClockIn ? new Date(body.proposedClockIn) : null;
     const proposedClockOut = body.proposedClockOut ? new Date(body.proposedClockOut) : null;
 
-    const row = await prisma.attendanceCorrectionRequest.create({
-      data: {
-        checkInId,
-        employeeId: checkIn.employeeId,
-        companyId: checkIn.companyId,
-        requestedByUserId,
-        reason,
-        proposedClockIn,
-        proposedClockOut,
-      },
+    const [row, emp] = await Promise.all([
+      prisma.attendanceCorrectionRequest.create({
+        data: {
+          checkInId,
+          employeeId: checkIn.employeeId,
+          companyId: checkIn.companyId,
+          requestedByUserId,
+          reason,
+          proposedClockIn,
+          proposedClockOut,
+        },
+      }),
+      prisma.employee.findUnique({
+        where: { id: checkIn.employeeId },
+        select: { name: true },
+      }),
+    ]);
+
+    void notifyAdmins({
+      companyId: checkIn.companyId,
+      type: "ATTENDANCE_CORRECTION",
+      title: "Attendance correction submitted",
+      message: `${emp?.name ?? "An employee"} submitted an attendance correction: "${reason}".`,
+      linkUrl: "/dashboard/inbox",
+      actorName: emp?.name ?? undefined,
     });
+
     return NextResponse.json(row, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to submit" }, { status: 500 });

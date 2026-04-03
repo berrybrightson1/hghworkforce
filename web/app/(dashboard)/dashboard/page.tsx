@@ -18,7 +18,6 @@ import {
   PayrollTrendChart,
   type TrendData,
 } from "@/components/dashboard/PayrollTrendChart";
-import { EmployeeSetupReminder } from "@/components/dashboard/employee-setup-reminder";
 import { MorningBriefing } from "@/components/dashboard/morning-briefing";
 import { PayrollForecast } from "@/components/dashboard/payroll-forecast";
 import { CostRevenueCompact } from "@/components/dashboard/cost-revenue-compact";
@@ -119,8 +118,6 @@ export default function DashboardPage() {
         </div>
         <Badge variant="success">Live</Badge>
       </div>
-
-      <EmployeeSetupReminder companyId={selected?.id ?? null} />
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

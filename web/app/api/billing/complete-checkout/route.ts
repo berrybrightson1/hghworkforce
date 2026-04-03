@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   const stripe = getStripe();
   if (!stripe) {
-    return NextResponse.json({ error: "Stripe not configured" }, { status: 503 });
+    return NextResponse.json({ error: "Payment verification is not available." }, { status: 503 });
   }
 
   try {
@@ -135,9 +135,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, companyId });
   } catch (e) {
     console.error("[billing/complete-checkout]", e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Verification failed" },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: "Could not verify payment. Please contact support if this persists." }, { status: 502 });
   }
 }

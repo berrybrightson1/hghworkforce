@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireDbUser } from "@/lib/api-auth";
+import { ensureAppUser } from "@/lib/ensure-app-user";
 import { prisma } from "@/lib/prisma";
+import { createClient } from "@/lib/supabase/server";
 import { verifySignupTicket } from "@/lib/signup-ticket";
 
 const bodySchema = z.object({
@@ -14,8 +15,24 @@ const bodySchema = z.object({
  * Records trial device usage after Supabase sign-up (session required).
  */
 export async function POST(req: Request) {
-  const auth = await requireDbUser();
-  if (!auth.ok) return auth.response;
+  const supabase = await createClient();
+  const {
+    data: { user: supabaseUser },
+  } = await supabase.auth.getUser();
+  if (!supabaseUser) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const emailForName = supabaseUser.email ?? "";
+  const displayName =
+    (typeof supabaseUser.user_metadata?.full_name === "string" && supabaseUser.user_metadata.full_name) ||
+    emailForName ||
+    "User";
+
+  const dbUser = await ensureAppUser(supabaseUser, displayName);
+  if (!dbUser.isActive) {
+    return NextResponse.json({ error: "Account inactive" }, { status: 403 });
+  }
 
   let json: unknown;
   try {
@@ -34,7 +51,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid or expired sign-up ticket. Try again." }, { status: 400 });
   }
 
-  const email = auth.dbUser.email.trim().toLowerCase();
+  const email = dbUser.email.trim().toLowerCase();
   if (verified.email !== email) {
     return NextResponse.json({ error: "Ticket does not match this account." }, { status: 403 });
   }

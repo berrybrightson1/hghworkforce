@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { SubscriptionStatus } from "@prisma/client";
 import { canManageBilling, requireDbUser } from "@/lib/api-auth";
 import { prisma } from "@/lib/prisma";
 
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
       data: {
         plan,
         planActivatedAt: new Date(),
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
       },
     });
     return NextResponse.json({ ok: true });

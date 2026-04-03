@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { canManage, gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { ensureCompanyAttentionNotifications } from "@/lib/ensure-company-attention-notifications";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -23,6 +24,8 @@ export async function GET(req: NextRequest) {
   if (billing) return billing;
 
   try {
+    await ensureCompanyAttentionNotifications(companyId);
+
     const [rows, unreadCount] = await prisma.$transaction([
       prisma.adminNotification.findMany({
         where: { companyId },

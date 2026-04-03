@@ -111,9 +111,7 @@ export default function OnboardingTemplatesManagePage() {
 
       <section className="space-y-3">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
-            auto_awesome
-          </span>
+          <Sparkles size={20} className="text-hgh-gold" aria-hidden />
           <h3 className="text-sm font-semibold text-hgh-navy">
             {hasTemplates ? "Add from suggestions" : "Get started with suggested templates"}
           </h3>

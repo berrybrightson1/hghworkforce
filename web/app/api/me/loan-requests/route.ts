@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { LoanStatus } from "@prisma/client";
 import { gateBillingForEmployeeSelf, requireEmployeeSelf } from "@/lib/api-auth";
+import { notifyAdmins } from "@/lib/admin-notifications";
 import { prisma } from "@/lib/prisma";
 
 const bodySchema = z.object({
@@ -46,6 +47,16 @@ export async function POST(req: Request) {
         note: note?.trim() || null,
       },
     });
+
+    void notifyAdmins({
+      companyId: self.employee.companyId,
+      type: "LOAN_REQUEST",
+      title: `New ${type.toLowerCase()} request`,
+      message: `${self.employee.name ?? "An employee"} requested a GHS ${amount.toLocaleString("en-GH", { minimumFractionDigits: 2 })} ${type.toLowerCase()}.`,
+      linkUrl: "/dashboard/loans",
+      actorName: self.employee.name ?? undefined,
+    });
+
     return NextResponse.json(loan, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to submit request" }, { status: 500 });

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { gateCompanyBilling, requireDbUser } from "@/lib/api-auth";
+import { notifyAdmins } from "@/lib/admin-notifications";
 import { guardEmployeeCreation } from "@/lib/billing/guards";
 import { allocateEmployeeCode } from "@/lib/employee-code";
 import { prisma } from "@/lib/prisma";
@@ -222,6 +223,15 @@ export async function POST(req: NextRequest) {
         timeout: 30_000,
       },
       );
+      void notifyAdmins({
+        companyId,
+        type: "EMPLOYEE_JOINED",
+        title: "New employee added",
+        message: `${name} has been added as ${jobTitle} in ${department}.`,
+        linkUrl: `/dashboard/employees/${employee.id}`,
+        actorName: name,
+      });
+
       return NextResponse.json(employee, { status: 201 });
     } catch (e: unknown) {
       if (

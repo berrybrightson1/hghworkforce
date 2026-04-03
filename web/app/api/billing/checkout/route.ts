@@ -18,7 +18,7 @@ function absoluteOrigin(req: Request): string {
 
 /**
  * POST /api/billing/checkout
- * Creates a Stripe Checkout Session (subscription) when STRIPE_SECRET_KEY + STRIPE_PRICE_ID are set.
+ * Creates a hosted checkout session when the configured payment provider is set up (currently Stripe behind the scenes).
  */
 export async function POST(req: Request) {
   const auth = await requireDbUser();
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
       ok: true,
       bypassed: true,
       message:
-        "Stripe is not fully configured. Set STRIPE_SECRET_KEY and STRIPE_PRICE_ID in .env.local (subscription price id). Until then, a super admin can mark subscription ACTIVE on Platform health.",
+        "Online checkout is not enabled on this server yet. Ask your administrator to activate your subscription, or try again once payments are turned on.",
       companyId: company.id,
       subscriptionStatus: company.subscriptionStatus,
     });
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   const stripe = getStripe();
   const priceId = getStripePriceId();
   if (!stripe || !priceId) {
-    return NextResponse.json({ error: "Stripe misconfiguration" }, { status: 500 });
+    return NextResponse.json({ error: "Checkout is temporarily unavailable. Please try again later." }, { status: 500 });
   }
 
   const origin = absoluteOrigin(req);
@@ -95,9 +95,6 @@ export async function POST(req: Request) {
     });
   } catch (e) {
     console.error("[billing/checkout]", e);
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Checkout failed" },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: "Checkout failed. Please try again or contact support." }, { status: 502 });
   }
 }

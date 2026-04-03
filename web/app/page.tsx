@@ -8,9 +8,12 @@ import { FeaturesShowcase } from "@/components/landing/features-showcase";
 import { RolesShowcase } from "@/components/landing/roles-showcase";
 import { ServicesShowcase } from "@/components/landing/services-showcase";
 import {
+  Award,
+  Banknote,
   CheckCircle2,
   Download,
   Edit,
+  Fingerprint,
   LogIn,
   Monitor,
   Rocket,
@@ -266,9 +269,7 @@ export default async function LandingPage() {
           </div>
           <div className="grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-hgh-border bg-hgh-offwhite/50 p-5">
-              <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
-                payments
-              </span>
+              <Banknote size={24} className="text-hgh-gold" aria-hidden />
               <h3 className="mt-2 text-lg font-semibold text-hgh-navy">Payroll Only</h3>
               <p className="mt-2 text-sm leading-relaxed text-hgh-muted">
                 Run payroll, calculate Ghana PAYE and SSNIT, generate payslips, and give staff access to their pay
@@ -276,9 +277,7 @@ export default async function LandingPage() {
               </p>
             </div>
             <div className="rounded-xl border border-hgh-border bg-hgh-offwhite/50 p-5">
-              <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
-                fingerprint
-              </span>
+              <Fingerprint size={24} className="text-hgh-gold" aria-hidden />
               <h3 className="mt-2 text-lg font-semibold text-hgh-navy">Attendance Only</h3>
               <p className="mt-2 text-sm leading-relaxed text-hgh-muted">
                 Set up your office kiosk, track clock-ins and clock-outs, manage corrections, and monitor attendance —
@@ -287,9 +286,7 @@ export default async function LandingPage() {
             </div>
             <div className="rounded-xl border border-hgh-gold/35 bg-hgh-offwhite/50 p-5">
               <div className="flex items-center justify-between gap-2">
-                <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
-                  workspace_premium
-                </span>
+                <Award size={24} className="text-hgh-gold" aria-hidden />
                 <span className="rounded-md bg-hgh-gold/15 px-2 py-0.5 text-[11px] font-medium text-hgh-gold">
                   Most Popular
                 </span>

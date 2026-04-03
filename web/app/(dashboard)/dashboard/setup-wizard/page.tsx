@@ -7,14 +7,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Controller, useForm } from "react-hook-form";
 import { z } from "zod";
 import {
+  Banknote,
   Building2,
+  CalendarCheck2,
   Check,
   CheckCircle2,
   ChevronRight,
-  ListChecks,
   Clock,
+  Fingerprint,
+  ListChecks,
   UserPlus,
-  CalendarCheck2,
+  type LucideIcon,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -44,23 +47,23 @@ const STEPS: { key: WizardStep; label: string; icon: typeof Building2 }[] = [
   { key: "shifts", label: "Shift", icon: Clock },
 ];
 
-const MODULE_OPTIONS = [
+const MODULE_OPTIONS: { key: string; label: string; icon: LucideIcon }[] = [
   {
     key: "payroll",
     label: "Payroll",
-    icon: "payments",
+    icon: Banknote,
   },
   {
     key: "attendance",
     label: "Attendance & Kiosk",
-    icon: "fingerprint",
+    icon: Fingerprint,
   },
   {
     key: "leave_loans",
     label: "Leave & Loans",
-    icon: "event_available",
+    icon: CalendarCheck2,
   },
-] as const;
+];
 
 const employeeSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -431,9 +434,7 @@ export default function SetupWizardPage() {
                       )
                     }
                   >
-                    <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
-                      {option.icon}
-                    </span>
+                    <option.icon size={22} className="text-hgh-gold" aria-hidden />
                     <p className="mt-2 text-sm font-medium text-hgh-navy">{option.label}</p>
                   </button>
                 );

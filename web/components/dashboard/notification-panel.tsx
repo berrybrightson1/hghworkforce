@@ -15,10 +15,12 @@ import {
   CheckCheck,
   Inbox,
   type LucideIcon,
+  Timer,
 } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
+import { TRIAL_ENDING_NOTIFICATION_TITLE } from "@/lib/trial-ending-notification";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
 
@@ -83,6 +85,7 @@ function NotificationRow({
 }) {
   const config = TYPE_CONFIG[notification.type] ?? TYPE_CONFIG.SYSTEM_NOTICE;
   const Icon = config.icon;
+  const isTrialEnding = notification.title === TRIAL_ENDING_NOTIFICATION_TITLE;
 
   const inner = (
     <div
@@ -100,8 +103,17 @@ function NotificationRow({
       }}
     >
       {/* Icon */}
-      <div className={cn("mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", config.bg)}>
-        <Icon size={16} className={config.color} />
+      <div
+        className={cn(
+          "mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+          isTrialEnding ? "bg-hgh-navy/90" : config.bg,
+        )}
+      >
+        {isTrialEnding ? (
+          <Timer size={18} className="text-hgh-gold" aria-hidden />
+        ) : (
+          <Icon size={16} className={config.color} />
+        )}
       </div>
 
       {/* Content */}
@@ -157,9 +169,19 @@ function EmptyState() {
 
 /* ─── Main panel ──────────────────────────────────────────────────────────── */
 
-export function NotificationPanel({ userRole }: { userRole: UserRole }) {
+export function NotificationPanel({
+  userRole,
+  open: controlledOpen,
+  onOpenChange,
+}: {
+  userRole: UserRole;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const { selected } = useCompany();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = onOpenChange ?? setInternalOpen;
   const [markingAll, setMarkingAll] = useState(false);
 
   const shouldShow = userRole !== "EMPLOYEE";
@@ -226,7 +248,7 @@ export function NotificationPanel({ userRole }: { userRole: UserRole }) {
   if (!shouldShow) return null;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => setOpen(next)}>
       <PopoverTrigger asChild>
         <button
           type="button"

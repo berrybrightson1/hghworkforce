@@ -267,20 +267,21 @@ export default function BillingPage() {
             ) : null}
           </div>
 
-          <DismissibleCallout
-            storageKey={`hgh-dismiss-billing-operator-note-${selected?.id ?? "none"}`}
-            className="items-start rounded-lg border border-dashed border-hgh-border bg-white px-4 py-3 text-xs text-hgh-muted"
-          >
-            <p>
-              <strong className="text-hgh-slate">Paying customers:</strong> set{" "}
-              <code className="rounded bg-hgh-offwhite px-1">STRIPE_SECRET_KEY</code> and{" "}
-              <code className="rounded bg-hgh-offwhite px-1">STRIPE_PRICE_ID</code> (recurring price) to enable checkout.
-              Until then, your operator can set{" "}
-              <code className="rounded bg-hgh-offwhite px-1">subscriptionStatus</code> to{" "}
-              <code className="rounded bg-hgh-offwhite px-1">ACTIVE</code> for this company in the database to unlock
-              immediately after trial.
-            </p>
-          </DismissibleCallout>
+          {me?.role === "SUPER_ADMIN" && !summary?.paymentProviderConfigured ? (
+            <DismissibleCallout
+              storageKey="hgh-dismiss-billing-super-admin-payments"
+              className="items-start rounded-lg border border-dashed border-hgh-border bg-white px-4 py-3 text-xs text-hgh-muted"
+            >
+              <p>
+                <strong className="text-hgh-slate">Operator note:</strong> card checkout is not enabled on this
+                deployment (payment provider env not set). Use{" "}
+                <Link href="/dashboard/platform-health" className="font-medium text-hgh-gold underline underline-offset-2">
+                  Platform health
+                </Link>{" "}
+                to set a company subscription to active for testing, or configure payments on the server.
+              </p>
+            </DismissibleCallout>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-3">
             <Link
@@ -292,8 +293,8 @@ export default function BillingPage() {
             <HintTooltip
               content={
                 summary?.subscribed
-                  ? "Billing management UI is coming soon; your operator can still adjust status in the database if needed."
-                  : "Start or resume checkout when Stripe is connected, or ask your operator to activate the workspace subscription."
+                  ? "More billing self-service options are coming soon."
+                  : "Subscribe opens checkout when your workspace has online payments enabled (Paystack for Ghana is rolling out). Otherwise ask your administrator to activate the subscription."
               }
             >
               <Button type="button" onClick={() => void handleSubscribe()} disabled={checkoutLoading}>
@@ -303,7 +304,8 @@ export default function BillingPage() {
             </HintTooltip>
             {!summary?.paymentProviderConfigured ? (
               <p className="text-xs text-hgh-muted">
-                Add Stripe secret key and subscription price id to enable checkout.
+                Online checkout will be available soon (Paystack for teams in Ghana). Your administrator can activate
+                this workspace in the meantime.
               </p>
             ) : null}
           </div>

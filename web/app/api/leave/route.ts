@@ -6,6 +6,7 @@ import {
   requireDbUser,
   requireEmployeeSelf,
 } from "@/lib/api-auth";
+import { notifyAdmins } from "@/lib/admin-notifications";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -148,6 +149,11 @@ export async function POST(req: NextRequest) {
       resolvedEmployeeId = target.id;
     }
 
+    const employee = await prisma.employee.findUnique({
+      where: { id: resolvedEmployeeId },
+      select: { name: true, companyId: true },
+    });
+
     const request = await prisma.leaveRequest.create({
       data: {
         employeeId: resolvedEmployeeId,
@@ -158,6 +164,18 @@ export async function POST(req: NextRequest) {
         note: body.note || null,
       },
     });
+
+    if (employee) {
+      void notifyAdmins({
+        companyId: employee.companyId,
+        type: "LEAVE_REQUEST",
+        title: "New leave request",
+        message: `${employee.name ?? "An employee"} requested ${body.days} day${body.days === 1 ? "" : "s"} ${body.type.toLowerCase()} leave.`,
+        linkUrl: "/dashboard/inbox",
+        actorName: employee.name ?? undefined,
+      });
+    }
+
     return NextResponse.json(request, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Failed to create leave request" }, { status: 500 });

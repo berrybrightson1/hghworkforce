@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireDbUser, canManage, gateCompanyBilling } from "@/lib/api-auth";
+import { notifyAdmins } from "@/lib/admin-notifications";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
@@ -78,6 +79,17 @@ export async function PATCH(
       },
     });
 
+    if (allRequiredDone && updated?.employee) {
+      void notifyAdmins({
+        companyId: onboarding.companyId,
+        type: "ONBOARDING_UPDATE",
+        title: "Onboarding completed",
+        message: `All required onboarding tasks for ${updated.employee.name} (${updated.employee.employeeCode}) are now complete.`,
+        linkUrl: `/dashboard/onboarding/${onboardingId}`,
+        actorName: updated.employee.name ?? undefined,
+      });
+    }
+
     return NextResponse.json(updated);
   }
 
@@ -128,6 +140,17 @@ export async function PATCH(
         employee: { select: { name: true, employeeCode: true } },
       },
     });
+
+    if (allRequiredDone && updated?.employee) {
+      void notifyAdmins({
+        companyId: onboarding.companyId,
+        type: "ONBOARDING_UPDATE",
+        title: "Onboarding completed",
+        message: `All required onboarding tasks for ${updated.employee.name} (${updated.employee.employeeCode}) are now complete.`,
+        linkUrl: `/dashboard/onboarding/${onboardingId}`,
+        actorName: updated.employee.name ?? undefined,
+      });
+    }
 
     return NextResponse.json(updated);
   }

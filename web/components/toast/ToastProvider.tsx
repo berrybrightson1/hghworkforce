@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { CheckCircle2, XCircle, AlertTriangle, Info, X } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Info, X, Gift } from "lucide-react";
 import type { ToastMessage, ToastVariant } from "./toast-types";
 import { ToastContext } from "./toast-context";
 
@@ -15,9 +15,7 @@ function ToastIcon({
   const cls = "shrink-0";
   if (variant === "success" && useRedeemIcon) {
     return (
-      <span className={`material-symbols-outlined ${cls} text-hgh-gold`} style={{ fontSize: 22 }} aria-hidden>
-        redeem
-      </span>
+      <Gift size={22} className={`${cls} text-hgh-gold`} aria-hidden />
     );
   }
   switch (variant) {

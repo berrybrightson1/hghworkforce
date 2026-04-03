@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Lock } from "lucide-react";
 import { usePlan } from "@/hooks/usePlan";
 import type { PlanModule } from "@/lib/planPermissions";
 
@@ -22,9 +23,7 @@ export function FeatureGate({
   return (
     <div className="rounded-xl border border-hgh-border bg-white p-5">
       <div className="flex items-start gap-3">
-        <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
-          lock
-        </span>
+        <Lock size={22} className="text-hgh-gold" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-hgh-navy">This feature is not included in your current plan.</p>
           <Link

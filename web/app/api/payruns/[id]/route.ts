@@ -6,6 +6,7 @@ import {
   gateCompanyBilling,
   requireDbUser,
 } from "@/lib/api-auth";
+import { notifyAdmins } from "@/lib/admin-notifications";
 import { deliverCompanyWebhooks } from "@/lib/company-webhooks";
 import { prisma } from "@/lib/prisma";
 
@@ -183,6 +184,15 @@ export async function PATCH(
         lineCount: lineAgg._count.id,
         totalNetPay: lineAgg._sum.netPay?.toString() ?? "0",
         approvedByUserId: auth.dbUser.id,
+      });
+
+      const netStr = Number(lineAgg._sum.netPay ?? 0).toLocaleString("en-GH", { minimumFractionDigits: 2 });
+      void notifyAdmins({
+        companyId: payrun.companyId,
+        type: "PAY_RUN_COMPLETED",
+        title: "Pay run approved",
+        message: `A pay run for ${lineAgg._count.id} employee${lineAgg._count.id === 1 ? "" : "s"} (GHS ${netStr} net) has been approved.`,
+        linkUrl: `/dashboard/payroll/${id}`,
       });
 
       return NextResponse.json(updated);

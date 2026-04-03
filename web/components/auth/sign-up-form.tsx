@@ -8,7 +8,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { AuthSubmitSpinner } from "@/components/auth/auth-submit-spinner";
 import { useToast } from "@/components/toast/useToast";
-import { HintTooltip } from "@/components/ui/hint-tooltip";
 import { newPasswordValueSchema } from "@/lib/auth-password-policy";
 import { DISPOSABLE_EMAIL_USER_MESSAGE } from "@/lib/disposable-email-copy";
 import { computeDeviceFingerprint } from "@/lib/device-fingerprint";
@@ -213,20 +212,12 @@ export function SignUpForm() {
       <form onSubmit={onSubmit} className="space-y-5">
         {/* Full name */}
         <div>
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <label htmlFor="fullName" className="block text-sm font-medium text-hgh-slate">
-              Full name
-            </label>
-            <HintTooltip
-              content="Your name as it should appear to colleagues. You can match your payroll or ID records."
-              side="right"
-              contentClassName="max-w-[14rem]"
-            >
-              <span className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-hgh-border text-[10px] font-bold text-hgh-muted">
-                i
-              </span>
-            </HintTooltip>
-          </div>
+          <label htmlFor="fullName" className="mb-1.5 block text-sm font-medium text-hgh-slate">
+            Full name
+          </label>
+          <p className="mb-1.5 text-xs text-hgh-muted">
+            Use the name colleagues should see; it can match payroll or ID records.
+          </p>
           <input
             id="fullName"
             type="text"
@@ -243,20 +234,12 @@ export function SignUpForm() {
 
         {/* Email */}
         <div>
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <label htmlFor="email" className="block text-sm font-medium text-hgh-slate">
-              Email address
-            </label>
-            <HintTooltip
-              content="Use a stable work or personal inbox you can access for password resets. Temporary or throwaway domains are blocked."
-              side="right"
-              contentClassName="max-w-[15rem]"
-            >
-              <span className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-hgh-border text-[10px] font-bold text-hgh-muted">
-                i
-              </span>
-            </HintTooltip>
-          </div>
+          <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-hgh-slate">
+            Email address
+          </label>
+          <p className="mb-1.5 text-xs text-hgh-muted">
+            Use an inbox you can access for resets. Temporary or throwaway domains are not accepted.
+          </p>
           <input
             id="email"
             type="email"
@@ -273,20 +256,12 @@ export function SignUpForm() {
 
         {/* Password */}
         <div>
-          <div className="mb-1.5 flex items-center gap-1.5">
-            <label htmlFor="password" className="block text-sm font-medium text-hgh-slate">
-              Password
-            </label>
-            <HintTooltip
-              content="Minimum eight characters with at least one capital letter and one number. Avoid words guessable from your email."
-              side="right"
-              contentClassName="max-w-[16rem]"
-            >
-              <span className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-hgh-border text-[10px] font-bold text-hgh-muted">
-                i
-              </span>
-            </HintTooltip>
-          </div>
+          <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-hgh-slate">
+            Password
+          </label>
+          <p className="mb-1.5 text-xs text-hgh-muted">
+            At least 8 characters, one uppercase letter, and one number.
+          </p>
           <div className="relative">
             <input
               id="password"
@@ -297,20 +272,18 @@ export function SignUpForm() {
               className={`${inputClass} pr-12`}
               {...register("password")}
             />
-            <HintTooltip content={showPassword ? "Mask password characters" : "Reveal password to verify typing"}>
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-hgh-muted transition-colors hover:bg-hgh-offwhite hover:text-hgh-slate focus:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold"
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? (
-                  <EyeOffIcon className="h-5 w-5 shrink-0" />
-                ) : (
-                  <EyeIcon className="h-5 w-5 shrink-0" />
-                )}
-              </button>
-            </HintTooltip>
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-hgh-muted transition-colors hover:bg-hgh-offwhite hover:text-hgh-slate focus:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOffIcon className="h-5 w-5 shrink-0" />
+              ) : (
+                <EyeIcon className="h-5 w-5 shrink-0" />
+              )}
+            </button>
           </div>
           {errors.password && (
             <p className="mt-1.5 text-xs text-hgh-danger">{errors.password.message}</p>
@@ -335,22 +308,20 @@ export function SignUpForm() {
           )}
         </div>
 
-        <HintTooltip content="Creates your HGH WorkForce identity. You will sign in next to finish onboarding or open an invitation.">
-          <button
-            type="submit"
-            disabled={submitting}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-hgh-gold font-semibold text-hgh-navy transition-all hover:bg-hgh-gold/90 focus:outline-none focus:ring-2 focus:ring-hgh-gold focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-80"
-          >
-            {submitting ? (
-              <>
-                <AuthSubmitSpinner />
-                Creating account…
-              </>
-            ) : (
-              "Create account"
-            )}
-          </button>
-        </HintTooltip>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-hgh-gold font-semibold text-hgh-navy transition-all hover:bg-hgh-gold/90 focus:outline-none focus:ring-2 focus:ring-hgh-gold focus:ring-offset-2 disabled:pointer-events-none disabled:opacity-80"
+        >
+          {submitting ? (
+            <>
+              <AuthSubmitSpinner />
+              Creating account…
+            </>
+          ) : (
+            "Create account"
+          )}
+        </button>
       </form>
 
       <div className="my-6 flex items-center gap-4">

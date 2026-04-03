@@ -79,7 +79,6 @@ export function LandingNav({ auth }: { auth: LandingAuth }) {
                 <Link
                   href="/sign-up"
                   className="rounded-lg bg-hgh-gold px-5 py-2 text-sm font-medium text-hgh-navy transition-all hover:bg-hgh-gold/90"
-                  title={`Start ${TRIAL_DAYS}-day full-access trial`}
                 >
                   Start trial
                 </Link>
@@ -151,7 +150,6 @@ export function LandingNav({ auth }: { auth: LandingAuth }) {
                     <Link
                       href="/sign-up"
                       className="mt-2 block rounded-lg bg-hgh-gold px-3 py-3 text-center text-base font-semibold text-hgh-navy hover:bg-hgh-gold/90"
-                      title={`Start ${TRIAL_DAYS}-day full-access trial`}
                       onClick={() => setOpen(false)}
                     >
                       Start {TRIAL_DAYS}-day trial

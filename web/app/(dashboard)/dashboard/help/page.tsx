@@ -116,7 +116,7 @@ const roadmapSteps: {
     step: 11,
     title: "Loans, performance, insights, reports, and billing",
     summary:
-      "Use the dashboard overview for headcount, attendance briefing, and payroll insights. Run performance review cycles when your team uses that module. Track staff loans if needed, export reports (PAYE, SSNIT, trends, attendance), and open Billing to see trial or subscription status—checkout when Stripe is connected, or ask your operator to activate the workspace if you are moving off trial.",
+      "Use the dashboard overview for headcount, attendance briefing, and payroll insights. Run performance review cycles when your team uses that module. Track staff loans if needed, export reports (PAYE, SSNIT, trends, attendance), and open Billing to see trial or subscription status. Pay with Paystack when checkout is enabled for your workspace, or ask your administrator to activate the subscription if you are moving off trial.",
     href: "/dashboard/reports",
     hrefLabel: "Reports",
     extra:

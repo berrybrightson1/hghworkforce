@@ -31,10 +31,12 @@ import {
   Briefcase,
   Info,
   type LucideIcon,
+  Rocket,
 } from "lucide-react";
 import { SidebarAccountMenu } from "@/components/dashboard/sidebar-account-menu";
 import { SidebarTrialUsageCard } from "@/components/dashboard/sidebar-trial-usage-card";
 import { NotificationPanel } from "@/components/dashboard/notification-panel";
+import { NotificationTrialPeek } from "@/components/dashboard/notification-trial-peek";
 import { VerifiedIcon, VerifiedHeaderBadge } from "@/components/dashboard/verified-badge";
 import { useCompany } from "@/components/company-context";
 import { usePlan } from "@/hooks/usePlan";
@@ -526,9 +528,7 @@ function SidebarStarterUpgradeBanner() {
   return (
     <div className="mx-2 mb-2 mt-1 rounded-lg border border-hgh-gold/35 bg-hgh-gold/10 p-3">
       <div className="flex items-start gap-2">
-        <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
-          rocket_launch
-        </span>
+        <Rocket size={20} className="text-hgh-gold" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-xs text-white/85">Upgrade to Pro to unlock all features.</p>
           <Link
@@ -696,6 +696,7 @@ export function DashboardShell({
     return getPlanVisibleNavigation(roleGroups, (module) => !module || canAccess(module));
   }, [userRole, canAccess]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
     setMobileNavOpen(false);
@@ -815,7 +816,18 @@ export function DashboardShell({
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-              <NotificationPanel userRole={userRole} />
+              <div className="relative flex shrink-0 items-center">
+                <NotificationTrialPeek
+                  userRole={userRole}
+                  notificationsOpen={notificationsOpen}
+                  onOpenNotifications={() => setNotificationsOpen(true)}
+                />
+                <NotificationPanel
+                  userRole={userRole}
+                  open={notificationsOpen}
+                  onOpenChange={setNotificationsOpen}
+                />
+              </div>
               <HintTooltip
                 content="Your permission level in this workspace. Admins configure payroll, attendance, and access; HR-focused roles manage people workflows."
                 side="bottom"
