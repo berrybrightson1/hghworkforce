@@ -86,129 +86,148 @@ export async function regeneratePayrunLines(
     },
   });
 
-  return prisma.$transaction(async (tx) => {
-    await tx.payrunLine.deleteMany({ where: { payrunId } });
+  const overtimeHoursByEmployeeId = new Map<string, number>();
+  if (
+    payrun.company.includeAttendanceOvertimeInPayrun &&
+    employees.length > 0
+  ) {
+    const checkins = await prisma.checkIn.findMany({
+      where: {
+        companyId: payrun.companyId,
+        employeeId: { in: employees.map((e) => e.id) },
+        clockIn: { gte: periodStart, lte: periodEnd },
+      },
+      select: { employeeId: true, overtimeHours: true },
+    });
+    for (const c of checkins) {
+      const h =
+        c.overtimeHours != null ? Number(c.overtimeHours) : 0;
+      overtimeHoursByEmployeeId.set(
+        c.employeeId,
+        (overtimeHoursByEmployeeId.get(c.employeeId) ?? 0) + h,
+      );
+    }
+  }
 
-    for (const emp of employees) {
-      const basic = Number(emp.basicSalary);
-      let allowanceTotal = 0;
-      let provident = 0;
-      let otherDed = 0;
+  type LineCreate = Prisma.PayrunLineCreateManyInput;
+  const lineRows: LineCreate[] = [];
 
-      for (const c of emp.salaryComponents) {
-        if (!componentInPeriod(c.startDate, c.endDate, periodStart, periodEnd)) continue;
-        const amt = Number(c.amount);
-        if (c.type === "ALLOWANCE") allowanceTotal += amt;
-        else if (c.name.toLowerCase().includes("provident")) provident += amt;
-        else otherDed += amt;
-      }
+  for (const emp of employees) {
+    const basic = Number(emp.basicSalary);
+    let allowanceTotal = 0;
+    let provident = 0;
+    let otherDed = 0;
 
-      const componentAllowanceTotal = allowanceTotal;
-
-      let overtimePay = 0;
-      let overtimeHoursInPeriod = 0;
-      if (payrun.company.includeAttendanceOvertimeInPayrun) {
-        const checkins = await prisma.checkIn.findMany({
-          where: {
-            employeeId: emp.id,
-            clockIn: { gte: periodStart, lte: periodEnd },
-          },
-          select: { overtimeHours: true },
-        });
-        overtimeHoursInPeriod = checkins.reduce(
-          (s, c) => s + (c.overtimeHours ? Number(c.overtimeHours) : 0),
-          0,
-        );
-        if (overtimeHoursInPeriod > 0 && basic > 0) {
-          const stdHours = Number(payrun.company.standardHoursPerMonth) || 173;
-          const mult = Number(payrun.company.overtimeHourlyMultiplier) || 1.5;
-          const hourly = basic / stdHours;
-          overtimePay = Math.round(overtimeHoursInPeriod * hourly * mult * 100) / 100;
-          allowanceTotal = componentAllowanceTotal + overtimePay;
-        }
-      }
-
-      let loanMonthly = 0;
-      for (const l of emp.loans) {
-        loanMonthly += Number(l.monthlyRepayment);
-      }
-
-      const applySsnit = emp.employmentType !== "CONTRACTOR";
-      const calc = calculatePayroll({
-        basicSalary: basic,
-        allowanceTotal,
-        otherDeductionsTotal: provident + loanMonthly + otherDed,
-        payeBrackets,
-        applySsnit,
-      });
-
-      const tier2On =
-        payrun.company.tier2PensionEnabled &&
-        applySsnit &&
-        emp.employmentType !== "CONTRACTOR";
-      const t2eePct = Number(payrun.company.tier2EmployeePercent) / 100;
-      const t2erPct = Number(payrun.company.tier2EmployerPercent) / 100;
-      const tier2Employee = tier2On ? Math.round(basic * t2eePct * 100) / 100 : 0;
-      const tier2Employer = tier2On ? Math.round(basic * t2erPct * 100) / 100 : 0;
-
-      const totalDed =
-        calc.ssnitEmployee +
-        calc.payeTax +
-        provident +
-        loanMonthly +
-        otherDed +
-        tier2Employee;
-      const netPay = calc.netPay - tier2Employee;
-
-      await tx.payrunLine.create({
-        data: {
-          payrunId,
-          employeeId: emp.id,
-          grossPay: moneyDec(calc.grossPay),
-          ssnitEmployee: moneyDec(calc.ssnitEmployee),
-          ssnitEmployer: moneyDec(calc.ssnitEmployer),
-          taxablePay: moneyDec(calc.taxablePay),
-          payeTax: moneyDec(calc.payeTax),
-          provident: moneyDec(provident),
-          loanDeductions: moneyDec(loanMonthly),
-          otherDeductions: moneyDec(otherDed),
-          tier2Employee: moneyDec(tier2Employee),
-          tier2Employer: moneyDec(tier2Employer),
-          totalDeductions: moneyDec(totalDed),
-          netPay: moneyDec(netPay),
-          salarySnapshot: JSON.parse(
-            JSON.stringify({
-              basicSalary: basic,
-              employmentType: emp.employmentType,
-              allowanceTotal: componentAllowanceTotal,
-              overtimeHoursInPeriod,
-              overtimePay,
-              overtimeMultiplier: Number(payrun.company.overtimeHourlyMultiplier),
-              provident,
-              loanDeductions: loanMonthly,
-              otherDeductions: otherDed,
-              tier2Employee,
-           tier2Employer,
-              tier2Enabled: tier2On,
-              payeBracketsYear: year,
-              breakdown: calc.breakdown,
-              chargeableIncome: calc.chargeableIncome,
-            }),
-          ) as Prisma.InputJsonValue,
-        },
-      });
+    for (const c of emp.salaryComponents) {
+      if (!componentInPeriod(c.startDate, c.endDate, periodStart, periodEnd)) continue;
+      const amt = Number(c.amount);
+      if (c.type === "ALLOWANCE") allowanceTotal += amt;
+      else if (c.name.toLowerCase().includes("provident")) provident += amt;
+      else otherDed += amt;
     }
 
-    await tx.auditLog.create({
-      data: {
-        actorId,
-        action: "PAYRUN_LINES_GENERATED",
-        entityType: "Payrun",
-        entityId: payrunId,
-        afterState: { employeeCount: employees.length } as Prisma.InputJsonValue,
-      },
+    const componentAllowanceTotal = allowanceTotal;
+
+    let overtimePay = 0;
+    const overtimeHoursInPeriod =
+      overtimeHoursByEmployeeId.get(emp.id) ?? 0;
+    if (payrun.company.includeAttendanceOvertimeInPayrun) {
+      if (overtimeHoursInPeriod > 0 && basic > 0) {
+        const stdHours = Number(payrun.company.standardHoursPerMonth) || 173;
+        const mult = Number(payrun.company.overtimeHourlyMultiplier) || 1.5;
+        const hourly = basic / stdHours;
+        overtimePay =
+          Math.round(overtimeHoursInPeriod * hourly * mult * 100) / 100;
+        allowanceTotal = componentAllowanceTotal + overtimePay;
+      }
+    }
+
+    let loanMonthly = 0;
+    for (const l of emp.loans) {
+      loanMonthly += Number(l.monthlyRepayment);
+    }
+
+    const applySsnit = emp.employmentType !== "CONTRACTOR";
+    const calc = calculatePayroll({
+      basicSalary: basic,
+      allowanceTotal,
+      otherDeductionsTotal: provident + loanMonthly + otherDed,
+      payeBrackets,
+      applySsnit,
     });
 
-    return { created: employees.length };
-  });
+    const tier2On =
+      payrun.company.tier2PensionEnabled &&
+      applySsnit &&
+      emp.employmentType !== "CONTRACTOR";
+    const t2eePct = Number(payrun.company.tier2EmployeePercent) / 100;
+    const t2erPct = Number(payrun.company.tier2EmployerPercent) / 100;
+    const tier2Employee = tier2On ? Math.round(basic * t2eePct * 100) / 100 : 0;
+    const tier2Employer = tier2On ? Math.round(basic * t2erPct * 100) / 100 : 0;
+
+    const totalDed =
+      calc.ssnitEmployee +
+      calc.payeTax +
+      provident +
+      loanMonthly +
+      otherDed +
+      tier2Employee;
+    const netPay = calc.netPay - tier2Employee;
+
+    lineRows.push({
+      payrunId,
+      employeeId: emp.id,
+      grossPay: moneyDec(calc.grossPay),
+      ssnitEmployee: moneyDec(calc.ssnitEmployee),
+      ssnitEmployer: moneyDec(calc.ssnitEmployer),
+      taxablePay: moneyDec(calc.taxablePay),
+      payeTax: moneyDec(calc.payeTax),
+      provident: moneyDec(provident),
+      loanDeductions: moneyDec(loanMonthly),
+      otherDeductions: moneyDec(otherDed),
+      tier2Employee: moneyDec(tier2Employee),
+      tier2Employer: moneyDec(tier2Employer),
+      totalDeductions: moneyDec(totalDed),
+      netPay: moneyDec(netPay),
+      salarySnapshot: JSON.parse(
+        JSON.stringify({
+          basicSalary: basic,
+          employmentType: emp.employmentType,
+          allowanceTotal: componentAllowanceTotal,
+          overtimeHoursInPeriod,
+          overtimePay,
+          overtimeMultiplier: Number(payrun.company.overtimeHourlyMultiplier),
+          provident,
+          loanDeductions: loanMonthly,
+          otherDeductions: otherDed,
+          tier2Employee,
+          tier2Employer,
+          tier2Enabled: tier2On,
+          payeBracketsYear: year,
+          breakdown: calc.breakdown,
+          chargeableIncome: calc.chargeableIncome,
+        }),
+      ) as Prisma.InputJsonValue,
+    });
+  }
+
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.payrunLine.deleteMany({ where: { payrunId } });
+      if (lineRows.length > 0) {
+        await tx.payrunLine.createMany({ data: lineRows });
+      }
+      await tx.auditLog.create({
+        data: {
+          actorId,
+          action: "PAYRUN_LINES_GENERATED",
+          entityType: "Payrun",
+          entityId: payrunId,
+          afterState: { employeeCount: employees.length } as Prisma.InputJsonValue,
+        },
+      });
+      return { created: lineRows.length };
+    },
+    { maxWait: 10_000, timeout: 60_000 },
+  );
 }
