@@ -13,8 +13,13 @@ const companyApiSelect = {
   registrationNumber: true,
   address: true,
   isActive: true,
+  plan: true,
+  selectedModules: true,
   subscriptionStatus: true,
+  trialStartedAt: true,
   trialEndsAt: true,
+  planActivatedAt: true,
+  subscriptionId: true,
   createdAt: true,
   updatedAt: true,
   _count: { select: { employees: true } },
@@ -84,6 +89,8 @@ export async function POST(req: NextRequest) {
         registrationNumber:
           typeof body.registrationNumber === "string" ? body.registrationNumber.trim() || null : null,
         address: typeof body.address === "string" ? body.address.trim() || null : null,
+        plan: "TRIAL",
+        trialStartedAt: new Date(),
         trialEndsAt,
       },
       select: companyApiSelect,
@@ -119,6 +126,16 @@ export async function PATCH(req: NextRequest) {
     const data: Record<string, unknown> = {};
     if (body.name !== undefined) data.name = body.name;
     if (body.address !== undefined) data.address = body.address || null;
+    if (body.selectedModules !== undefined && Array.isArray(body.selectedModules)) {
+      data.selectedModules = body.selectedModules
+        .filter((m: unknown) => typeof m === "string")
+        .map((m: string) => m.trim())
+        .filter(Boolean);
+    }
+    if (body.plan !== undefined && typeof body.plan === "string") {
+      data.plan = body.plan;
+      if (body.plan !== "TRIAL") data.planActivatedAt = new Date();
+    }
 
     const updated = await prisma.company.update({
       where: { id: companyId },

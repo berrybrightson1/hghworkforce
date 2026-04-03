@@ -34,8 +34,18 @@ model Company {
   tier2PensionEnabled               Boolean                       @default(false)
   tier2EmployeePercent              Decimal                       @default(5) @db.Decimal(5, 2)
   tier2EmployerPercent              Decimal                       @default(5) @db.Decimal(5, 2)
-  /// End of the free trial (all features). If null, the app treats the trial end as createdAt + 3 days (see TRIAL_DAYS in billing/access.ts).
-  trialEndsAt                       DateTime?
+  /// Plan tier controls module availability after trial.
+  plan                              Plan                          @default(TRIAL)
+  /// When the workspace trial started.
+  trialStartedAt                    DateTime                      @default(now())
+  /// End of free trial (all features). Set at org/workspace creation.
+  trialEndsAt                       DateTime
+  /// When a paid/non-trial plan is activated.
+  planActivatedAt                   DateTime?
+  /// External billing reference (future use).
+  subscriptionId                    String?
+  /// Selected onboarding modules used for recommendations/pre-configuration.
+  selectedModules                   String[]                      @default([])
   /// Dashboard: upcoming birthdays / anniversaries widget
   showBirthdaysOnDashboard          Boolean                       @default(true)
   birthdayLookaheadDays             Int                           @default(30)
@@ -116,6 +126,7 @@ model TrialDevice {
   id          String    @id @default(cuid())
   fingerprint String    @unique
   emailsUsed  String[]
+  trialCount  Int       @default(0)
   blockedAt   DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -1003,6 +1014,13 @@ enum SubscriptionStatus {
   TRIAL
   PAST_DUE
   CANCELED
+}
+
+enum Plan {
+  TRIAL
+  STARTER_PAYROLL
+  STARTER_ATTENDANCE
+  PRO
 }
 
 enum PortalNotificationType {

@@ -7,9 +7,11 @@ function FlipDigit({ digit }: { digit: string }) {
   return (
     <div
       className={cn(
-        "relative flex h-12 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/25 bg-black/55 shadow-md tabular-nums ring-1 ring-white/15 sm:h-14 sm:w-10",
+        "relative flex h-12 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-hgh-gold/15 bg-black/60 shadow-lg shadow-black/30 tabular-nums ring-1 ring-white/[0.08] sm:h-14 sm:w-10",
       )}
     >
+      {/* Subtle top highlight */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
       <span
         key={digit}
         className={cn(
@@ -37,7 +39,7 @@ function FlipPair({ value }: { value: number }) {
 function TimeColon() {
   return (
     <span
-      className="mb-2 select-none px-1.5 font-mono text-3xl font-semibold leading-none text-white/60 sm:text-4xl sm:mb-2.5"
+      className="mb-2 select-none px-1.5 font-mono text-3xl font-semibold leading-none text-hgh-gold/40 animate-pulse sm:text-4xl sm:mb-2.5"
       aria-hidden
     >
       :
@@ -71,7 +73,7 @@ export function DashboardFlipClock({ className }: { className?: string }) {
         <FlipPair value={minutes} />
         <TimeColon />
         <FlipPair value={seconds} />
-        <span className="mb-2 ml-2 font-mono text-xl font-bold lowercase tabular-nums text-white sm:mb-2.5 sm:ml-3 sm:text-2xl">
+        <span className="mb-2 ml-2 font-mono text-lg font-semibold lowercase tabular-nums text-hgh-gold/60 sm:mb-2.5 sm:ml-3 sm:text-xl">
           {ampm}
         </span>
       </div>

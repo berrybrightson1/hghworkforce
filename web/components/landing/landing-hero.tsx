@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Building2, CalendarClock, FileSpreadsheet, Smartphone, Users, Wallet } from "lucide-react";
 import { HeroProductNotices } from "@/components/landing/hero-product-notices";
+import { TRIAL_DAYS } from "@/lib/billing/access";
 import { cn } from "@/lib/utils";
 import type { LandingAuth } from "@/lib/landing-auth";
-import { TRIAL_DAYS } from "@/lib/billing/access";
 
 const TRUSTED_BY_NAMES = [
   "Hobort Auto Parts",
@@ -123,7 +123,7 @@ export function LandingHero({ auth }: { auth: LandingAuth }) {
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-hgh-muted">
           Clock-ins, payslips, leave requests, loan tracking, and attendance corrections — all in one place, built for
-          Ghanaian teams. Staff access it on any device. You get {TRIAL_DAYS} full days to explore everything, no card
+          Ghanaian teams. Staff access it on any device. You get three full days to explore everything, no card
           required.
         </p>
 

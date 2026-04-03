@@ -14,6 +14,7 @@ import {
   ListChecks,
   Clock,
   UserPlus,
+  CalendarCheck2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -34,13 +35,32 @@ import { cn } from "@/lib/utils";
 import { HintTooltip } from "@/components/ui/hint-tooltip";
 import type { UserRole } from "@prisma/client";
 
-type WizardStep = "company" | "employee" | "shifts" | "done";
+type WizardStep = "company" | "modules" | "employee" | "shifts" | "done";
 
 const STEPS: { key: WizardStep; label: string; icon: typeof Building2 }[] = [
   { key: "company", label: "Workspace", icon: Building2 },
+  { key: "modules", label: "Modules", icon: ListChecks },
   { key: "employee", label: "Employee", icon: UserPlus },
   { key: "shifts", label: "Shift", icon: Clock },
 ];
+
+const MODULE_OPTIONS = [
+  {
+    key: "payroll",
+    label: "Payroll",
+    icon: "payments",
+  },
+  {
+    key: "attendance",
+    label: "Attendance & Kiosk",
+    icon: "fingerprint",
+  },
+  {
+    key: "leave_loans",
+    label: "Leave & Loans",
+    icon: "event_available",
+  },
+] as const;
 
 const employeeSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -79,6 +99,8 @@ export default function SetupWizardPage() {
   const [employeeCode, setEmployeeCode] = useState<string | null>(null);
   const [employeeName, setEmployeeName] = useState<string | null>(null);
   const [shiftId, setShiftId] = useState<string | null>(null);
+  const [selectedModules, setSelectedModules] = useState<string[]>([]);
+  const [savingModules, setSavingModules] = useState(false);
 
   const [newCompanyName, setNewCompanyName] = useState("");
   const [creatingCompany, setCreatingCompany] = useState(false);
@@ -109,6 +131,15 @@ export default function SetupWizardPage() {
   });
 
   const companyId = selected?.id ?? null;
+
+  const recommendedPlan = useMemo(() => {
+    const hasPayroll = selectedModules.includes("payroll");
+    const hasAttendance = selectedModules.includes("attendance");
+    if (hasPayroll && hasAttendance) return "PRO";
+    if (hasPayroll) return "STARTER_PAYROLL";
+    if (hasAttendance) return "STARTER_ATTENDANCE";
+    return "PRO";
+  }, [selectedModules]);
 
   const createCompany = useCallback(async () => {
     if (!newCompanyName.trim()) {
@@ -157,6 +188,34 @@ export default function SetupWizardPage() {
       toast.error(e instanceof Error ? e.message : "Failed to create employee");
     }
   });
+
+  async function saveSelectedModules() {
+    if (!companyId) return;
+    if (selectedModules.length === 0) {
+      toast.error("Select at least one module.");
+      return;
+    }
+    setSavingModules(true);
+    try {
+      const res = await fetch("/api/companies", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyId,
+          selectedModules,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        toast.error(typeof data?.error === "string" ? data.error : "Could not save module selection.");
+        return;
+      }
+      toast.success("Module preferences saved.");
+      setStep("employee");
+    } finally {
+      setSavingModules(false);
+    }
+  }
 
   const onCreateShift = shiftForm.handleSubmit(async (values) => {
     if (!companyId || !employeeId) return;
@@ -321,10 +380,10 @@ export default function SetupWizardPage() {
                 <HintTooltip content="Once a company is selected, move on to add the first employee for this flow.">
                   <Button
                     disabled={!companyId}
-                    onClick={() => setStep("employee")}
+                    onClick={() => setStep("modules")}
                     className="mt-2"
                   >
-                    Continue to employee
+                    Continue to module selection
                     <ChevronRight className="ml-1 h-4 w-4" />
                   </Button>
                 </HintTooltip>
@@ -335,6 +394,62 @@ export default function SetupWizardPage() {
                 )}
               </>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {step === "modules" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarCheck2 size={18} className="text-hgh-gold" />
+              2. What does your business need?
+            </CardTitle>
+            <p className="text-xs text-hgh-muted">
+              Select the features you want to use. You can change this anytime in Settings.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              {MODULE_OPTIONS.map((option) => {
+                const selectedCard = selectedModules.includes(option.key);
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    className={cn(
+                      "rounded-lg border bg-white p-4 text-left transition-colors",
+                      selectedCard
+                        ? "border-hgh-gold bg-hgh-gold/10"
+                        : "border-hgh-border hover:bg-hgh-offwhite/70",
+                    )}
+                    onClick={() =>
+                      setSelectedModules((prev) =>
+                        prev.includes(option.key)
+                          ? prev.filter((v) => v !== option.key)
+                          : [...prev, option.key],
+                      )
+                    }
+                  >
+                    <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
+                      {option.icon}
+                    </span>
+                    <p className="mt-2 text-sm font-medium text-hgh-navy">{option.label}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-hgh-muted">
+              Suggested post-trial plan: <span className="font-medium text-hgh-slate">{recommendedPlan}</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="ghost" onClick={() => setStep("company")}>
+                Back
+              </Button>
+              <Button type="button" onClick={() => void saveSelectedModules()} disabled={savingModules}>
+                {savingModules ? "Saving..." : "Save and continue"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -413,7 +528,7 @@ export default function SetupWizardPage() {
               </div>
               <div className="flex flex-wrap gap-2 pt-2">
                 <HintTooltip content="Return to workspace selection.">
-                  <Button type="button" variant="ghost" onClick={() => setStep("company")}>
+                  <Button type="button" variant="ghost" onClick={() => setStep("modules")}>
                     Back
                   </Button>
                 </HintTooltip>

@@ -64,7 +64,8 @@ function safeNextPath(raw: string | null): string {
     pathOnly.startsWith("/dashboard") ||
     pathOnly.startsWith("/portal") ||
     pathOnly === "/onboarding" ||
-    pathOnly.startsWith("/update-password")
+    pathOnly.startsWith("/update-password") ||
+    pathOnly.startsWith("/subscribe")
   ) {
     return raw;
   }
@@ -182,6 +183,26 @@ export async function updateSession(request: NextRequest) {
       const data = (await res.json()) as { role: string | null; companyId: string | null };
 
       if (path.startsWith("/dashboard")) {
+        if (data.companyId && data.role && data.role !== "SUPER_ADMIN") {
+          const billingUrl = new URL(`/api/billing/summary?companyId=${encodeURIComponent(data.companyId)}`, request.nextUrl.origin);
+          const billingRes = await fetch(billingUrl, {
+            headers: { cookie: request.headers.get("cookie") ?? "" },
+            cache: "no-store",
+          });
+          if (billingRes.ok) {
+            const billing = (await billingRes.json()) as { plan?: string; trialEndsAt?: string };
+            if (billing.plan === "TRIAL" && billing.trialEndsAt) {
+              const endsAt = new Date(billing.trialEndsAt).getTime();
+              if (!Number.isNaN(endsAt) && endsAt <= Date.now()) {
+                const u = request.nextUrl.clone();
+                u.pathname = "/subscribe";
+                u.search = "";
+                u.searchParams.set("reason", "trial_expired");
+                return NextResponse.redirect(u);
+              }
+            }
+          }
+        }
         if (data.role === "EMPLOYEE" && data.companyId) {
           const u = request.nextUrl.clone();
           u.pathname = "/portal";

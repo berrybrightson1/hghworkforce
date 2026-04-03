@@ -71,7 +71,8 @@ function safeNextPath(raw: string | null): string {
     pathOnly.startsWith("/dashboard") ||
     pathOnly.startsWith("/portal") ||
     pathOnly === "/onboarding" ||
-    pathOnly.startsWith("/update-password")
+    pathOnly.startsWith("/update-password") ||
+    pathOnly.startsWith("/subscribe")
   ) {
     return raw;
   }

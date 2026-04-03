@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCompany } from "@/components/company-context";
+import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,9 +22,39 @@ type ApiTemplate = {
 export default function OnboardingTemplatesManagePage() {
   const router = useRouter();
   const { selected } = useCompany();
+  const { toast } = useToast();
   const { data: templates } = useApi<ApiTemplate[]>(
     selected ? `/api/onboarding-tracker/templates?companyId=${selected.id}` : null,
   );
+  const hasTemplates = (templates?.length ?? 0) > 0;
+
+  async function addStarterTemplate(starterId: string) {
+    if (!selected) return;
+    const starter = ONBOARDING_STARTER_TEMPLATES.find((s) => s.id === starterId);
+    if (!starter) return;
+    const res = await fetch("/api/onboarding-tracker/templates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        companyId: selected.id,
+        name: starter.name,
+        isDefault: false,
+        tasks: starter.tasks.map((task) => ({
+          title: task.title,
+          description: task.description,
+          dueAfterDays: task.dueAfterDays,
+          isRequired: task.isRequired,
+        })),
+      }),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      toast.error(typeof data?.error === "string" ? data.error : "Could not add template");
+      return;
+    }
+    toast.success(`${starter.name} added to your templates.`);
+    router.refresh();
+  }
 
   return (
     <div className="space-y-8">
@@ -73,6 +104,39 @@ export default function OnboardingTemplatesManagePage() {
                   </Button>
                 </Link>
               </HintTooltip>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
+            auto_awesome
+          </span>
+          <h3 className="text-sm font-semibold text-hgh-navy">
+            {hasTemplates ? "Add from suggestions" : "Get started with suggested templates"}
+          </h3>
+        </div>
+        {!hasTemplates ? (
+          <p className="text-xs text-hgh-muted">
+            One-click adds with sensible defaults for common teams.
+          </p>
+        ) : null}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {ONBOARDING_STARTER_TEMPLATES.map((starter) => (
+            <div key={starter.id} className="rounded-lg border border-hgh-border bg-white p-3">
+              <p className="text-sm font-medium text-hgh-navy">{starter.name}</p>
+              <p className="mt-1 text-xs text-hgh-muted">{starter.summary}</p>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() => void addStarterTemplate(starter.id)}
+              >
+                + Add to my templates
+              </Button>
             </div>
           ))}
         </div>

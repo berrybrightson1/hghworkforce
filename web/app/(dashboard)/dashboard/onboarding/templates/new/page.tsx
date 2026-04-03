@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SmartTextField } from "@/components/ui/smart-text-field";
+import { TemplateComboInput } from "@/components/ui/TemplateComboInput";
 import { DueDayPresetSelect } from "@/components/onboarding/due-day-preset-select";
 import { ArrowLeft, Plus, Trash2, GripVertical } from "lucide-react";
 import {
@@ -268,12 +269,12 @@ function NewTemplatePageInner() {
           <CardTitle>Template details</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <SmartTextField
-            label="Template name"
+          <TemplateComboInput
+            label="Suggested names (pick then edit if needed)"
             value={name}
             onChange={setName}
-            placeholder="e.g. Standard onboarding"
-            suggestions={TEMPLATE_NAME_SUGGESTIONS}
+            options={TEMPLATE_NAME_SUGGESTIONS}
+            placeholder="Type template name"
           />
           <label className="flex items-center gap-2 text-sm text-hgh-slate">
             <input

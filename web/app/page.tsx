@@ -256,6 +256,61 @@ export default async function LandingPage() {
         </div>
       </section>
 
+      <section className="border-t border-hgh-border bg-white py-16 md:py-24">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="mx-auto mb-10 max-w-2xl text-center">
+            <h2 className="text-3xl font-bold text-hgh-navy">Choose only what your business needs</h2>
+            <p className="mt-3 text-sm leading-relaxed text-hgh-muted">
+              Not every business needs every feature. Start with what matters most — add more when you&apos;re ready.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="rounded-xl border border-hgh-border bg-hgh-offwhite/50 p-5">
+              <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
+                payments
+              </span>
+              <h3 className="mt-2 text-lg font-semibold text-hgh-navy">Payroll Only</h3>
+              <p className="mt-2 text-sm leading-relaxed text-hgh-muted">
+                Run payroll, calculate Ghana PAYE and SSNIT, generate payslips, and give staff access to their pay
+                history — without the attendance module.
+              </p>
+            </div>
+            <div className="rounded-xl border border-hgh-border bg-hgh-offwhite/50 p-5">
+              <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
+                fingerprint
+              </span>
+              <h3 className="mt-2 text-lg font-semibold text-hgh-navy">Attendance Only</h3>
+              <p className="mt-2 text-sm leading-relaxed text-hgh-muted">
+                Set up your office kiosk, track clock-ins and clock-outs, manage corrections, and monitor attendance —
+                without payroll.
+              </p>
+            </div>
+            <div className="rounded-xl border border-hgh-gold/35 bg-hgh-offwhite/50 p-5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
+                  workspace_premium
+                </span>
+                <span className="rounded-md bg-hgh-gold/15 px-2 py-0.5 text-[11px] font-medium text-hgh-gold">
+                  Most Popular
+                </span>
+              </div>
+              <h3 className="mt-2 text-lg font-semibold text-hgh-navy">Everything with Pro</h3>
+              <p className="mt-2 text-sm leading-relaxed text-hgh-muted">
+                Payroll, attendance, leave, loans, and advanced reports — all connected, all in one dashboard.
+              </p>
+            </div>
+          </div>
+          <div className="mt-8 text-center">
+            <Link
+              href="/sign-up"
+              className="inline-flex items-center justify-center rounded-full bg-hgh-navy px-8 py-3 text-sm font-semibold text-white shadow-lg shadow-hgh-navy/20 transition hover:bg-hgh-navy-light"
+            >
+              Start your free 3-day trial — no card required
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Workflow */}
       <section className="relative overflow-hidden border-t border-hgh-navy-light bg-hgh-navy py-16 md:py-24">
         <div

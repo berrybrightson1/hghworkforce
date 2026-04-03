@@ -20,6 +20,16 @@ export async function GET() {
       role: true,
       companyId: true,
       referralCode: true,
+      company: {
+        select: {
+          plan: true,
+          trialStartedAt: true,
+          trialEndsAt: true,
+          planActivatedAt: true,
+          subscriptionId: true,
+          selectedModules: true,
+        },
+      },
     },
   });
 
@@ -50,6 +60,12 @@ export async function GET() {
     referralCode: full.referralCode,
     referralCount,
     referralMonthsEarned: referralCount,
+    companyPlan: full.company?.plan ?? "TRIAL",
+    trialStartedAt: full.company?.trialStartedAt ?? null,
+    trialEndsAt: full.company?.trialEndsAt ?? null,
+    planActivatedAt: full.company?.planActivatedAt ?? null,
+    subscriptionId: full.company?.subscriptionId ?? null,
+    selectedModules: full.company?.selectedModules ?? [],
   });
 }
 

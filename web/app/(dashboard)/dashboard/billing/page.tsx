@@ -14,9 +14,12 @@ import { HintTooltip } from "@/components/ui/hint-tooltip";
 
 type Summary = {
   companyName: string;
+  plan?: "TRIAL" | "STARTER_PAYROLL" | "STARTER_ATTENDANCE" | "PRO";
   subscriptionStatus: string;
+  trialStartedAt?: string;
   trialDays: number;
   trialEndsAt: string;
+  planActivatedAt?: string | null;
   subscribed: boolean;
   fullAccess: boolean;
   locked: boolean;
@@ -244,6 +247,18 @@ export default function BillingPage() {
                 </>
               ) : null}
             </p>
+            <p className="mt-2 text-xs text-hgh-muted">
+              Current plan: <span className="font-medium text-hgh-slate">{summary?.plan ?? "TRIAL"}</span>
+              {summary?.planActivatedAt ? (
+                <>
+                  {" "}
+                  · Activated{" "}
+                  <time dateTime={summary.planActivatedAt}>
+                    {new Date(summary.planActivatedAt).toLocaleString()}
+                  </time>
+                </>
+              ) : null}
+            </p>
             {summary && !summary.subscribed && !summary.locked && summary.msRemaining > 0 ? (
               <p className="mt-2 text-xs text-hgh-muted">
                 About {Math.max(0, Math.ceil(summary.msRemaining / 86_400_000))} day(s) remaining in the trial
@@ -268,6 +283,12 @@ export default function BillingPage() {
           </DismissibleCallout>
 
           <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/subscribe"
+              className="inline-flex h-10 items-center rounded-lg border border-hgh-border px-4 text-sm font-medium text-hgh-slate hover:bg-hgh-offwhite"
+            >
+              Change Plan
+            </Link>
             <HintTooltip
               content={
                 summary?.subscribed
@@ -286,6 +307,10 @@ export default function BillingPage() {
               </p>
             ) : null}
           </div>
+
+          {summary?.plan === "PRO" ? (
+            <p className="text-xs text-hgh-muted">You&apos;re on the best plan.</p>
+          ) : null}
 
           <p className="text-xs text-hgh-muted">
             Questions? See{" "}

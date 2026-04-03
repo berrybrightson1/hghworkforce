@@ -6,7 +6,13 @@ interface Company {
   id: string;
   name: string;
   isActive: boolean;
+  plan?: "TRIAL" | "STARTER_PAYROLL" | "STARTER_ATTENDANCE" | "PRO";
   subscriptionStatus?: string;
+  trialStartedAt?: string;
+  trialEndsAt?: string;
+  planActivatedAt?: string | null;
+  subscriptionId?: string | null;
+  selectedModules?: string[];
   _count?: { employees: number };
 }
 

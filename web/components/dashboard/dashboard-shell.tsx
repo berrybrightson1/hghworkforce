@@ -37,6 +37,8 @@ import { SidebarTrialUsageCard } from "@/components/dashboard/sidebar-trial-usag
 import { NotificationPanel } from "@/components/dashboard/notification-panel";
 import { VerifiedIcon, VerifiedHeaderBadge } from "@/components/dashboard/verified-badge";
 import { useCompany } from "@/components/company-context";
+import { usePlan } from "@/hooks/usePlan";
+import type { PlanModule } from "@/lib/planPermissions";
 import { useApi } from "@/lib/swr";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@prisma/client";
@@ -61,6 +63,7 @@ type NavItem = {
   icon: LucideIcon;
   /** Which roles can see this nav item. If omitted, all dashboard roles can see it. */
   roles?: UserRole[];
+  module?: PlanModule;
 };
 
 type NavGroup = {
@@ -90,29 +93,33 @@ const navigation: NavGroup[] = [
   {
     label: "People",
     items: [
-      { href: "/dashboard/employees", label: "Employees", icon: Users },
+      { href: "/dashboard/employees", label: "Employees", icon: Users, module: "staff_portal_full" },
       {
         href: "/dashboard/onboarding",
         label: "Onboarding",
         icon: ClipboardList,
+        module: "staff_portal_full",
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
       },
       {
         href: "/dashboard/performance",
         label: "Performance",
         icon: Medal,
+        module: "staff_portal_full",
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
       },
       {
         href: "/dashboard/exits",
         label: "Exits",
         icon: DoorOpen,
+        module: "staff_portal_full",
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
       },
       {
         href: "/dashboard/workplace",
         label: "Workplace",
         icon: Briefcase,
+        module: "staff_portal_full",
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
       },
     ],
@@ -126,16 +133,16 @@ const navigation: NavGroup[] = [
         icon: Radio,
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
       },
-      { href: "/dashboard/attendance", label: "Attendance", icon: Smartphone },
-      { href: "/dashboard/shifts", label: "Shifts", icon: Clock },
-      { href: "/dashboard/leave", label: "Leave", icon: CalendarDays },
+      { href: "/dashboard/attendance", label: "Attendance", icon: Smartphone, module: "attendance" },
+      { href: "/dashboard/shifts", label: "Shifts", icon: Clock, module: "attendance" },
+      { href: "/dashboard/leave", label: "Leave", icon: CalendarDays, module: "leave" },
     ],
   },
   {
     label: "Payroll & Finance",
     items: [
-      { href: "/dashboard/payroll", label: "Payroll", icon: Banknote },
-      { href: "/dashboard/loans", label: "Loans", icon: Landmark },
+      { href: "/dashboard/payroll", label: "Payroll", icon: Banknote, module: "payroll" },
+      { href: "/dashboard/loans", label: "Loans", icon: Landmark, module: "loans" },
     ],
   },
   {
@@ -145,12 +152,14 @@ const navigation: NavGroup[] = [
         href: "/dashboard/reports",
         label: "Reports",
         icon: TrendingUp,
+        module: "reports_basic",
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN", "HR"],
       },
       {
         href: "/dashboard/reports/cost-vs-revenue",
         label: "Cost vs Revenue",
         icon: BarChart3,
+        module: "reports_advanced",
         roles: ["SUPER_ADMIN", "COMPANY_ADMIN"],
       },
     ],
@@ -402,7 +411,6 @@ function CollapsibleNavSection({
           "flex w-full min-h-10 items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold tracking-wide transition-colors outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40",
           hasActive ? "text-hgh-gold" : "text-white/55 hover:bg-white/5 hover:text-white/85",
         )}
-        aria-expanded={expanded ? "true" : "false"}
       >
         <span>{label}</span>
         <ChevronDown
@@ -501,6 +509,38 @@ function getVisibleNavigation(role: UserRole): NavGroup[] {
       items: group.items.filter((item) => !item.roles || item.roles.includes(role)),
     }))
     .filter((group) => group.items.length > 0);
+}
+
+function getPlanVisibleNavigation(groups: NavGroup[], hasModule: (m?: PlanModule) => boolean): NavGroup[] {
+  return groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => hasModule(item.module)),
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+function SidebarStarterUpgradeBanner() {
+  const { plan } = usePlan();
+  if (plan !== "STARTER_PAYROLL" && plan !== "STARTER_ATTENDANCE") return null;
+  return (
+    <div className="mx-2 mb-2 mt-1 rounded-lg border border-hgh-gold/35 bg-hgh-gold/10 p-3">
+      <div className="flex items-start gap-2">
+        <span className="material-symbols-outlined text-hgh-gold" aria-hidden>
+          rocket_launch
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-white/85">Upgrade to Pro to unlock all features.</p>
+          <Link
+            href="/subscribe"
+            className="mt-2 inline-flex items-center rounded-md bg-hgh-gold/20 px-2.5 py-1 text-xs font-medium text-hgh-gold hover:bg-hgh-gold/30"
+          >
+            Upgrade
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function WorkspaceLabelWithHint() {
@@ -650,7 +690,11 @@ export function DashboardShell({
   userRole: UserRole;
 }) {
   const pathname = usePathname();
-  const groups = useMemo(() => getVisibleNavigation(userRole), [userRole]);
+  const { canAccess } = usePlan();
+  const groups = useMemo(() => {
+    const roleGroups = getVisibleNavigation(userRole);
+    return getPlanVisibleNavigation(roleGroups, (module) => !module || canAccess(module));
+  }, [userRole, canAccess]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
@@ -727,6 +771,7 @@ export function DashboardShell({
             showNavHints={false}
           />
           <SidebarTrialUsageCard userRole={userRole} onNavigate={() => setMobileNavOpen(false)} />
+          <SidebarStarterUpgradeBanner />
           <SidebarFooterNav onNavigate={() => setMobileNavOpen(false)} />
           <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
         </aside>
@@ -737,6 +782,7 @@ export function DashboardShell({
         <SidebarBrandingBlock />
         <SidebarCollapsibleNav groups={groups} pathname={pathname} showNavHints />
         <SidebarTrialUsageCard userRole={userRole} />
+        <SidebarStarterUpgradeBanner />
         <SidebarFooterNav />
         <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
       </aside>
