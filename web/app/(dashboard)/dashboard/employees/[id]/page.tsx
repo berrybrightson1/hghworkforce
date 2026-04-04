@@ -517,11 +517,9 @@ function EmployeeDetailPageContent() {
       <div className="rounded-xl border border-hgh-border bg-white p-8 text-center text-sm text-hgh-danger">
         Employee not found or access denied.
         <div className="mt-4">
-          <HintTooltip content="Return to the employee directory.">
-            <Button variant="secondary" onClick={() => router.push("/dashboard/employees")}>
-              Back to employees
-            </Button>
-          </HintTooltip>
+          <Button variant="secondary" onClick={() => router.push("/dashboard/employees")}>
+            Back to employees
+          </Button>
         </div>
       </div>
     );
@@ -561,12 +559,10 @@ function EmployeeDetailPageContent() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <HintTooltip content="Back to the employee list for this company.">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/employees")}>
-              <ArrowLeft size={18} />
-              Back
-            </Button>
-          </HintTooltip>
+          <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/employees")}>
+            <ArrowLeft size={18} />
+            Back
+          </Button>
           <div>
             <h2 className="text-xl font-semibold text-hgh-navy">{employeeDisplayName(employee)}</h2>
             <p className="text-sm text-hgh-muted">
@@ -591,7 +587,7 @@ function EmployeeDetailPageContent() {
                   className="h-8 w-8 border border-hgh-border p-0"
                   disabled={headerMenuBusy}
                   aria-label="Employee actions menu"
-                  title="Suspend, record an exit, or end employment."
+
                 >
                   <MoreHorizontal className="h-4 w-4" aria-hidden />
                 </Button>
@@ -923,7 +919,7 @@ function EmployeeDetailPageContent() {
                       role="switch"
                       aria-checked={employee.portalEnabled !== false}
                       aria-label={employee.portalEnabled === false ? "Enable portal access" : "Disable portal access"}
-                      title={employee.portalEnabled === false ? "Enable portal access" : "Disable portal access"}
+
                       disabled={portalBusy}
                       onClick={async () => {
                         const next = employee.portalEnabled === false;
@@ -1207,16 +1203,14 @@ function EmployeeDetailPageContent() {
                       <td className="px-5 py-3 text-hgh-muted">{new Date(doc.createdAt).toLocaleDateString()}</td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex justify-end gap-2">
-                          <HintTooltip content="Open this file in a new browser tab (download or preview depends on your browser).">
-                            <a
-                              href={doc.fileUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-hgh-navy")}
-                            >
-                              View
-                            </a>
-                          </HintTooltip>
+                          <a
+                            href={doc.fileUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-hgh-navy")}
+                          >
+                            View
+                          </a>
                           <HintTooltip content="Permanently remove this file from the employee record (stored file may remain in storage per provider policy).">
                             <Button
                               variant="ghost"

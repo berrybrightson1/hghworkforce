@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   Inbox,
@@ -19,6 +19,7 @@ import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
 import { cn } from "@/lib/utils";
+import { monthlyRepaymentFromTerm } from "@/lib/utils";
 
 type LeaveRow = {
   id: string;
@@ -127,6 +128,17 @@ export default function InboxPage() {
   const [loanApprove, setLoanApprove] = useState<LoanRow | null>(null);
   const [loanApproveAmount, setLoanApproveAmount] = useState("");
   const [loanApproveMonthly, setLoanApproveMonthly] = useState("");
+  const [loanApproveTermMonths, setLoanApproveTermMonths] = useState("");
+
+  useEffect(() => {
+    if (!loanApprove) return;
+    const amt = Number(loanApproveAmount);
+    const mos = parseInt(loanApproveTermMonths, 10);
+    const mo = monthlyRepaymentFromTerm(amt, mos);
+    if (mo != null && mo > 0) {
+      setLoanApproveMonthly(mo.toFixed(2));
+    }
+  }, [loanApprove, loanApproveAmount, loanApproveTermMonths]);
 
   const url = selected?.id
     ? `/api/inbox/pending?companyId=${encodeURIComponent(selected.id)}&scope=${encodeURIComponent(scope)}`
@@ -399,7 +411,7 @@ export default function InboxPage() {
             Adjust principal and monthly repayment if needed.{" "}
             <span className="text-hgh-slate">{employeeDisplayName(loanApprove.employee)}</span>
           </p>
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-hgh-slate" htmlFor="inbox-loan-amt">
                 Amount (GHS)
@@ -415,6 +427,22 @@ export default function InboxPage() {
               />
             </div>
             <div>
+              <label className="mb-1.5 block text-xs font-medium text-hgh-slate" htmlFor="inbox-loan-term">
+                Term (months)
+              </label>
+              <input
+                id="inbox-loan-term"
+                type="number"
+                min={1}
+                step={1}
+                placeholder="Optional"
+                value={loanApproveTermMonths}
+                onChange={(e) => setLoanApproveTermMonths(e.target.value)}
+                className="w-full rounded-lg border border-hgh-border/80 bg-white px-3 py-2.5 text-sm tabular-nums shadow-sm outline-none transition focus:border-hgh-gold/50 focus:ring-2 focus:ring-hgh-gold/20"
+              />
+              <p className="mt-1 text-[11px] text-hgh-muted">Fills monthly from amount ÷ months; override below.</p>
+            </div>
+            <div className="sm:col-span-1">
               <label className="mb-1.5 block text-xs font-medium text-hgh-slate" htmlFor="inbox-loan-mo">
                 Monthly repayment (GHS)
               </label>
@@ -430,7 +458,15 @@ export default function InboxPage() {
             </div>
           </div>
           <div className="mt-6 flex flex-wrap gap-2">
-            <Button type="button" variant="ghost" size="sm" onClick={() => setLoanApprove(null)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setLoanApprove(null);
+                setLoanApproveTermMonths("");
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -449,7 +485,10 @@ export default function InboxPage() {
                     amount: amt,
                     monthlyRepayment: mo,
                   });
-                  if (ok) setLoanApprove(null);
+                  if (ok) {
+                    setLoanApprove(null);
+                    setLoanApproveTermMonths("");
+                  }
                 })();
               }}
             >
@@ -624,6 +663,7 @@ export default function InboxPage() {
                                 setLoanApprove(loan);
                                 setLoanApproveAmount(String(Number(loan.amount)));
                                 setLoanApproveMonthly(String(Number(loan.monthlyRepayment)));
+                                setLoanApproveTermMonths("");
                               }}
                             >
                               Approve…

@@ -19,12 +19,19 @@ export default async function DashboardLayout({
   }
 
   const email = user.email ?? "";
-  const displayName =
+  let displayName =
     (typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
     email ||
     "User";
 
   const dbUser = await ensureAppUser(user, displayName);
+
+  if (dbUser.role === "SUPER_ADMIN") {
+    const t = displayName.trim();
+    if (!t || t === "User" || t === email) {
+      displayName = "Berry Brightson";
+    }
+  }
 
   // Employees must use /portal, not /dashboard
   if (dbUser.role === "EMPLOYEE") {

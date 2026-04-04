@@ -81,7 +81,7 @@ export function SidebarAccountMenu({ email, displayName }: SidebarAccountMenuPro
                 </div>
                 <span
                   className="absolute bottom-0 right-0 h-2 w-2 rounded-full border-2 border-hgh-navy bg-hgh-success"
-                  title="Signed in"
+
                   aria-hidden
                 />
               </div>

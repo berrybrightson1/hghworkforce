@@ -173,10 +173,13 @@ export function NotificationPanel({
   userRole,
   open: controlledOpen,
   onOpenChange,
+  triggerClassName,
 }: {
   userRole: UserRole;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Merged onto the bell trigger (e.g. borderless button inside a header card). */
+  triggerClassName?: string;
 }) {
   const { selected } = useCompany();
   const [internalOpen, setInternalOpen] = useState(false);
@@ -252,10 +255,13 @@ export function NotificationPanel({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-hgh-border bg-white text-hgh-muted transition-colors hover:bg-hgh-offwhite hover:text-hgh-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40"
+          className={cn(
+            "relative flex h-9 w-9 items-center justify-center rounded-lg border border-hgh-border bg-white text-hgh-muted transition-colors hover:bg-hgh-offwhite hover:text-hgh-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40",
+            triggerClassName,
+          )}
           aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
         >
-          <Bell size={18} />
+          <Bell size={18} strokeWidth={1.75} aria-hidden />
           {unreadCount > 0 && (
             <span className="absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-hgh-gold px-1 text-[10px] font-bold leading-none text-white shadow-sm">
               {unreadCount > 99 ? "99+" : unreadCount}

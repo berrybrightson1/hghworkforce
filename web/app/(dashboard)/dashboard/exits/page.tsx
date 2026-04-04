@@ -5,7 +5,7 @@ import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { HintTooltip } from "@/components/ui/hint-tooltip";
+
 
 type ExitRow = {
   id: string;
@@ -89,14 +89,12 @@ export default function ExitsPage() {
                       <Badge variant={statusVariant[r.status] ?? "default"}>{r.status}</Badge>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <HintTooltip content="Open this exit: checklist, notes, and status updates.">
-                        <Link
-                          href={`/dashboard/exits/${r.id}`}
-                          className="text-xs font-medium text-hgh-gold hover:underline"
-                        >
-                          Open
-                        </Link>
-                      </HintTooltip>
+                      <Link
+                        href={`/dashboard/exits/${r.id}`}
+                        className="text-xs font-medium text-hgh-gold hover:underline"
+                      >
+                        Open
+                      </Link>
                     </td>
                   </tr>
                 ))}

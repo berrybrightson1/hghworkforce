@@ -133,14 +133,12 @@ export default function OnboardingListPage() {
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <HintTooltip content="Open this employee’s onboarding board and tasks.">
-                          <Link
-                            href={`/dashboard/onboarding/${row.employeeId}`}
-                            className="text-xs font-medium text-hgh-gold hover:underline"
-                          >
-                            View
-                          </Link>
-                        </HintTooltip>
+                        <Link
+                          href={`/dashboard/onboarding/${row.employeeId}`}
+                          className="text-xs font-medium text-hgh-gold hover:underline"
+                        >
+                          View
+                        </Link>
                       </td>
                     </tr>
                   );
@@ -158,13 +156,11 @@ export default function OnboardingListPage() {
             <p className="text-sm font-medium text-hgh-navy">Onboarding Templates</p>
             <p className="text-xs text-hgh-muted">Manage reusable onboarding checklists.</p>
           </div>
-          <HintTooltip content="Ready-made starters and templates saved for this company.">
-            <Link href="/dashboard/onboarding/templates">
-              <Button variant="secondary" size="sm">
-                Manage templates
-              </Button>
-            </Link>
-          </HintTooltip>
+          <Link href="/dashboard/onboarding/templates">
+            <Button variant="secondary" size="sm">
+              Manage templates
+            </Button>
+          </Link>
         </div>
       </div>
     </div>

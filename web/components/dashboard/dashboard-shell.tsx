@@ -485,25 +485,6 @@ function SidebarCollapsibleNav({
   );
 }
 
-function SidebarFooterNav({ onNavigate }: { onNavigate?: () => void }) {
-  const row =
-    "flex min-h-10 w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-white/75 transition-colors hover:bg-white/5 hover:text-white outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40";
-  return (
-    <div className="shrink-0 space-y-0.5 border-t border-white/10 px-2 pb-1 pt-2">
-      <HintTooltip
-        content="Workspace preferences: taxes, kiosk, webhooks, and more."
-        side="right"
-        contentClassName="max-w-[16rem]"
-      >
-        <Link href="/dashboard/settings" className={row} onClick={() => onNavigate?.()}>
-          <Settings size={18} className="shrink-0 text-white/70" aria-hidden />
-          Settings
-        </Link>
-      </HintTooltip>
-    </div>
-  );
-}
-
 function getVisibleNavigation(role: UserRole): NavGroup[] {
   return navigation
     .map((group) => ({
@@ -660,20 +641,56 @@ function SidebarBrandingBlock() {
   );
 }
 
-function HeaderVerifiedBadge() {
-  const { selected } = useCompany();
-  return <VerifiedHeaderBadge subscriptionStatus={selected?.subscriptionStatus} />;
+/** Shared chrome for bell/settings/profile header tiles (reference layout: light cards on off-white bar). */
+const HEADER_ACTION_TILE =
+  "rounded-xl border border-hgh-border/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.06)]";
+
+/** One height for notification, settings, and profile tiles (2.5rem). */
+const HEADER_ACTION_HEIGHT = "h-10";
+
+/** Wider tile than bell/settings so name and role stay readable (verified badge is a separate tile). */
+function HeaderProfileCard({
+  fallbackName,
+  userRole,
+}: {
+  fallbackName: string;
+  userRole: UserRole;
+}) {
+  const { data: me } = useApi<{ name: string; email: string }>("/api/me");
+  const displayName = (me?.name && me.name.trim()) || fallbackName.trim() || "User";
+
+  return (
+    <div
+      className={cn(
+        HEADER_ACTION_TILE,
+        HEADER_ACTION_HEIGHT,
+        "hidden min-w-[12rem] max-w-[min(19rem,calc(100vw-11rem))] shrink-0 flex-row items-center gap-2 overflow-hidden px-2.5 sm:flex",
+      )}
+    >
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center gap-0.5 text-left leading-none">
+        <p className="truncate text-xs font-semibold text-hgh-navy">{displayName}</p>
+        <p className="truncate text-[9px] font-semibold uppercase tracking-[0.12em] text-hgh-gold/90">
+          {userRole.replace("_", " ")}
+        </p>
+      </div>
+    </div>
+  );
 }
 
-/** Reactive header user info — updates when profile is changed without a full page reload. */
-function HeaderUserInfo({ fallbackName, fallbackEmail }: { fallbackName: string; fallbackEmail: string }) {
-  const { data: me } = useApi<{ name: string; email: string }>("/api/me");
-  const displayName = me?.name || fallbackName;
-  const email = me?.email || fallbackEmail;
+/** Same height as bell/settings/profile — verified shield only when workspace is ACTIVE. */
+function HeaderVerifiedTile() {
+  const { selected } = useCompany();
+  if (selected?.subscriptionStatus !== "ACTIVE") return null;
+
   return (
-    <div className="text-right">
-      <p className="text-sm font-medium text-hgh-navy">{displayName}</p>
-      <p className="max-w-[200px] truncate text-xs text-hgh-muted">{email}</p>
+    <div
+      className={cn(
+        HEADER_ACTION_TILE,
+        HEADER_ACTION_HEIGHT,
+        "hidden w-10 shrink-0 items-center justify-center sm:flex",
+      )}
+    >
+      <VerifiedHeaderBadge subscriptionStatus={selected.subscriptionStatus} unframed />
     </div>
   );
 }
@@ -773,7 +790,6 @@ export function DashboardShell({
           />
           <SidebarTrialUsageCard userRole={userRole} onNavigate={() => setMobileNavOpen(false)} />
           <SidebarStarterUpgradeBanner />
-          <SidebarFooterNav onNavigate={() => setMobileNavOpen(false)} />
           <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
         </aside>
       </div>
@@ -784,7 +800,6 @@ export function DashboardShell({
         <SidebarCollapsibleNav groups={groups} pathname={pathname} showNavHints />
         <SidebarTrialUsageCard userRole={userRole} />
         <SidebarStarterUpgradeBanner />
-        <SidebarFooterNav />
         <SidebarAccountMenu email={userEmail} displayName={userDisplayName} />
       </aside>
 
@@ -816,31 +831,43 @@ export function DashboardShell({
               </div>
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-              <div className="relative flex shrink-0 items-center">
-                <NotificationTrialPeek
-                  userRole={userRole}
-                  notificationsOpen={notificationsOpen}
-                  onOpenNotifications={() => setNotificationsOpen(true)}
-                />
-                <NotificationPanel
-                  userRole={userRole}
-                  open={notificationsOpen}
-                  onOpenChange={setNotificationsOpen}
-                />
-              </div>
-              <HintTooltip
-                content="Your permission level in this workspace. Admins configure payroll, attendance, and access; HR-focused roles manage people workflows."
-                side="bottom"
-                contentClassName="max-w-[18rem]"
+              {userRole !== "EMPLOYEE" ? (
+                <div
+                  className={cn(
+                    HEADER_ACTION_TILE,
+                    HEADER_ACTION_HEIGHT,
+                    "relative flex w-10 shrink-0 items-center justify-center",
+                  )}
+                >
+                  <NotificationTrialPeek
+                    userRole={userRole}
+                    notificationsOpen={notificationsOpen}
+                    onOpenNotifications={() => setNotificationsOpen(true)}
+                  />
+                  <NotificationPanel
+                    userRole={userRole}
+                    open={notificationsOpen}
+                    onOpenChange={setNotificationsOpen}
+                    triggerClassName="h-10 w-10 rounded-[10px] border-0 bg-transparent text-hgh-navy shadow-none hover:bg-hgh-offwhite/90 hover:text-hgh-navy"
+                  />
+                </div>
+              ) : null}
+              <Link
+                href="/dashboard/settings"
+                className={cn(
+                  HEADER_ACTION_TILE,
+                  HEADER_ACTION_HEIGHT,
+                  "flex w-10 shrink-0 items-center justify-center text-hgh-navy transition-colors hover:bg-hgh-offwhite/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40",
+                )}
+                aria-label="Settings"
               >
-                <span className="max-w-[min(160px,45vw)] truncate rounded-md bg-hgh-gold/10 px-2.5 py-1 text-xs font-medium text-hgh-gold sm:max-w-none cursor-help">
-                  {userRole.replace("_", " ")}
-                </span>
-              </HintTooltip>
-              <div className="hidden min-w-0 items-center gap-2 sm:flex">
-                <HeaderUserInfo fallbackName={userDisplayName} fallbackEmail={userEmail} />
-                <HeaderVerifiedBadge />
-              </div>
+                <Settings size={18} strokeWidth={1.75} aria-hidden />
+              </Link>
+              <HeaderProfileCard fallbackName={userDisplayName} userRole={userRole} />
+              <HeaderVerifiedTile />
+              <span className="inline-flex max-w-[min(160px,45vw)] truncate rounded-md bg-hgh-gold/10 px-2.5 py-1 text-xs font-medium text-hgh-gold sm:hidden">
+                {userRole.replace("_", " ")}
+              </span>
             </div>
           </div>
         </header>

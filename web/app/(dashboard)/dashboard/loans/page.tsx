@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Landmark, Plus } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -22,6 +22,7 @@ import { useCompany } from "@/components/company-context";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
+import { monthlyRepaymentFromTerm } from "@/lib/utils";
 
 interface Loan {
   id: string;
@@ -68,6 +69,7 @@ export default function LoansPage() {
   const { toast } = useToast();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [repaymentMonths, setRepaymentMonths] = useState("");
 
   const loansUrl = selected ? `/api/loans?companyId=${selected.id}` : null;
   const { data: loans, mutate } = useApi<Loan[]>(loansUrl);
@@ -79,11 +81,23 @@ export default function LoansPage() {
     control,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { type: "LOAN", employeeId: "", disbursedAt: "" },
   });
+
+  const watchedAmount = watch("amount");
+
+  useEffect(() => {
+    const mos = parseInt(repaymentMonths, 10);
+    const mo = monthlyRepaymentFromTerm(Number(watchedAmount), mos);
+    if (mo != null && mo > 0) {
+      setValue("monthlyRepayment", mo, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [watchedAmount, repaymentMonths, setValue]);
 
   const onSubmit = handleSubmit(async (values) => {
     setSubmitting(true);
@@ -96,6 +110,7 @@ export default function LoansPage() {
       if (!res.ok) throw new Error();
       toast.success("Loan created successfully.");
       reset();
+      setRepaymentMonths("");
       setDialogOpen(false);
       mutate();
     } catch {
@@ -209,7 +224,14 @@ export default function LoansPage() {
         </div>
       </Card>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title="New Loan / Advance">
+      <Dialog
+        open={dialogOpen}
+        onClose={() => {
+          setDialogOpen(false);
+          setRepaymentMonths("");
+        }}
+        title="New Loan / Advance"
+      >
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-hgh-slate" htmlFor="loan-employee">
@@ -273,14 +295,31 @@ export default function LoansPage() {
               )}
             </div>
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-hgh-slate">
-              Monthly Repayment (GHS) <span className="text-hgh-danger">*</span>
-            </label>
-            <Input type="number" step="0.01" placeholder="e.g. 500" {...register("monthlyRepayment")} />
-            {errors.monthlyRepayment && (
-              <p className="mt-1 text-xs text-hgh-danger">{errors.monthlyRepayment.message}</p>
-            )}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate" htmlFor="loan-term-mo">
+                Repayment term (months)
+              </label>
+              <Input
+                id="loan-term-mo"
+                type="number"
+                min={1}
+                step={1}
+                placeholder="Optional — fills monthly below"
+                value={repaymentMonths}
+                onChange={(e) => setRepaymentMonths(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-hgh-muted">Amount ÷ months. You can still edit monthly repayment.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate">
+                Monthly Repayment (GHS) <span className="text-hgh-danger">*</span>
+              </label>
+              <Input type="number" step="0.01" placeholder="e.g. 500" {...register("monthlyRepayment")} />
+              {errors.monthlyRepayment && (
+                <p className="mt-1 text-xs text-hgh-danger">{errors.monthlyRepayment.message}</p>
+              )}
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-hgh-slate" htmlFor="loan-disbursed">
@@ -305,7 +344,14 @@ export default function LoansPage() {
             <Input placeholder="Optional note..." {...register("note")} />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setDialogOpen(false);
+                setRepaymentMonths("");
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={submitting || empList.length === 0}>

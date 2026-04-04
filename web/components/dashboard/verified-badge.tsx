@@ -81,12 +81,16 @@ export function VerifiedIcon({
 }
 
 /**
- * Header chrome: same 9×9 footprint and radius as the notification bell, gold-toned.
+ * Verified subscriber control for the dashboard header.
+ * - `unframed`: icon only — place inside a parent tile (e.g. same h-10 as bell/settings).
+ * - default: compact 8×8 framed chip (legacy; prefer unframed + header tile).
  */
 export function VerifiedHeaderBadge({
   subscriptionStatus,
+  unframed = false,
 }: {
   subscriptionStatus?: string;
+  unframed?: boolean;
 }) {
   if (subscriptionStatus !== "ACTIVE") return null;
 
@@ -96,17 +100,27 @@ export function VerifiedHeaderBadge({
       side="bottom"
       contentClassName="max-w-[16rem]"
     >
-      <span
-        className={cn(
-          "relative flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-hgh-gold/40",
-          "bg-hgh-gold/10 text-hgh-gold shadow-sm transition-colors hover:bg-hgh-gold/16",
-          "outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40",
-        )}
-        tabIndex={0}
-        aria-label="Verified subscriber workspace"
-      >
-        <ShieldCheck size={18} className="shrink-0" strokeWidth={2.25} />
-      </span>
+      {unframed ? (
+        <span
+          className="flex shrink-0 items-center justify-center text-hgh-gold outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40 rounded-md"
+          tabIndex={0}
+          aria-label="Verified subscriber workspace"
+        >
+          <ShieldCheck size={18} strokeWidth={1.75} className="shrink-0" aria-hidden />
+        </span>
+      ) : (
+        <span
+          className={cn(
+            "relative flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-hgh-gold/40",
+            "bg-hgh-gold/10 text-hgh-gold shadow-sm transition-colors hover:bg-hgh-gold/16",
+            "outline-none focus-visible:ring-2 focus-visible:ring-hgh-gold/40",
+          )}
+          tabIndex={0}
+          aria-label="Verified subscriber workspace"
+        >
+          <ShieldCheck size={16} className="shrink-0" strokeWidth={2} />
+        </span>
+      )}
     </HintTooltip>
   );
 }

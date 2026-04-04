@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Landmark, Plus } from "lucide-react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -20,6 +20,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
+import { monthlyRepaymentFromTerm } from "@/lib/utils";
 
 interface Loan {
   id: string;
@@ -57,17 +58,30 @@ export default function PortalLoansPage() {
   const { data: loans, mutate } = useApi<Loan[]>("/api/loans");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [repaymentMonths, setRepaymentMonths] = useState("");
 
   const {
     control,
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<RequestForm>({
     resolver: zodResolver(requestSchema),
     defaultValues: { type: "ADVANCE", amount: 0, monthlyRepayment: 0 },
   });
+
+  const watchedAmount = watch("amount");
+
+  useEffect(() => {
+    const mos = parseInt(repaymentMonths, 10);
+    const mo = monthlyRepaymentFromTerm(Number(watchedAmount), mos);
+    if (mo != null && mo > 0) {
+      setValue("monthlyRepayment", mo, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [watchedAmount, repaymentMonths, setValue]);
 
   const list = loans ?? [];
   const active = list.filter((l) => l.status === "ACTIVE");
@@ -87,6 +101,7 @@ export default function PortalLoansPage() {
       if (!res.ok) throw new Error(data.error || "Failed");
       toast.success("Request submitted. HR will review it.");
       reset({ type: "ADVANCE", amount: 0, monthlyRepayment: 0 });
+      setRepaymentMonths("");
       setDialogOpen(false);
       mutate();
     } catch (e) {
@@ -199,7 +214,14 @@ export default function PortalLoansPage() {
         </div>
       </Card>
 
-      <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} title="Loan / advance request">
+      <Dialog
+        open={dialogOpen}
+        onClose={() => {
+          setDialogOpen(false);
+          setRepaymentMonths("");
+        }}
+        title="Loan / advance request"
+      >
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-hgh-slate">Type</label>
@@ -226,19 +248,43 @@ export default function PortalLoansPage() {
               <p className="mt-1 text-xs text-hgh-danger">{errors.amount.message}</p>
             ) : null}
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-hgh-slate">Monthly repayment (GHS)</label>
-            <Input type="number" step="0.01" min={0} {...register("monthlyRepayment")} />
-            {errors.monthlyRepayment ? (
-              <p className="mt-1 text-xs text-hgh-danger">{errors.monthlyRepayment.message}</p>
-            ) : null}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate" htmlFor="portal-loan-term">
+                Repayment term (months)
+              </label>
+              <Input
+                id="portal-loan-term"
+                type="number"
+                min={1}
+                step={1}
+                placeholder="Optional — fills monthly"
+                value={repaymentMonths}
+                onChange={(e) => setRepaymentMonths(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-hgh-muted">Amount ÷ months. You can still edit monthly repayment.</p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-hgh-slate">Monthly repayment (GHS)</label>
+              <Input type="number" step="0.01" min={0} {...register("monthlyRepayment")} />
+              {errors.monthlyRepayment ? (
+                <p className="mt-1 text-xs text-hgh-danger">{errors.monthlyRepayment.message}</p>
+              ) : null}
+            </div>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-hgh-slate">Note (optional)</label>
             <Input {...register("note")} />
           </div>
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setDialogOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setDialogOpen(false);
+                setRepaymentMonths("");
+              }}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={submitting}>

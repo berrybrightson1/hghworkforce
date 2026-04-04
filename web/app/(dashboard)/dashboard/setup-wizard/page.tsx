@@ -289,11 +289,9 @@ export default function SetupWizardPage() {
       <div className="rounded-xl border border-hgh-border bg-white p-8 text-center text-sm text-hgh-muted">
         This guided setup is for workspace administrators. Use the portal for day-to-day tasks.
         <div className="mt-4">
-          <HintTooltip content="Return to the dashboard home.">
-            <Button variant="secondary" onClick={() => router.push("/dashboard")}>
-              Back to overview
-            </Button>
-          </HintTooltip>
+          <Button variant="secondary" onClick={() => router.push("/dashboard")}>
+            Back to overview
+          </Button>
         </div>
       </div>
     );
@@ -380,16 +378,14 @@ export default function SetupWizardPage() {
                   </p>
                 )}
 
-                <HintTooltip content="Once a company is selected, move on to add the first employee for this flow.">
-                  <Button
-                    disabled={!companyId}
-                    onClick={() => setStep("modules")}
-                    className="mt-2"
-                  >
-                    Continue to module selection
-                    <ChevronRight className="ml-1 h-4 w-4" />
-                  </Button>
-                </HintTooltip>
+                <Button
+                  disabled={!companyId}
+                  onClick={() => setStep("modules")}
+                  className="mt-2"
+                >
+                  Continue to module selection
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
                 {!companyId && (
                   <p className="text-xs text-hgh-danger">
                     {isSuper ? "Select or create a company first." : "No company on your account — complete onboarding."}
@@ -528,11 +524,9 @@ export default function SetupWizardPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 pt-2">
-                <HintTooltip content="Return to workspace selection.">
-                  <Button type="button" variant="ghost" onClick={() => setStep("modules")}>
-                    Back
-                  </Button>
-                </HintTooltip>
+                <Button type="button" variant="ghost" onClick={() => setStep("modules")}>
+                  Back
+                </Button>
                 <HintTooltip content="Create this employee under the selected company and go to shift setup.">
                   <Button type="submit">Save and continue</Button>
                 </HintTooltip>
@@ -593,11 +587,9 @@ export default function SetupWizardPage() {
                 <p className="text-xs text-hgh-danger">Use 24h times in HH:mm.</p>
               )}
               <div className="flex flex-wrap gap-2">
-                <HintTooltip content="Return to the employee form step.">
-                  <Button type="button" variant="ghost" onClick={() => setStep("employee")}>
-                    Back
-                  </Button>
-                </HintTooltip>
+                <Button type="button" variant="ghost" onClick={() => setStep("employee")}>
+                  Back
+                </Button>
                 <HintTooltip content="Creates the shift template and assigns this employee starting today.">
                   <Button type="submit">Create shift & assign</Button>
                 </HintTooltip>
@@ -624,9 +616,7 @@ export default function SetupWizardPage() {
               <li>Shift: created and assigned from today{shiftId ? ` (${shiftId.slice(0, 8)}…)` : ""}</li>
             </ul>
             <div className="flex flex-wrap gap-2 pt-2">
-              <HintTooltip content="Back to the main dashboard and insights.">
-                <Button onClick={() => router.push("/dashboard")}>Go to overview</Button>
-              </HintTooltip>
+              <Button onClick={() => router.push("/dashboard")}>Go to overview</Button>
               <HintTooltip content="Edit shift templates and assignments for this company.">
                 <Link
                   href="/dashboard/shifts"

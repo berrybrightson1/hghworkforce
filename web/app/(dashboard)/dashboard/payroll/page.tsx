@@ -165,14 +165,10 @@ export default function PayrollPage() {
             <thead>
               <tr className="border-b border-hgh-border text-left">
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
-                  <HintTooltip content="Start and end dates for this pay cycle. Open the run to calculate taxes and net pay for the period.">
-                    <span className="inline cursor-default">Period</span>
-                  </HintTooltip>
+                  Period
                 </th>
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
-                  <HintTooltip content="Workspace this pay run belongs to.">
-                    <span className="inline cursor-default">Company</span>
-                  </HintTooltip>
+                  Company
                 </th>
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
                   <HintTooltip content="Number of payroll lines generated (one per included employee when lines exist).">
@@ -205,15 +201,10 @@ export default function PayrollPage() {
                     key={pr.id}
                     className="cursor-pointer border-b border-hgh-border last:border-0 hover:bg-hgh-offwhite/50"
                     onClick={() => router.push(`/dashboard/payroll/${pr.id}`)}
-                    title="Open pay run"
                   >
                     <td className="px-5 py-3">
-                      <HintTooltip content="Open this pay run: lines, approval, bank export, and payslips (click anywhere on the row).">
-                        <span className="block">
-                          {new Date(pr.periodStart).toLocaleDateString()} &ndash;{" "}
-                          {new Date(pr.periodEnd).toLocaleDateString()}
-                        </span>
-                      </HintTooltip>
+                      {new Date(pr.periodStart).toLocaleDateString()} &ndash;{" "}
+                      {new Date(pr.periodEnd).toLocaleDateString()}
                     </td>
                     <td className="px-5 py-3">{pr.company?.name}</td>
                     <td className="px-5 py-3 tabular-nums">{pr._count?.lines ?? 0}</td>
@@ -229,7 +220,7 @@ export default function PayrollPage() {
                               size="sm"
                               className="h-8 w-8 p-0"
                               aria-label={`Pay run actions (${new Date(pr.periodStart).toLocaleDateString()})`}
-                              title="Pay run actions: open details, navigate in full page."
+
                             >
                               <MoreHorizontal className="h-4 w-4" aria-hidden />
                             </Button>
@@ -251,14 +242,12 @@ export default function PayrollPage() {
                       </td>
                     ) : (
                       <td className="px-5 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <HintTooltip content="Open pay run detail: generate lines, submit, approve, and download exports.">
-                          <Link
-                            href={`/dashboard/payroll/${pr.id}`}
-                            className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
-                          >
-                            View
-                          </Link>
-                        </HintTooltip>
+                        <Link
+                          href={`/dashboard/payroll/${pr.id}`}
+                          className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
+                        >
+                          View
+                        </Link>
                       </td>
                     )}
                   </tr>

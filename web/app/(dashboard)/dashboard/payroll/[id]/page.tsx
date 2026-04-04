@@ -3,7 +3,19 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Banknote, Calculator, Check, CheckCircle, Download, RefreshCw, Send, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Calculator,
+  Calendar,
+  Check,
+  CheckCircle,
+  Download,
+  MoreVertical,
+  RefreshCw,
+  Send,
+  Undo2,
+  XCircle,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -13,6 +25,14 @@ import { HintTooltip } from "@/components/ui/hint-tooltip";
 import { DatePickerField } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/components/toast/useToast";
 import { useApi } from "@/lib/swr";
 import { employeeDisplayName } from "@/lib/employee-display";
@@ -79,6 +99,7 @@ export default function PayrunDetailPage() {
   const [approveOpen, setApproveOpen] = useState(false);
   const [approveNote, setApproveNote] = useState("");
   const [payDate, setPayDate] = useState("");
+  const [payDateDialogOpen, setPayDateDialogOpen] = useState(false);
   const [showActionsHint, setShowActionsHint] = useState(true);
 
   useEffect(() => {
@@ -164,8 +185,44 @@ export default function PayrunDetailPage() {
         onOk();
         mutate();
       } else {
-        toast.error(errMsg);
+        const data = await res.json().catch(() => ({}));
+        toast.error(typeof data.error === "string" ? data.error : errMsg);
       }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function downloadPayslipsZip() {
+    setBusy("payslips-zip");
+    try {
+      const res = await fetch(`/api/payruns/${id}/payslips-zip`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string; detail?: string };
+        const msg =
+          typeof data.error === "string"
+            ? data.detail
+              ? `${data.error} (${data.detail})`
+              : data.error
+            : "Download failed";
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const cd = res.headers.get("Content-Disposition");
+      let fname = `payslips-${id}.zip`;
+      const m = cd?.match(/filename="([^"]+)"/);
+      if (m?.[1]) fname = m[1];
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Payslips ZIP downloaded.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to download ZIP");
     } finally {
       setBusy(null);
     }
@@ -176,11 +233,9 @@ export default function PayrunDetailPage() {
       <div className="rounded-xl border border-hgh-border bg-white p-8 text-center text-sm text-hgh-danger">
         Could not load this pay run. It may have been removed or you may not have access.
         <div className="mt-4">
-          <HintTooltip content="Return to the payroll list.">
-            <Button variant="secondary" onClick={() => router.push("/dashboard/payroll")}>
-              Back to payroll
-            </Button>
-          </HintTooltip>
+          <Button variant="secondary" onClick={() => router.push("/dashboard/payroll")}>
+            Back to payroll
+          </Button>
         </div>
       </div>
     );
@@ -199,12 +254,10 @@ export default function PayrunDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <HintTooltip content="Return to the payroll list for this workspace.">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/payroll")}>
-              <ArrowLeft size={18} />
-              Back
-            </Button>
-          </HintTooltip>
+          <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/payroll")}>
+            <ArrowLeft size={18} />
+            Back
+          </Button>
           <div>
             <h2 className="text-xl font-semibold text-hgh-navy">Pay run</h2>
             <p className="text-sm text-hgh-muted">
@@ -316,16 +369,16 @@ export default function PayrunDetailPage() {
                   </a>
                 </HintTooltip>
                 <HintTooltip content="Download all payslip PDFs for this run in one ZIP file.">
-                  <a
-                    href={`/api/payruns/${id}/payslips-zip`}
-                    className={cn(
-                      buttonVariants({ variant: "secondary", size: "sm" }),
-                      "inline-flex no-underline",
-                    )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={busy !== null}
+                    onClick={() => void downloadPayslipsZip()}
                   >
                     <Download size={16} />
-                    Payslips (ZIP)
-                  </a>
+                    {busy === "payslips-zip" ? "Working…" : "Payslips (ZIP)"}
+                  </Button>
                 </HintTooltip>
               </>
             )}
@@ -358,142 +411,12 @@ export default function PayrunDetailPage() {
         ) : null}
       </Card>
 
-      {/* Payment tracking — APPROVED payruns only */}
-      {canManage && payrun.status === "APPROVED" && (
-        <div
-          className={cn(
-            "flex flex-wrap items-center gap-4 rounded-xl border p-4",
-            payrun.isPaid
-              ? "border-hgh-success/20 bg-hgh-success/5"
-              : "border-hgh-gold/20 bg-hgh-gold/5",
-          )}
-        >
-          {payrun.isPaid ? (
-            <>
-              <CheckCircle size={22} className="text-hgh-success" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-hgh-navy">
-                  Salaries paid on{" "}
-                  {payrun.paidAt
-                    ? new Date(payrun.paidAt).toLocaleDateString("en-GH", {
-                        day: "numeric",
-                        month: "long",
-                        year: "numeric",
-                      })
-                    : "N/A"}
-                </p>
-              </div>
-              {canApprove && (
-                <HintTooltip content="Remove the paid flag if this run was marked paid by mistake.">
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-hgh-muted underline hover:text-hgh-navy disabled:opacity-50"
-                    disabled={busy !== null}
-                    onClick={() =>
-                      patchMarkPaid(
-                        "undo-paid",
-                        { action: "undo-paid" },
-                        {
-                          onOk: () => toast.success("Payment status undone"),
-                          errMsg: "Failed to undo",
-                        },
-                      )
-                    }
-                  >
-                    {busy === "undo-paid" ? "…" : "Undo"}
-                  </button>
-                </HintTooltip>
-              )}
-            </>
-          ) : (
-            <>
-              <Banknote size={22} className="text-hgh-gold" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-hgh-navy">
-                  Salaries not yet marked as paid
-                </p>
-                {payrun.scheduledPayDate && (
-                  <p className="text-xs text-hgh-muted">
-                    Expected:{" "}
-                    {new Date(payrun.scheduledPayDate).toLocaleDateString("en-GH", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </p>
-                )}
-              </div>
-              {canApprove ? (
-                <div className="flex flex-wrap gap-2">
-                  <HintTooltip content="Record that salaries for this approved run have been paid (internal tracking).">
-                    <Button
-                      size="sm"
-                      disabled={busy !== null}
-                      onClick={() =>
-                        patchMarkPaid(
-                          "mark-paid",
-                          { action: "mark-paid" },
-                          {
-                            onOk: () => toast.success("Payrun marked as paid"),
-                            errMsg: "Failed to mark as paid",
-                          },
-                        )
-                      }
-                    >
-                      {busy === "mark-paid" ? "…" : "Mark as Paid"}
-                    </Button>
-                  </HintTooltip>
-                  <div className="flex items-center gap-1">
-                    <DatePickerField
-                      value={payDate}
-                      onChange={setPayDate}
-                      placeholder="Pay date"
-                      disabled={busy !== null}
-                      className="min-w-0"
-                      triggerClassName="h-8 max-w-[11rem] text-xs"
-                    />
-                    <HintTooltip content="Save the intended salary payment date (shown on this pay run card).">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={busy !== null || !payDate}
-                        onClick={() =>
-                          patchMarkPaid(
-                            "set-pay-date",
-                            { action: "set-pay-date", scheduledPayDate: payDate },
-                            {
-                              onOk: () => {
-                                toast.info(
-                                  `Payment date set for ${new Date(payDate).toLocaleDateString()}`,
-                                );
-                                setPayDate("");
-                              },
-                              errMsg: "Failed to set date",
-                            },
-                          )
-                        }
-                      >
-                        {busy === "set-pay-date" ? "…" : "Set Date"}
-                      </Button>
-                    </HintTooltip>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-hgh-muted">
-                  Only a company administrator can mark this run paid or set the payment date.
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
       <Card>
         <CardHeader>
           <CardTitle>Lines ({payrun.lines.length})</CardTitle>
         </CardHeader>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-sm">
+          <table className="w-full min-w-[920px] text-sm">
             <thead>
               <tr className="border-b border-hgh-border text-left">
                 <th className="px-4 py-2 font-medium text-hgh-muted">Employee</th>
@@ -502,17 +425,28 @@ export default function PayrunDetailPage() {
                 <th className="px-4 py-2 font-medium text-hgh-muted">PAYE</th>
                 <th className="px-4 py-2 font-medium text-hgh-muted">Loans</th>
                 <th className="px-4 py-2 font-medium text-hgh-muted">Net</th>
+                {payrun.status === "APPROVED" && canManage ? (
+                  <>
+                    <th className="px-4 py-2 font-medium text-hgh-muted">Salary paid</th>
+                    <th className="w-14 px-2 py-2 text-center font-medium text-hgh-muted" aria-label="Pay run actions">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </>
+                ) : null}
               </tr>
             </thead>
             <tbody>
               {payrun.lines.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-hgh-muted">
+                  <td
+                    colSpan={payrun.status === "APPROVED" && canManage ? 8 : 6}
+                    className="px-4 py-10 text-center text-hgh-muted"
+                  >
                     No lines yet. Use <strong>Calculate / refresh lines</strong> while in draft.
                   </td>
                 </tr>
               ) : (
-                payrun.lines.map((l) => (
+                payrun.lines.map((l, rowIdx) => (
                   <tr key={l.id} className="border-b border-hgh-border last:border-0">
                     <td className="px-4 py-2">
                       <span className="font-medium text-hgh-navy">{employeeDisplayName(l.employee)}</span>
@@ -535,6 +469,121 @@ export default function PayrunDetailPage() {
                     <td className="px-4 py-2 tabular-nums font-medium text-hgh-navy">
                       {Number(l.netPay).toLocaleString("en-GH", { minimumFractionDigits: 2 })}
                     </td>
+                    {payrun.status === "APPROVED" && canManage ? (
+                      <>
+                        <td className="px-4 py-2 text-xs">
+                          {payrun.isPaid ? (
+                            <span className="inline-flex items-center gap-1 font-medium text-emerald-800">
+                              <CheckCircle size={14} className="shrink-0" aria-hidden />
+                              Paid
+                              {payrun.paidAt
+                                ? ` · ${new Date(payrun.paidAt).toLocaleDateString("en-GH", {
+                                    day: "numeric",
+                                    month: "short",
+                                  })}`
+                                : null}
+                            </span>
+                          ) : (
+                            <span className="text-hgh-muted">Pending</span>
+                          )}
+                        </td>
+                        {rowIdx === 0 ? (
+                          <td
+                            rowSpan={Math.max(1, payrun.lines.length)}
+                            className="align-top border-l border-hgh-border/60 px-1 py-2"
+                          >
+                            {canApprove ? (
+                              <DropdownMenu>
+                                <HintTooltip content="Pay run: mark paid, set expected date, or undo.">
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 shrink-0 rounded-lg p-0 text-hgh-muted hover:bg-hgh-offwhite hover:text-hgh-navy"
+                                      disabled={busy !== null}
+                                      aria-label="Salary payment actions"
+                                    >
+                                      <MoreVertical size={18} />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                </HintTooltip>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="min-w-[15rem] border border-hgh-border/80 bg-white p-1.5 shadow-lg"
+                                >
+                                  <DropdownMenuLabel className="text-xs font-normal text-hgh-muted">
+                                    Pay run · {payrun.company.name}
+                                  </DropdownMenuLabel>
+                                  {payrun.scheduledPayDate ? (
+                                    <p className="px-2 pb-2 text-[11px] leading-snug text-hgh-muted">
+                                      Expected pay date:{" "}
+                                      {new Date(payrun.scheduledPayDate).toLocaleDateString("en-GH", {
+                                        day: "numeric",
+                                        month: "short",
+                                        year: "numeric",
+                                      })}
+                                    </p>
+                                  ) : null}
+                                  <DropdownMenuSeparator className="bg-hgh-border/60" />
+                                  {!payrun.isPaid ? (
+                                    <>
+                                      <DropdownMenuItem
+                                        className="gap-2 rounded-md text-hgh-navy focus:bg-hgh-offwhite"
+                                        disabled={busy !== null}
+                                        onSelect={() =>
+                                          patchMarkPaid(
+                                            "mark-paid",
+                                            { action: "mark-paid" },
+                                            {
+                                              onOk: () => toast.success("Pay run marked as paid"),
+                                              errMsg: "Failed to mark as paid",
+                                            },
+                                          )
+                                        }
+                                      >
+                                        <CheckCircle size={16} className="text-emerald-600" />
+                                        Mark salaries as paid
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        className="gap-2 rounded-md text-hgh-navy focus:bg-hgh-offwhite"
+                                        disabled={busy !== null}
+                                        onSelect={() => setPayDateDialogOpen(true)}
+                                      >
+                                        <Calendar size={16} className="text-hgh-gold" />
+                                        Set expected pay date…
+                                      </DropdownMenuItem>
+                                    </>
+                                  ) : (
+                                    <DropdownMenuItem
+                                      className="gap-2 rounded-md text-hgh-navy focus:bg-hgh-offwhite"
+                                      disabled={busy !== null}
+                                      onSelect={() =>
+                                        patchMarkPaid(
+                                          "undo-paid",
+                                          { action: "undo-paid" },
+                                          {
+                                            onOk: () => toast.success("Payment status undone"),
+                                            errMsg: "Failed to undo",
+                                          },
+                                        )
+                                      }
+                                    >
+                                      <Undo2 size={16} className="text-hgh-muted" />
+                                      Undo paid status
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            ) : (
+                              <p className="max-w-[10rem] px-1 text-[11px] leading-snug text-hgh-muted">
+                                Only a company admin can mark this run paid or set the pay date.
+                              </p>
+                            )}
+                          </td>
+                        ) : null}
+                      </>
+                    ) : null}
                   </tr>
                 ))
               )}
@@ -551,11 +600,9 @@ export default function PayrunDetailPage() {
           <Input value={approveNote} onChange={(e) => setApproveNote(e.target.value)} />
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <HintTooltip content="Close without approving.">
-            <Button variant="ghost" onClick={() => setApproveOpen(false)}>
-              Cancel
-            </Button>
-          </HintTooltip>
+          <Button variant="ghost" onClick={() => setApproveOpen(false)}>
+            Cancel
+          </Button>
           <HintTooltip content="Finalize this pay run. It locks for editing; bank and payslip exports stay available.">
             <Button
               className="bg-emerald-600 text-white hover:bg-emerald-700"
@@ -572,17 +619,66 @@ export default function PayrunDetailPage() {
         </div>
       </Dialog>
 
+      <Dialog
+        open={payDateDialogOpen}
+        onClose={() => {
+          setPayDateDialogOpen(false);
+          setPayDate("");
+        }}
+        title="Expected pay date"
+      >
+        <p className="text-sm text-hgh-muted">
+          Optional date you plan to pay salaries for this run (internal reference).
+        </p>
+        <div className="mt-3">
+          <DatePickerField
+            value={payDate}
+            onChange={setPayDate}
+            placeholder="Select date"
+            disabled={busy !== null}
+          />
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setPayDateDialogOpen(false);
+              setPayDate("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            disabled={busy !== null || !payDate}
+            onClick={() =>
+              patchMarkPaid(
+                "set-pay-date",
+                { action: "set-pay-date", scheduledPayDate: payDate },
+                {
+                  onOk: () => {
+                    toast.info(`Payment date set for ${new Date(payDate).toLocaleDateString()}`);
+                    setPayDate("");
+                    setPayDateDialogOpen(false);
+                  },
+                  errMsg: "Failed to set date",
+                },
+              )
+            }
+          >
+            {busy === "set-pay-date" ? "…" : "Save date"}
+          </Button>
+        </div>
+      </Dialog>
+
       <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} title="Reject pay run">
         <div className="space-y-3">
           <label className="block text-sm font-medium text-hgh-slate">Reason (optional)</label>
           <Input value={rejectNote} onChange={(e) => setRejectNote(e.target.value)} />
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <HintTooltip content="Close without rejecting.">
-            <Button variant="ghost" onClick={() => setRejectOpen(false)}>
-              Cancel
-            </Button>
-          </HintTooltip>
+          <Button variant="ghost" onClick={() => setRejectOpen(false)}>
+            Cancel
+          </Button>
           <HintTooltip content="Send this run back as rejected. The preparer can fix lines and resubmit.">
             <Button
               variant="danger"

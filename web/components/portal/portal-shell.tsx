@@ -378,22 +378,20 @@ export function PortalShell({
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
-            <HintTooltip content="Sign out of the employee portal on this device." side="bottom" contentClassName="max-w-[14rem]">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleSignOut}
-                className={cn(
-                  "shrink-0 text-white/80 hover:bg-white/10 hover:text-white",
-                  PORTAL_HEADER_ICON_BTN,
-                )}
-              >
-                <LogOut size={16} aria-hidden />
-                <span className="ml-1 hidden sm:inline">Sign out</span>
-                <span className="sr-only sm:hidden">Sign out</span>
-              </Button>
-            </HintTooltip>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleSignOut}
+              className={cn(
+                "shrink-0 text-white/80 hover:bg-white/10 hover:text-white",
+                PORTAL_HEADER_ICON_BTN,
+              )}
+            >
+              <LogOut size={16} aria-hidden />
+              <span className="ml-1 hidden sm:inline">Sign out</span>
+              <span className="sr-only sm:hidden">Sign out</span>
+            </Button>
           </div>
         </div>
       </div>
@@ -426,18 +424,16 @@ export function PortalShell({
         >
           <div className="flex items-center justify-between border-b border-hgh-border px-3 py-3 md:hidden">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-hgh-muted">Navigation</p>
-            <HintTooltip content="Close the menu" side="right" contentClassName="max-w-[12rem]">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-9 w-9 shrink-0 p-0 text-hgh-navy hover:bg-hgh-offwhite"
-                onClick={() => setMobileNavOpen(false)}
-                aria-label="Close navigation"
-              >
-                <X size={20} aria-hidden />
-              </Button>
-            </HintTooltip>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-9 w-9 shrink-0 p-0 text-hgh-navy hover:bg-hgh-offwhite"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close navigation"
+            >
+              <X size={20} aria-hidden />
+            </Button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
             {sidebarNav}

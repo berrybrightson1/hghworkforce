@@ -247,13 +247,11 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Payroll</CardTitle>
-            <HintTooltip content="Go to Payroll: draft runs, approvals, and exports for this company.">
-              <Link href="/dashboard/payroll">
-                <Button variant="ghost" size="sm">
-                  View <ArrowRight size={14} />
-                </Button>
-              </Link>
-            </HintTooltip>
+            <Link href="/dashboard/payroll">
+              <Button variant="ghost" size="sm">
+                View <ArrowRight size={14} />
+              </Button>
+            </Link>
           </CardHeader>
           <CardContent className="text-sm text-hgh-muted">
             {draftPayruns > 0
@@ -265,13 +263,11 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Leave Requests</CardTitle>
-            <HintTooltip content="Open Leave to approve requests and see team balances.">
-              <Link href="/dashboard/leave">
-                <Button variant="ghost" size="sm">
-                  View <ArrowRight size={14} />
-                </Button>
-              </Link>
-            </HintTooltip>
+            <Link href="/dashboard/leave">
+              <Button variant="ghost" size="sm">
+                View <ArrowRight size={14} />
+              </Button>
+            </Link>
           </CardHeader>
           <CardContent className="text-sm text-hgh-muted">
             {pendingLeave > 0
@@ -283,13 +279,11 @@ export default function DashboardPage() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Active Loans</CardTitle>
-            <HintTooltip content="Open Loans to manage staff advances and payroll deductions.">
-              <Link href="/dashboard/loans">
-                <Button variant="ghost" size="sm">
-                  View <ArrowRight size={14} />
-                </Button>
-              </Link>
-            </HintTooltip>
+            <Link href="/dashboard/loans">
+              <Button variant="ghost" size="sm">
+                View <ArrowRight size={14} />
+              </Button>
+            </Link>
           </CardHeader>
           <CardContent className="text-sm text-hgh-muted">
             {activeLoans > 0

@@ -5,7 +5,7 @@ import { useCompany } from "@/components/company-context";
 import { useApi } from "@/lib/swr";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { HintTooltip } from "@/components/ui/hint-tooltip";
+
 
 type Cycle = {
   id: string;
@@ -35,11 +35,9 @@ export default function PerformancePage() {
           <h2 className="text-xl font-semibold text-hgh-navy">Performance Management</h2>
           <p className="text-sm text-hgh-muted">Manage review cycles, goals, and ratings.</p>
         </div>
-        <HintTooltip content="Define dates and scope for a new performance review period.">
-          <Link href="/dashboard/performance/cycles/new">
-            <Button>New Cycle</Button>
-          </Link>
-        </HintTooltip>
+        <Link href="/dashboard/performance/cycles/new">
+          <Button>New Cycle</Button>
+        </Link>
       </div>
 
       {!cycles ? (
@@ -80,14 +78,12 @@ export default function PerformancePage() {
                       </Badge>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <HintTooltip content="Open this cycle: reviews, goals, and progress.">
-                        <Link
-                          href={`/dashboard/performance/cycles/${cycle.id}`}
-                          className="text-xs font-medium text-hgh-gold hover:underline"
-                        >
-                          View
-                        </Link>
-                      </HintTooltip>
+                      <Link
+                        href={`/dashboard/performance/cycles/${cycle.id}`}
+                        className="text-xs font-medium text-hgh-gold hover:underline"
+                      >
+                        View
+                      </Link>
                     </td>
                   </tr>
                 ))}

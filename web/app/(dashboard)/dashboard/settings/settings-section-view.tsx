@@ -15,6 +15,8 @@ import {
   UserCircle,
   Mail,
   Building2,
+  Globe,
+  PencilLine,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -403,46 +405,73 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
                   <span className="text-hgh-danger"> Select a company to load or edit.</span>
                 )}
               </p>
-              {isSuper && (
-                <div className="mt-3 flex flex-wrap gap-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={payeScope === "company" ? "primary" : "ghost"}
-                    onClick={() => setPayeScope("company")}
-                  >
-                    This company
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={payeScope === "global" ? "primary" : "ghost"}
-                    onClick={() => setPayeScope("global")}
-                  >
-                    Platform default
-                  </Button>
-                </div>
-              )}
             </div>
           </CardHeader>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          {isSuper ? (
+            <div className="space-y-2 border-b border-zinc-100/90 bg-zinc-50/70 px-5 py-3 sm:px-6">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                Which brackets are you editing?
+              </p>
+              <p className="sr-only" aria-live="polite">
+                {payeScope === "company"
+                  ? "Editing PAYE brackets for this company."
+                  : "Editing platform default PAYE brackets."}
+              </p>
+              <div className="inline-flex w-full max-w-md gap-0.5 rounded-lg border border-zinc-200/90 bg-zinc-100/80 p-0.5">
+                <button
+                  type="button"
+                  aria-label="Edit PAYE brackets for this company only"
+                  className={cn(
+                    "flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
+                    payeScope === "company"
+                      ? "bg-hgh-gold text-hgh-navy shadow-sm"
+                      : "text-zinc-600 hover:bg-white/80 hover:text-hgh-navy",
+                  )}
+                  onClick={() => setPayeScope("company")}
+                >
+                  <Building2 className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+                  <span className="truncate">This company</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Edit platform default PAYE brackets"
+                  className={cn(
+                    "flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors",
+                    payeScope === "global"
+                      ? "bg-hgh-navy text-white shadow-sm"
+                      : "text-zinc-600 hover:bg-white/80 hover:text-hgh-navy",
+                  )}
+                  onClick={() => setPayeScope("global")}
+                >
+                  <Globe className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden />
+                  <span className="truncate">Platform default</span>
+                </button>
+              </div>
+              <p className="max-w-xl text-[11px] leading-snug text-zinc-500">
+                <strong className="text-zinc-700">This company</strong> overrides apply only to the workspace selected
+                in the header. <strong className="text-zinc-700">Platform default</strong> applies when a company has no
+                custom brackets.
+              </p>
+            </div>
+          ) : null}
+          <div className="overflow-x-auto px-5 sm:px-6">
+            <table className="w-full max-w-2xl text-sm">
               <thead>
                 <tr className="border-b border-hgh-border text-left">
-                  <th className="px-5 py-2 font-medium text-hgh-muted">From (GHS)</th>
-                  <th className="px-5 py-2 font-medium text-hgh-muted">To (GHS)</th>
-                  <th className="px-5 py-2 font-medium text-hgh-muted">Rate</th>
+                  <th className="py-2.5 pr-4 font-medium text-hgh-muted sm:pr-6">From (GHS)</th>
+                  <th className="py-2.5 pr-4 font-medium text-hgh-muted sm:pr-6">To (GHS)</th>
+                  <th className="py-2.5 font-medium text-hgh-muted">Rate</th>
                 </tr>
               </thead>
               <tbody>
                 {brackets.map((b, i) => (
                   <tr key={i} className="border-b border-hgh-border last:border-0">
-                    <td className="px-5 py-2 tabular-nums">{b.minAmount.toLocaleString()}</td>
-                    <td className="px-5 py-2 tabular-nums">
+                    <td className="py-2.5 pr-4 tabular-nums sm:pr-6">{b.minAmount.toLocaleString()}</td>
+                    <td className="py-2.5 pr-4 tabular-nums sm:pr-6">
                       {b.maxAmount !== null ? b.maxAmount.toLocaleString() : "No limit"}
                     </td>
-                    <td className="px-5 py-2">
-                      <Badge variant={b.ratePercent === 0 ? "success" : "default"}>
+                    <td className="py-2.5">
+                      <Badge variant={b.ratePercent === 0 ? "success" : "default"} className="tabular-nums">
                         {b.ratePercent}%
                       </Badge>
                     </td>
@@ -451,14 +480,17 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
               </tbody>
             </table>
           </div>
-          <CardContent>
+          <CardContent className="px-5 sm:px-6">
             <Button
-              variant="ghost"
-              size="sm"
+              type="button"
+              variant="secondary"
+              size="md"
               disabled={!canEditPaye}
               onClick={() => setEditOpen(true)}
+              className="w-full gap-2 shadow-sm sm:w-auto"
             >
-              Edit Brackets
+              <PencilLine className="h-4 w-4 shrink-0" aria-hidden />
+              Edit brackets
             </Button>
             <p className="mt-2 text-xs text-hgh-muted">
               {payeScope === "global" ? (
@@ -1303,61 +1335,82 @@ export function SettingsSectionView({ active }: { active: SettingsSectionId }) {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         title={
-          payeScope === "global" ? "Edit platform default PAYE brackets" : "Edit PAYE Tax Brackets"
+          payeScope === "global" ? "Edit platform default PAYE brackets" : "Edit PAYE tax brackets"
         }
+        className="max-w-2xl"
       >
         {payeScope === "global" && (
-          <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
-            Saving updates the global default used when a company has no company-specific brackets.
+          <p className="mb-4 rounded-lg border-2 border-amber-300/80 bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-950">
+            Saving updates the <strong>global default</strong> used when a company has no company-specific brackets.
           </p>
         )}
-        <div className="space-y-3">
+        <p className="mb-3 text-sm text-hgh-slate">
+          Set monthly bands in <strong>GHS</strong> and the rate for each band. Leave “To” empty for the top open-ended
+          bracket.
+        </p>
+        <div className="max-h-[min(24rem,55vh)] space-y-3 overflow-y-auto overscroll-contain pr-1">
           {brackets.map((b, i) => (
-            <div key={i} className="grid grid-cols-3 gap-2">
-              <div>
-                {i === 0 && (
-                  <label className="mb-1 block text-xs font-medium text-hgh-muted">From</label>
-                )}
-                <Input
-                  type="number"
-                  value={b.minAmount}
-                  onChange={(e) => handleBracketChange(i, "minAmount", e.target.value)}
-                />
-              </div>
-              <div>
-                {i === 0 && (
-                  <label className="mb-1 block text-xs font-medium text-hgh-muted">To</label>
-                )}
-                <Input
-                  type="number"
-                  value={b.maxAmount ?? ""}
-                  placeholder="No limit"
-                  onChange={(e) => handleBracketChange(i, "maxAmount", e.target.value)}
-                />
-              </div>
-              <div>
-                {i === 0 && (
-                  <label className="mb-1 block text-xs font-medium text-hgh-muted">Rate %</label>
-                )}
-                <Input
-                  type="number"
-                  step="0.5"
-                  value={b.ratePercent}
-                  onChange={(e) => handleBracketChange(i, "ratePercent", e.target.value)}
-                />
+            <div
+              key={i}
+              className="rounded-xl border-2 border-hgh-border bg-hgh-offwhite/60 p-3 shadow-sm"
+            >
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-hgh-navy">
+                Band {i + 1}
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-hgh-muted" htmlFor={`paye-min-${i}`}>
+                    From (GHS)
+                  </label>
+                  <Input
+                    id={`paye-min-${i}`}
+                    type="number"
+                    value={b.minAmount}
+                    onChange={(e) => handleBracketChange(i, "minAmount", e.target.value)}
+                    className="border-hgh-border font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-hgh-muted" htmlFor={`paye-max-${i}`}>
+                    To (GHS)
+                  </label>
+                  <Input
+                    id={`paye-max-${i}`}
+                    type="number"
+                    value={b.maxAmount ?? ""}
+                    placeholder="No limit"
+                    onChange={(e) => handleBracketChange(i, "maxAmount", e.target.value)}
+                    className="border-hgh-border font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-semibold text-hgh-muted" htmlFor={`paye-rate-${i}`}>
+                    Rate (%)
+                  </label>
+                  <Input
+                    id={`paye-rate-${i}`}
+                    type="number"
+                    step="0.5"
+                    value={b.ratePercent}
+                    onChange={(e) => handleBracketChange(i, "ratePercent", e.target.value)}
+                    className="border-hgh-border font-medium"
+                  />
+                </div>
               </div>
             </div>
           ))}
         </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" onClick={() => setEditOpen(false)}>
+        <div className="mt-5 flex flex-col-reverse gap-2 border-t border-hgh-border pt-4 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" size="md" onClick={() => setEditOpen(false)}>
             Cancel
           </Button>
           <Button
+            type="button"
+            size="md"
             onClick={() => void handleSaveBrackets()}
             disabled={savingBrackets || (payeScope === "company" && !selected)}
           >
-            {savingBrackets ? "Saving…" : "Save Brackets"}
+            {savingBrackets ? "Saving…" : "Save brackets"}
           </Button>
         </div>
       </Dialog>

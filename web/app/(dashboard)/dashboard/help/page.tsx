@@ -342,27 +342,24 @@ export default function HelpPage() {
                     </p>
                   ) : null}
                   {item.href ? (
-                    <HintTooltip content={`Jump to ${item.hrefLabel} in your workspace.`} side="right">
-                      <Link
-                        href={item.href}
-                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-hgh-gold transition-colors hover:text-hgh-gold/80"
-                      >
-                        Go to {item.hrefLabel}
-                        <ArrowRight size={15} className="shrink-0" aria-hidden />
-                      </Link>
-                    </HintTooltip>
+                    <Link
+                      href={item.href}
+                      className="inline-flex items-center gap-1.5 text-sm font-semibold text-hgh-gold transition-colors hover:text-hgh-gold/80"
+                    >
+                      Go to {item.hrefLabel}
+                      <ArrowRight size={15} className="shrink-0" aria-hidden />
+                    </Link>
                   ) : null}
                   {item.moreLinks?.length ? (
                     <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1 text-xs">
                       {item.moreLinks.map((l) => (
-                        <HintTooltip key={l.href} content={`Open: ${l.label}.`} side="top">
-                          <Link
-                            href={l.href}
-                            className="font-medium text-hgh-navy/80 underline decoration-hgh-border underline-offset-2 hover:text-hgh-gold"
-                          >
-                            {l.label}
-                          </Link>
-                        </HintTooltip>
+                        <Link
+                          key={l.href}
+                          href={l.href}
+                          className="font-medium text-hgh-navy/80 underline decoration-hgh-border underline-offset-2 hover:text-hgh-gold"
+                        >
+                          {l.label}
+                        </Link>
                       ))}
                     </div>
                   ) : null}
@@ -437,12 +434,10 @@ export default function HelpPage() {
               <p className="text-sm text-hgh-muted">Our support team is available Monday to Friday, 8am - 5pm.</p>
             </div>
           </div>
-          <HintTooltip content="Reach your administrator or HGH operator—wire this button to mail/support when ready.">
-            <Button className="bg-hgh-navy text-white hover:bg-hgh-navy/90">
-              Contact Support
-              <ArrowRight size={16} className="ml-2" aria-hidden />
-            </Button>
-          </HintTooltip>
+          <Button className="bg-hgh-navy text-white hover:bg-hgh-navy/90">
+            Contact Support
+            <ArrowRight size={16} className="ml-2" aria-hidden />
+          </Button>
         </CardContent>
       </Card>
     </div>

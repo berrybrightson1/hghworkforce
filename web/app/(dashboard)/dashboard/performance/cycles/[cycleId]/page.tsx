@@ -8,7 +8,7 @@ import { useApi } from "@/lib/swr";
 import { useToast } from "@/components/toast/useToast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { HintTooltip } from "@/components/ui/hint-tooltip";
+
 
 type Goal = {
   id: string;
@@ -98,12 +98,10 @@ export default function CycleDetailPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <HintTooltip content="Return to all performance cycles.">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/performance")}>
-              <ArrowLeft size={18} />
-              Back
-            </Button>
-          </HintTooltip>
+          <Button variant="ghost" size="sm" onClick={() => router.push("/dashboard/performance")}>
+            <ArrowLeft size={18} />
+            Back
+          </Button>
           <div>
             <h2 className="text-xl font-semibold text-hgh-navy">{cycle.name}</h2>
             <p className="text-sm text-hgh-muted">
@@ -168,14 +166,12 @@ export default function CycleDetailPage() {
                       <Stars rating={review.finalRating} />
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <HintTooltip content="Open this employee’s review form and ratings.">
-                        <Link
-                          href={`/dashboard/performance/reviews/${review.id}`}
-                          className="text-xs font-medium text-hgh-gold hover:underline"
-                        >
-                          Review
-                        </Link>
-                      </HintTooltip>
+                      <Link
+                        href={`/dashboard/performance/reviews/${review.id}`}
+                        className="text-xs font-medium text-hgh-gold hover:underline"
+                      >
+                        Review
+                      </Link>
                     </td>
                   </tr>
                 ))}

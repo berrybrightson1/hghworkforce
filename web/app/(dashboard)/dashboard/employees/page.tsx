@@ -362,12 +362,10 @@ export default function EmployeesPage() {
               </Button>
             </HintTooltip>
           ) : null}
-          <HintTooltip content="Create a new team member with salary and bank details. A payroll code is assigned automatically.">
-            <Button onClick={() => setDialogOpen(true)} disabled={!selected} aria-label="Add a new employee">
-              <Plus size={18} className="shrink-0 opacity-90" aria-hidden />
-              Add Employee
-            </Button>
-          </HintTooltip>
+          <Button onClick={() => setDialogOpen(true)} disabled={!selected} aria-label="Add a new employee">
+            <Plus size={18} className="shrink-0 opacity-90" aria-hidden />
+            Add Employee
+          </Button>
         </div>
       </div>
 
@@ -381,7 +379,7 @@ export default function EmployeesPage() {
               className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              title="Filter the list below. Matches name, payroll code, department, or job title."
+
               aria-label="Search employees by name, code, department, or job title"
             />
           </div>
@@ -395,9 +393,7 @@ export default function EmployeesPage() {
             <thead>
               <tr className="border-b border-hgh-border text-left">
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
-                  <HintTooltip content="Legal or preferred name on the HR record. May differ from a linked portal account name.">
-                    <span className="inline cursor-default">Name</span>
-                  </HintTooltip>
+                  Name
                 </th>
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
                   <HintTooltip content="Unique payroll code for this company. Use it when ending employment by code or in bank files.">
@@ -405,14 +401,10 @@ export default function EmployeesPage() {
                   </HintTooltip>
                 </th>
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
-                  <HintTooltip content="Department or cost centre label for reporting and suggestions on new hires.">
-                    <span className="inline cursor-default">Department</span>
-                  </HintTooltip>
+                  Department
                 </th>
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
-                  <HintTooltip content="Role title stored on the employee record.">
-                    <span className="inline cursor-default">Job Title</span>
-                  </HintTooltip>
+                  Job Title
                 </th>
                 <th className="px-5 py-3 font-medium text-hgh-muted" scope="col">
                   <HintTooltip content="Monthly basic salary in GHS before allowances. Used as the base for tax and SSNIT in payroll runs.">
@@ -453,9 +445,7 @@ export default function EmployeesPage() {
                     onClick={() => router.push(`/dashboard/employees/${emp.id}`)}
                   >
                     <td className="px-5 py-3 font-medium text-hgh-navy">
-                      <HintTooltip content="Open this person’s full profile — salary, documents, portal/kiosk setup, and actions.">
-                        <span className="block">{employeeDisplayName(emp)}</span>
-                      </HintTooltip>
+                      {employeeDisplayName(emp)}
                     </td>
                     <td
                       className="px-5 py-3 text-hgh-muted"
@@ -488,17 +478,15 @@ export default function EmployeesPage() {
                               className="h-8 w-8 p-0"
                               disabled={rowBusy === emp.id}
                               aria-label={`More actions for ${employeeDisplayName(emp)}`}
-                              title="Row menu: profile, suspend, exit workflow, or end employment."
+
                             >
                               <MoreHorizontal className="h-4 w-4" aria-hidden />
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="min-w-[14rem]">
-                            <HintTooltip content="Open their full record — salary, components, documents, and kiosk binding." side="left">
-                              <DropdownMenuItem onClick={() => router.push(`/dashboard/employees/${emp.id}`)}>
-                                View profile
-                              </DropdownMenuItem>
-                            </HintTooltip>
+                            <DropdownMenuItem onClick={() => router.push(`/dashboard/employees/${emp.id}`)}>
+                              View profile
+                            </DropdownMenuItem>
                             {emp.status === "ACTIVE" ? (
                               <HintTooltip
                                 content="Pause payroll and kiosk access without ending the contract. Reactivate anytime from this menu."
